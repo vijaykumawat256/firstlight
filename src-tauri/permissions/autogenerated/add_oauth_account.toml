@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-add-oauth-account"
+description = "Enables the add_oauth_account command without any pre-configured scope."
+commands.allow = ["add_oauth_account"]
+
+[[permission]]
+identifier = "deny-add-oauth-account"
+description = "Denies the add_oauth_account command without any pre-configured scope."
+commands.deny = ["add_oauth_account"]

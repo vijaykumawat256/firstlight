@@ -119,6 +119,16 @@ const params = typeof location === "undefined" ? new URLSearchParams() : new URL
 let accounts: AccountView[] = params.has("fresh") ? [] : [demoAccount()];
 if (params.has("attention")) {
   accounts.push({
+    id: "google-old",
+    provider: "google",
+    display_name: "me@gmail.com",
+    email: "me@gmail.com",
+    status: "needs_attention",
+    calendars: [{ id: "google-old:primary", account_id: "google-old", remote_id: "primary", name: "me@gmail.com", colour: "teal", visible: true, read_only: false }],
+    last_synced_at: new Date(Date.now() - 5 * 3_600_000).toISOString(),
+    last_error: "auth",
+  });
+  accounts.push({
     id: "ics-old",
     provider: "ics",
     display_name: "Team holidays",
@@ -129,6 +139,7 @@ if (params.has("attention")) {
     last_error: "auth",
   });
 }
+let oauthCancelled = false;
 const listeners = new Set<(s: SyncSummary) => void>();
 const notify = () => listeners.forEach((l) => l({ ok: true, offline: false, needs_attention: false }));
 
@@ -188,6 +199,40 @@ export const fixtureBackend: Backend = {
     accounts = [...accounts, view];
     notify();
     return structuredClone(view);
+  },
+  async oauthAvailable() {
+    return { google: true, microsoft: !params.has("nomicrosoft") };
+  },
+  async addOauthAccount(provider) {
+    // Simulates the browser round trip so the waiting/cancel states can be exercised.
+    oauthCancelled = false;
+    await new Promise((r) => setTimeout(r, params.has("slowoauth") ? 4000 : 500));
+    if (oauthCancelled) throw new Error("Sign-in was cancelled.");
+    if (params.has("oauthfail")) throw new Error("Couldn't complete sign-in. Please try again.");
+    const email = provider === "google" ? "me@gmail.com" : "me@outlook.com";
+    const existing = accounts.find((a) => a.provider === provider && a.email === email);
+    if (existing) {
+      accounts = accounts.map((a) => (a.id === existing.id ? { ...a, status: "ok", last_error: null } : a));
+      notify();
+      return structuredClone(accounts.find((a) => a.id === existing.id)!);
+    }
+    const id = `${provider}-${Math.floor(Math.random() * 1e6)}`;
+    const view: AccountView = {
+      id,
+      provider,
+      display_name: email,
+      email,
+      status: "ok",
+      calendars: [{ id: `${id}:primary`, account_id: id, remote_id: "primary", name: email, colour: provider === "google" ? "teal" : "blue", visible: true, read_only: false }],
+      last_synced_at: new Date().toISOString(),
+      last_error: null,
+    };
+    accounts = [...accounts, view];
+    notify();
+    return structuredClone(view);
+  },
+  async cancelOauth() {
+    oauthCancelled = true;
   },
   async addDemoAccount() {
     accounts = [...accounts.filter((a) => a.id !== DEMO_ID), demoAccount()];

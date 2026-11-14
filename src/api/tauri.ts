@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, CalendarInfo, CalEvent, SyncSummary } from "./types";
+import type { AccountView, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -10,6 +10,9 @@ export const tauriBackend: Backend = {
   listAccounts: () => invoke<AccountView[]>("list_accounts"),
   addIcsAccount: (name, url) => invoke<AccountView>("add_ics_account", { name, url }),
   addCaldavAccount: (name, server, username, password) => invoke<AccountView>("add_caldav_account", { name, server, username, password }),
+  oauthAvailable: () => invoke<OAuthAvailability>("oauth_available"),
+  addOauthAccount: (provider) => invoke<AccountView>("add_oauth_account", { provider }),
+  cancelOauth: () => invoke<void>("cancel_oauth"),
   addDemoAccount: () => invoke<AccountView>("add_demo_account"),
   removeAccount: (id) => invoke<void>("remove_account", { id }),
   renameAccount: (id, name) => invoke<void>("rename_account", { id, name }),

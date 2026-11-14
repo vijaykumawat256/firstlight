@@ -1,15 +1,17 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, KeyRound, Link2, Mail, Sparkles } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { api, errorMessage } from "@/api";
 import { Badge, Button, ListGroup, Select, Sheet, TextField } from "@/design";
 import { CALDAV_PRESETS, OTHER_SERVER } from "./presets";
 
-type Step = "choose" | "ics" | "caldav";
+type Step = "choose" | "ics" | "caldav" | "oauth";
+type OAuthProvider = "google" | "microsoft";
+const OAUTH_LABEL: Record<OAuthProvider, string> = { google: "Google", microsoft: "Microsoft" };
 
 const LINK_RE = /^(https|webcal):\/\/\S{4,}$/i;
 
-function Choice({ icon, title, subtitle, soon, onClick }: { icon: ReactNode; title: string; subtitle: string; soon?: boolean; onClick?: () => void }) {
+function Choice({ icon, title, subtitle, soon, badge, onClick }: { icon: ReactNode; title: string; subtitle: string; soon?: boolean; badge?: string; onClick?: () => void }) {
   return (
     <li>
       <button
@@ -23,7 +25,7 @@ function Choice({ icon, title, subtitle, soon, onClick }: { icon: ReactNode; tit
           <span className="block truncate text-headline font-medium text-fg">{title}</span>
           <span className="block truncate text-footnote text-fg-2">{subtitle}</span>
         </span>
-        {soon ? <Badge>Soon</Badge> : <ChevronRight className="size-4 text-fg-3" aria-hidden />}
+        {soon ? <Badge>{badge ?? "Soon"}</Badge> : <ChevronRight className="size-4 text-fg-3" aria-hidden />}
       </button>
     </li>
   );
@@ -39,8 +41,12 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
   const [server, setServer] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [oauthProvider, setOauthProvider] = useState<OAuthProvider>("google");
+  const available = useQuery({ queryKey: ["oauth-available"], queryFn: () => api.oauthAvailable(), enabled: open, staleTime: Infinity });
 
   const close = (o: boolean) => {
+    // Closing while we wait for the browser aborts the sign-in so nothing lingers.
+    if (!o && step === "oauth" && oauth.isPending) void api.cancelOauth();
     onOpenChange(o);
     if (!o) {
       // Reset after the closing animation so the content doesn't flash.
@@ -55,6 +61,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
         setPassword("");
         ics.reset();
         dav.reset();
+        oauth.reset();
         demo.reset();
       }, 250);
     }
@@ -69,6 +76,17 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
   const presetInfo = CALDAV_PRESETS.find((p) => p.id === preset);
   const serverUrl = presetInfo ? presetInfo.server : server.trim();
   const dav = useMutation({ mutationFn: () => api.addCaldavAccount(name, serverUrl, username.trim(), password), onSuccess: done });
+  const oauth = useMutation({ mutationFn: (p: OAuthProvider) => api.addOauthAccount(p), onSuccess: done });
+  const startOauth = (p: OAuthProvider) => {
+    setOauthProvider(p);
+    setStep("oauth");
+    oauth.mutate(p);
+  };
+  const cancelOauth = () => {
+    void api.cancelOauth();
+    oauth.reset();
+    setStep("choose");
+  };
   const demo = useMutation({ mutationFn: () => api.addDemoAccount(), onSuccess: done });
 
   const linkError = touched && !LINK_RE.test(url.trim()) ? "Enter an https:// or webcal:// link." : undefined;
@@ -87,10 +105,25 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
     <Sheet
       open={open}
       onOpenChange={close}
-      title={step === "choose" ? "Add a calendar" : step === "ics" ? "Calendar link" : "iCloud, Yahoo and others"}
-      description={step === "choose" ? "Choose how to connect." : step === "ics" ? "Paste the address of a published calendar." : "Sign in with an app password."}
+      title={step === "choose" ? "Add a calendar" : step === "ics" ? "Calendar link" : step === "oauth" ? `Sign in with ${OAUTH_LABEL[oauthProvider]}` : "iCloud, Yahoo and others"}
+      description={step === "choose" ? "Choose how to connect." : step === "ics" ? "Paste the address of a published calendar." : step === "oauth" ? "Daybrief only asks to view your calendar." : "Sign in with an app password."}
       footer={
-        step !== "choose" ? (
+        step === "oauth" ? (
+          oauth.isPending ? (
+            <Button variant="secondary" onClick={cancelOauth}>
+              Cancel
+            </Button>
+          ) : (
+            <>
+              <Button variant="secondary" onClick={() => setStep("choose")}>
+                Back
+              </Button>
+              <Button variant="primary" onClick={() => oauth.mutate(oauthProvider)}>
+                Try again
+              </Button>
+            </>
+          )
+        ) : step !== "choose" ? (
           <>
             <Button variant="secondary" leading={<ChevronLeft className="size-4" />} onClick={() => setStep("choose")} disabled={busy}>
               Back
@@ -106,8 +139,22 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
         <div className="flex flex-col gap-3 pb-4">
           <ListGroup>
             <Choice icon={<Link2 />} title="Calendar link" subtitle="Any published calendar (ICS or webcal)" onClick={() => setStep("ics")} />
-            <Choice icon={<Mail />} title="Google" subtitle="Gmail and Google Workspace" soon />
-            <Choice icon={<CalendarDays />} title="Microsoft" subtitle="Outlook.com and Microsoft 365" soon />
+            <Choice
+              icon={<Mail />}
+              title="Google"
+              subtitle="Gmail and Google Workspace"
+              soon={!available.data?.google}
+              badge="Setup needed"
+              onClick={() => startOauth("google")}
+            />
+            <Choice
+              icon={<CalendarDays />}
+              title="Microsoft"
+              subtitle="Outlook.com and Microsoft 365"
+              soon={!available.data?.microsoft}
+              badge="Setup needed"
+              onClick={() => startOauth("microsoft")}
+            />
             <Choice icon={<KeyRound />} title="iCloud, Yahoo and others" subtitle="CalDAV with an app password" onClick={() => setStep("caldav")} />
           </ListGroup>
           {!hasDemo && (
@@ -116,6 +163,23 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
             </ListGroup>
           )}
           {demo.isError && <p role="alert" className="px-1 text-footnote text-danger">{errorMessage(demo.error)}</p>}
+        </div>
+      ) : step === "oauth" ? (
+        <div className="flex flex-col items-center gap-4 px-2 pb-8 pt-4 text-center" aria-live="polite">
+          {oauth.isError ? (
+            <p role="alert" className="w-full rounded-card bg-danger-soft px-3 py-2 text-left text-body text-danger">
+              {errorMessage(oauth.error)}
+            </p>
+          ) : (
+            <>
+              <div className="size-10 animate-spin rounded-full border-[3px] border-fill-strong border-t-accent" aria-hidden />
+              <div>
+                <p className="text-headline font-semibold text-fg">Finish signing in in your browser</p>
+                <p className="mt-1 text-body text-fg-2">Choose your {OAUTH_LABEL[oauthProvider]} account and allow calendar access. Then come back here.</p>
+              </div>
+            </>
+          )}
+          <p className="max-w-[34ch] text-footnote text-fg-3">Daybrief never sees your password, only a revocable permission to read your calendar.</p>
         </div>
       ) : step === "caldav" ? (
         <form

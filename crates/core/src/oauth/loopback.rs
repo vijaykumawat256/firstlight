@@ -1,7 +1,7 @@
 //! Receives the browser redirect on `127.0.0.1` (RFC 8252, section 7.3).
 //!
 //! The listener binds a random port on the loopback interface only, accepts only
-//! `GET /callback`, and requires the `state` we generated. Stray requests (favicon, port scanners)
+//! `GET /` (a bare loopback URI, which is what providers register), and requires the `state` we generated. Stray requests (favicon, port scanners)
 //! are answered and ignored without ending the wait.
 
 use crate::{Error, Result};
@@ -51,7 +51,7 @@ impl Loopback {
     }
 
     pub fn redirect_uri(&self, host: &str) -> String {
-        format!("http://{host}:{}/callback", self.port)
+        format!("http://{host}:{}/", self.port)
     }
 
     /// Waits for the redirect and returns the authorization code.
@@ -94,7 +94,7 @@ impl Loopback {
         let mut parts = line.split_whitespace();
         let (method, target) = (parts.next()?, parts.next()?);
         let url = Url::parse(&format!("http://localhost{target}")).ok()?;
-        if method != "GET" || url.path() != "/callback" {
+        if method != "GET" || url.path() != "/" {
             respond(stream, "404 Not Found", "Not found");
             return None;
         }
@@ -163,7 +163,7 @@ mod tests {
         let lb = Loopback::bind().unwrap();
         let port = lb.port;
         let h = wait(lb, "good-state");
-        let page = get(port, "/callback?code=abc123&state=good-state");
+        let page = get(port, "/?code=abc123&state=good-state");
         assert!(page.contains("200 OK") && page.contains("signed in"));
         assert_eq!(h.join().unwrap().unwrap(), "abc123");
     }
@@ -173,10 +173,10 @@ mod tests {
         let lb = Loopback::bind().unwrap();
         let port = lb.port;
         let h = wait(lb, "good-state");
-        assert!(get(port, "/callback?code=evil&state=bad-state").contains("400"));
-        assert!(get(port, "/callback?code=evil").contains("400"));
+        assert!(get(port, "/?code=evil&state=bad-state").contains("400"));
+        assert!(get(port, "/?code=evil").contains("400"));
         assert!(get(port, "/favicon.ico").contains("404"));
-        assert!(get(port, "/callback?code=real&state=good-state").contains("200"));
+        assert!(get(port, "/?code=real&state=good-state").contains("200"));
         assert_eq!(
             h.join().unwrap().unwrap(),
             "real",
@@ -189,7 +189,7 @@ mod tests {
         let lb = Loopback::bind().unwrap();
         let port = lb.port;
         let h = wait(lb, "s");
-        get(port, "/callback?error=access_denied&state=s");
+        get(port, "/?error=access_denied&state=s");
         assert!(
             h.join()
                 .unwrap()
@@ -204,8 +204,8 @@ mod tests {
         let lb = Loopback::bind().unwrap();
         let port = lb.port;
         let h = wait(lb, "s");
-        get(port, "/callback?error=access_denied&state=forged");
-        get(port, "/callback?code=ok&state=s");
+        get(port, "/?error=access_denied&state=forged");
+        get(port, "/?code=ok&state=s");
         assert_eq!(h.join().unwrap().unwrap(), "ok");
     }
 
@@ -240,7 +240,7 @@ mod tests {
         assert!(a.listener.local_addr().unwrap().ip().is_loopback());
         assert_eq!(
             a.redirect_uri("127.0.0.1"),
-            format!("http://127.0.0.1:{}/callback", a.port)
+            format!("http://127.0.0.1:{}/", a.port)
         );
     }
 }

@@ -1,4 +1,4 @@
-import type { AccountView, CalendarInfo, CalEvent, SyncSummary } from "./types";
+import type { AccountView, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -13,6 +13,14 @@ export interface Backend {
   addIcsAccount(name: string, url: string): Promise<AccountView>;
   /** Connects a CalDAV server (iCloud, Yahoo, Fastmail, ...) with a username and app password. */
   addCaldavAccount(name: string, server: string, username: string, password: string): Promise<AccountView>;
+  /** Which sign-in providers this build is configured for (client IDs present). */
+  oauthAvailable(): Promise<OAuthAvailability>;
+  /**
+   * Opens the provider's sign-in page in the system browser and resolves when the user finishes.
+   * Signing in again with an existing account reconnects it instead of adding a duplicate.
+   */
+  addOauthAccount(provider: "google" | "microsoft"): Promise<AccountView>;
+  cancelOauth(): Promise<void>;
   addDemoAccount(): Promise<AccountView>;
   /** Deletes the account, its cached events and its saved credentials. */
   removeAccount(id: string): Promise<void>;

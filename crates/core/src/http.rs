@@ -9,6 +9,9 @@
 
 use crate::{Error, Result};
 use std::io::Read;
+
+/// Re-exported so the shell can parse and check URLs without its own HTTP dependency.
+pub use reqwest::Url;
 use std::time::Duration;
 
 const MAX_BODY_BYTES: u64 = 20 * 1024 * 1024;

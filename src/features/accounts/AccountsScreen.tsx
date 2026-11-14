@@ -72,20 +72,21 @@ function CalendarRow({ cal, onChanged }: { cal: CalendarInfo; onChanged: () => v
 function Status({ a }: { a: AccountView }) {
   if (a.status === "needs_attention") {
     return (
-      <p className="mt-1 flex items-center gap-1.5 text-footnote text-danger">
-        <AlertCircle className="size-3.5 shrink-0" aria-hidden /> Needs attention. Add the calendar again with a fresh link.
+      <p className="flex items-start gap-1.5 text-footnote text-danger">
+        <AlertCircle className="mt-px size-3.5 shrink-0" aria-hidden />{" "}
+        {a.provider === "google" || a.provider === "microsoft" ? "Needs attention. Sign in again to keep it up to date." : "Needs attention. Add the calendar again with a fresh link or password."}
       </p>
     );
   }
   if (a.last_error === "offline") {
     return (
-      <p className="mt-1 flex items-center gap-1.5 text-footnote text-fg-2">
-        <CloudOff className="size-3.5 shrink-0" aria-hidden /> Offline. Showing saved events from {timeAgo(a.last_synced_at)}.
+      <p className="flex items-start gap-1.5 text-footnote text-fg-2">
+        <CloudOff className="mt-px size-3.5 shrink-0" aria-hidden /> Offline. Showing saved events from {timeAgo(a.last_synced_at)}.
       </p>
     );
   }
-  if (a.last_error) return <p className="mt-1 text-footnote text-warning">Last sync didn’t finish. Will retry.</p>;
-  return <p className="mt-1 text-footnote text-fg-2">Synced {timeAgo(a.last_synced_at)}</p>;
+  if (a.last_error) return <p className="text-footnote text-warning">Last sync didn’t finish. Will retry.</p>;
+  return <p className="text-footnote text-fg-2">Synced {timeAgo(a.last_synced_at)}</p>;
 }
 
 function AccountCard({ account, onChanged }: { account: AccountView; onChanged: () => void }) {
@@ -102,6 +103,12 @@ function AccountCard({ account, onChanged }: { account: AccountView; onChanged: 
     },
     onError: (e) => push({ title: "Couldn't rename", description: errorMessage(e), tone: "danger" }),
   });
+  const reconnect = useMutation({
+    mutationFn: () => api.addOauthAccount(account.provider as "google" | "microsoft"),
+    onSuccess: onChanged,
+    onError: (e) => push({ title: "Couldn't reconnect", description: errorMessage(e), tone: "danger" }),
+  });
+  const isOauth = account.provider === "google" || account.provider === "microsoft";
   const remove = useMutation({
     mutationFn: () => api.removeAccount(account.id),
     onSuccess: () => {
@@ -119,9 +126,13 @@ function AccountCard({ account, onChanged }: { account: AccountView; onChanged: 
           <div className="mt-0.5 flex items-center gap-2">
             <Badge tone={account.status === "needs_attention" ? "danger" : "neutral"}>{PROVIDER_LABEL[account.provider]}</Badge>
           </div>
-          <Status a={account} />
         </div>
         <div className="flex shrink-0 gap-1">
+          {isOauth && account.status === "needs_attention" && (
+            <Button variant="primary" size="sm" disabled={reconnect.isPending} onClick={() => reconnect.mutate()}>
+              {reconnect.isPending ? "Waiting…" : "Reconnect"}
+            </Button>
+          )}
           <Button variant="plain" size="sm" onClick={() => { setName(account.display_name); setRenaming(true); }}>
             Rename
           </Button>
@@ -129,6 +140,9 @@ function AccountCard({ account, onChanged }: { account: AccountView; onChanged: 
             Remove
           </Button>
         </div>
+      </div>
+      <div className="px-1">
+        <Status a={account} />
       </div>
       <ListGroup>
         {account.calendars.map((c) => (

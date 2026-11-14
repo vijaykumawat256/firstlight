@@ -143,8 +143,9 @@ fn run_round(
         summary.offline |= report.offline;
         summary.needs_attention |= report.needs_attention;
         log::info!(
-            "synced account {} ok={} failed={} offline={} attention={}",
+            "synced account {} trigger={:?} ok={} failed={} offline={} attention={}",
             account.id,
+            trigger,
             report.calendars_ok,
             report.calendars_failed,
             report.offline,

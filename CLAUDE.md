@@ -3,7 +3,9 @@
 The full brief is `PLAN.md`; read it first. This file records what is true *now* and what you'd otherwise rediscover.
 
 ## Status
-Phase 1 (foundation) built. Next: Phase 2 (calendars). Do not build ahead.
+Phases 1 and 2 built, except what is listed under "Not yet verified". Next: Phase 3 (briefing). Do not build ahead.
+Phase 2 delivered: ICS links, CalDAV (iCloud/Yahoo/Fastmail/other), Google and Microsoft OAuth, sync engine/scheduler, dedupe, accounts UI.
+Phase 2 NOT delivered: macOS EventKit system-calendar provider (see below).
 
 ## Commands
 - Run app: `npm run tauri dev` (needs Rust: `. "$HOME/.cargo/env"`; each shell call starts without cargo on PATH)
@@ -26,7 +28,18 @@ Phase 1 (foundation) built. Next: Phase 2 (calendars). Do not build ahead.
 - Tray icon is a template image (`icons/tray.png`); app icon source is `icons/source-1024.png` (regenerate with `npx tauri icon`).
 - App runs as a macOS Accessory app (no Dock icon). Quit from the tray menu.
 
+## Phase 2 notes
+- Providers: `crates/core/src/providers/{fixture,ics,caldav,google,microsoft}`; add new ones to `src-tauri/src/providers.rs`.
+- Sync: `crates/core/src/sync` (pure, tested) + `src-tauri/src/scheduler.rs` (thread, own DB connection, backoff).
+- Adding an account always goes through `commands::connect` (keychain write, first sync, rollback on failure).
+- OAuth client IDs come from `.env` at build time (`src-tauri/build.rs`); guide in `docs/OAUTH_SETUP.md`.
+- Mock HTTP server for tests: `crates/core/src/http.rs` `testserver`. Live check: `cargo test -p daybrief-core live_ -- --ignored --nocapture`.
+- Browser fixture backend flags: `?fresh` (no accounts), `?attention`, `?slowoauth`, `?oauthfail`, `?nomicrosoft`.
+- Google/Microsoft sync fetch the whole window every time (no sync tokens/delta); revisit once live credentials allow verification.
+
 ## Not yet verified (be honest in summaries)
+- Google and Microsoft sign-in against the LIVE services (mock-tested only; needs the user's client IDs).
+- macOS EventKit provider: not built. It needs the calendar permission prompt, which requires an Info.plist usage string that unbundled `tauri dev` binaries lack, and cannot be checked headlessly.
 - Real-window appearance (vibrancy/titlebar overlay): could not screenshot the desktop app.
 - Start-at-login across an actual logout/login; toggling was not exercised.
 - Windows: nothing built or run locally; CI covers it once pushed. Unlock detection is a stub there.

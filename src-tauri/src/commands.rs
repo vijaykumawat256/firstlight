@@ -8,8 +8,13 @@ use chrono::{Duration, Utc};
 use daybrief_core::dedupe::dedupe;
 use daybrief_core::http::normalise_calendar_url;
 use daybrief_core::model::*;
+use daybrief_core::oauth::loopback::Loopback;
+use daybrief_core::oauth::{
+    self, OAuthConfig, Pkce, authorization_url, exchange_code, random_state,
+};
 use daybrief_core::providers::caldav::{CaldavProvider, CaldavSecret, validate_server};
 use daybrief_core::providers::ics::IcsProvider;
+use daybrief_core::providers::{google, microsoft};
 use daybrief_core::store::Store;
 use daybrief_core::sync::{default_window, sync_account};
 use daybrief_core::{Error, SyncReport};
@@ -29,7 +34,7 @@ fn internal<E: std::fmt::Debug>(what: &'static str) -> impl Fn(E) -> String {
     }
 }
 
-fn lock(state: &AppState) -> CmdResult<std::sync::MutexGuard<'_, Store>> {
+fn lock_store(state: &AppState) -> CmdResult<std::sync::MutexGuard<'_, Store>> {
     state
         .store
         .lock()
@@ -56,7 +61,7 @@ pub async fn get_events(
     if end - start > Duration::days(MAX_RANGE_DAYS) {
         return Err("range too large".into());
     }
-    let events = lock(&state)?
+    let events = lock_store(&state)?
         .events_between(start, end)
         .map_err(internal("loading events"))?;
     Ok(dedupe(events))
@@ -64,14 +69,14 @@ pub async fn get_events(
 
 #[tauri::command]
 pub async fn get_calendars(state: State<'_, AppState>) -> CmdResult<Vec<Calendar>> {
-    lock(&state)?
+    lock_store(&state)?
         .list_calendars()
         .map_err(internal("loading calendars"))
 }
 
 #[tauri::command]
 pub async fn list_accounts(state: State<'_, AppState>) -> CmdResult<Vec<AccountView>> {
-    lock(&state)?
+    lock_store(&state)?
         .account_views()
         .map_err(internal("loading accounts"))
 }
@@ -86,6 +91,9 @@ fn explain(kind: ProviderKind, report: &SyncReport) -> &'static str {
         }
         (ProviderKind::Caldav, true, _) => {
             "The server rejected that username or password. Use an app-specific password, not your normal one."
+        }
+        (ProviderKind::Google | ProviderKind::Microsoft, true, _) => {
+            "Access was refused. Make sure calendar access is allowed for this app, then sign in again."
         }
         (_, _, true) => "Couldn't reach the server. Check your connection and try again.",
         (ProviderKind::Ics, ..) => {
@@ -286,7 +294,7 @@ pub async fn add_demo_account(
 
 #[tauri::command]
 pub async fn remove_account(state: State<'_, AppState>, id: String) -> CmdResult<()> {
-    let store = lock(&state)?;
+    let store = lock_store(&state)?;
     let Some(account) = store
         .get_account(&id)
         .map_err(internal("loading the account"))?
@@ -308,7 +316,7 @@ pub async fn remove_account(state: State<'_, AppState>, id: String) -> CmdResult
 
 #[tauri::command]
 pub async fn rename_account(state: State<'_, AppState>, id: String, name: String) -> CmdResult<()> {
-    lock(&state)?
+    lock_store(&state)?
         .rename_account(&id, &name)
         .map_err(|e| match e {
             Error::Invalid(m) => m.to_string(),
@@ -322,7 +330,7 @@ pub async fn set_calendar_visible(
     calendar_id: String,
     visible: bool,
 ) -> CmdResult<()> {
-    lock(&state)?
+    lock_store(&state)?
         .set_calendar_visible(&calendar_id, visible)
         .map_err(internal("updating the calendar"))
 }
@@ -333,7 +341,7 @@ pub async fn set_calendar_colour(
     calendar_id: String,
     colour: String,
 ) -> CmdResult<()> {
-    lock(&state)?
+    lock_store(&state)?
         .set_calendar_colour(&calendar_id, &colour)
         .map_err(|e| match e {
             Error::Invalid(m) => m.to_string(),
@@ -370,7 +378,199 @@ pub async fn set_autostart(app: AppHandle, enabled: bool) -> CmdResult<()> {
 #[tauri::command]
 pub async fn get_unlock_count_today(state: State<'_, AppState>) -> CmdResult<i64> {
     let today = Utc::now().with_timezone(&state.tz).date_naive();
-    lock(&state)?
+    lock_store(&state)?
         .count_briefing_log(today, "unlock")
         .map_err(internal("reading unlock log"))
+}
+
+// ---- OAuth sign-in (Google, Microsoft) -------------------------------------------
+
+#[derive(serde::Serialize)]
+pub struct OAuthAvailability {
+    google: bool,
+    microsoft: bool,
+}
+
+/// Whether this build carries a client ID for each provider (see `.env.example`).
+#[tauri::command]
+pub async fn oauth_available(state: State<'_, AppState>) -> CmdResult<OAuthAvailability> {
+    Ok(OAuthAvailability {
+        google: state.deps.oauth.google.is_some(),
+        microsoft: state.deps.oauth.microsoft.is_some(),
+    })
+}
+
+/// Aborts a sign-in that is waiting for the browser.
+#[tauri::command]
+pub async fn cancel_oauth(state: State<'_, AppState>) -> CmdResult<()> {
+    state
+        .oauth_cancel
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+/// Only these sign-in pages may be opened in the browser.
+const SIGN_IN_HOSTS: [&str; 2] = ["accounts.google.com", "login.microsoftonline.com"];
+const SIGN_IN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+fn oauth_error(e: Error) -> String {
+    match e {
+        // Messages from the loopback/cancel path are already plain language.
+        Error::Provider(m) if m.starts_with("sign-in") => {
+            let mut c = m.chars();
+            c.next()
+                .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
+                .unwrap_or(m)
+                + "."
+        }
+        Error::Offline => {
+            "Couldn't reach the sign-in server. Check your connection and try again.".into()
+        }
+        Error::AuthRevoked => "The sign-in was refused. Please try again.".into(),
+        _ => "Couldn't complete sign-in. Please try again.".into(),
+    }
+}
+
+fn config_for(state: &AppState, kind: ProviderKind) -> CmdResult<OAuthConfig> {
+    match kind {
+        ProviderKind::Google => state.deps.oauth.google.clone(),
+        ProviderKind::Microsoft => state.deps.oauth.microsoft.clone(),
+        _ => None,
+    }
+    .ok_or_else(|| "Sign-in for this provider isn't set up in this build yet.".to_string())
+}
+
+#[tauri::command]
+pub async fn add_oauth_account(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    provider: String,
+) -> CmdResult<AccountView> {
+    use tauri_plugin_opener::OpenerExt;
+    let kind = match provider.as_str() {
+        "google" => ProviderKind::Google,
+        "microsoft" => ProviderKind::Microsoft,
+        _ => return Err("unknown provider".into()),
+    };
+    let cfg = config_for(&state, kind)?;
+    let (deps, cancel, lock) = (
+        state.deps.clone(),
+        state.oauth_cancel.clone(),
+        state.oauth_lock.clone(),
+    );
+
+    let opener_app = app.clone();
+    let (tokens, email) =
+        tauri::async_runtime::spawn_blocking(move || -> CmdResult<(oauth::TokenSet, String)> {
+            let _one_at_a_time = lock
+                .try_lock()
+                .map_err(|_| "A sign-in is already in progress.".to_string())?;
+            cancel.store(false, std::sync::atomic::Ordering::Relaxed);
+
+            let listener = Loopback::bind().map_err(oauth_error)?;
+            // Microsoft only registers "localhost"; Google recommends the literal loopback address.
+            let host = if kind == ProviderKind::Microsoft {
+                "localhost"
+            } else {
+                "127.0.0.1"
+            };
+            let redirect = listener.redirect_uri(host);
+            let (state_token, pkce) = (random_state(), Pkce::generate());
+            let extra: &[(&str, &str)] = if kind == ProviderKind::Google {
+                &google::AUTH_EXTRA
+            } else {
+                &[]
+            };
+            let url = authorization_url(&cfg, &redirect, &state_token, &pkce.challenge, extra)
+                .map_err(oauth_error)?;
+
+            let parsed = daybrief_core::http::Url::parse(&url)
+                .map_err(|_| "bad sign-in address".to_string())?;
+            if parsed.scheme() != "https"
+                || !parsed
+                    .host_str()
+                    .is_some_and(|h| SIGN_IN_HOSTS.contains(&h))
+            {
+                return Err("Refusing to open an unexpected sign-in address.".into());
+            }
+            opener_app
+                .opener()
+                .open_url(url, None::<&str>)
+                .map_err(|_| "Couldn't open your browser.".to_string())?;
+
+            let code = listener
+                .wait_for_code(&state_token, SIGN_IN_TIMEOUT, &cancel)
+                .map_err(oauth_error)?;
+            let tokens = exchange_code(
+                deps.http.as_ref(),
+                &cfg,
+                &code,
+                &pkce.verifier,
+                &redirect,
+                Utc::now(),
+            )
+            .map_err(oauth_error)?;
+            let email = match kind {
+                ProviderKind::Google => google::GoogleProvider::fetch_email(
+                    deps.http.as_ref(),
+                    google::USERINFO_URL,
+                    &tokens.access_token,
+                ),
+                _ => microsoft::MicrosoftProvider::fetch_email(
+                    deps.http.as_ref(),
+                    microsoft::API_BASE,
+                    &tokens.access_token,
+                ),
+            }
+            .map_err(oauth_error)?;
+            Ok((tokens, email))
+        })
+        .await
+        .map_err(|_| "sign-in failed".to_string())??;
+
+    let secret_value = serde_json::to_string(&tokens).map_err(internal("saving the sign-in"))?;
+
+    // Signing in again with an account we already have refreshes it (this is also how "Reconnect" works).
+    let existing = lock_store(&state)?
+        .list_accounts()
+        .map_err(internal("loading accounts"))?
+        .into_iter()
+        .find(|a| {
+            a.provider == kind
+                && a.email
+                    .as_deref()
+                    .is_some_and(|e| e.eq_ignore_ascii_case(&email))
+        });
+    if let Some(account) = existing {
+        let secret_ref = account
+            .secret_ref
+            .clone()
+            .unwrap_or_else(|| oauth::secret_key(&account.id));
+        state
+            .deps
+            .secrets
+            .set(&secret_ref, &secret_value)
+            .map_err(internal("saving the sign-in"))?;
+        let store = lock_store(&state)?;
+        store
+            .set_account_status(&account.id, AccountStatus::Ok)
+            .map_err(internal("updating the account"))?;
+        state.sync.trigger(Trigger::Manual);
+        return store
+            .account_views()
+            .map_err(internal("loading accounts"))?
+            .into_iter()
+            .find(|a| a.id == account.id)
+            .ok_or_else(|| "account missing".to_string());
+    }
+
+    let id = new_id();
+    let new = NewAccount {
+        kind,
+        name: email.clone(),
+        email: Some(email),
+        secret_ref: oauth::secret_key(&id),
+        secret_value,
+    };
+    connect(&app, &state, id, new).await
 }

@@ -33,6 +33,10 @@ pub(crate) struct AppState {
     pub tz: Tz,
     pub deps: Deps,
     pub sync: SyncHandle,
+    /// Set to abort a sign-in that is waiting for the browser.
+    pub oauth_cancel: Arc<std::sync::atomic::AtomicBool>,
+    /// Held for the duration of a sign-in so only one runs at a time.
+    pub oauth_lock: Arc<Mutex<()>>,
 }
 
 // ---- helpers --------------------------------------------------------------
@@ -131,6 +135,9 @@ pub fn run() {
             commands::list_accounts,
             commands::add_ics_account,
             commands::add_caldav_account,
+            commands::add_oauth_account,
+            commands::cancel_oauth,
+            commands::oauth_available,
             commands::add_demo_account,
             commands::remove_account,
             commands::rename_account,
@@ -172,6 +179,7 @@ pub fn run() {
                 http: Arc::new(ReqwestClient::new().map_err(|e| e.to_string())?),
                 secrets: Arc::new(keychain),
                 tz,
+                oauth: providers::OAuthConfigs::from_build(),
             };
             let sync = scheduler::spawn(
                 app.handle().clone(),
@@ -187,6 +195,8 @@ pub fn run() {
                 tz,
                 deps,
                 sync,
+                oauth_cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                oauth_lock: Arc::new(Mutex::new(())),
             });
 
             build_tray(app.handle())?;

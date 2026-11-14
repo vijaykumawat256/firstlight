@@ -15,7 +15,7 @@ test("first run shows onboarding and sample data fills the briefing", async ({ p
   await page.screenshot({ path: `${SHOTS}/onboarding.png` });
 
   await openAdd(page);
-  await expect(page.getByText("Soon")).toHaveCount(2);
+  await expect(page.getByText("Setup needed")).toHaveCount(0);
   await page.screenshot({ path: `${SHOTS}/add-account.png` });
   await page.getByRole("button", { name: /Try with sample data/ }).click();
 
@@ -90,7 +90,8 @@ test("an account that needs attention says so", async ({ page }) => {
   await page.goto("/?attention");
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: /Accounts & calendars/ }).click();
-  await expect(page.getByText(/Needs attention/)).toBeVisible();
+  await expect(page.getByText(/Needs attention. Sign in again/)).toBeVisible(); // OAuth: reconnect
+  await expect(page.getByText(/Needs attention. Add the calendar again/)).toBeVisible(); // link: re-add
   await page.screenshot({ path: `${SHOTS}/accounts-attention.png` });
 });
 
@@ -149,4 +150,61 @@ test("CalDAV: a custom server needs a full https address", async ({ page }) => {
   await page.getByLabel("App password").fill("pw");
   await page.getByRole("button", { name: "Add calendar" }).click();
   await expect(page.getByText("Enter the full https:// address.")).toBeVisible();
+});
+
+test("Google sign-in: waiting state, then connected; signing in again does not duplicate", async ({ page }) => {
+  await page.goto("/?fresh&slowoauth");
+  await openAdd(page);
+  await page.getByRole("button", { name: /^Google/ }).click();
+  await expect(page.getByText("Finish signing in in your browser")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/oauth-waiting.png` });
+
+  await expect(page.getByRole("heading", { name: "Your day is clear" })).toBeVisible({ timeout: 10_000 });
+
+  // Second sign-in with the same account reconnects instead of adding another.
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: /Accounts & calendars/ }).click();
+  await page.getByRole("button", { name: "Add a calendar" }).click();
+  await page.getByRole("button", { name: /^Google/ }).click();
+  await expect(page.getByRole("heading", { name: "Accounts" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "me@gmail.com" })).toHaveCount(1);
+});
+
+test("Google sign-in can be cancelled while waiting", async ({ page }) => {
+  await page.goto("/?fresh&slowoauth");
+  await openAdd(page);
+  await page.getByRole("button", { name: /^Microsoft/ }).click();
+  await expect(page.getByText("Finish signing in in your browser")).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("button", { name: /^Microsoft/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Calendar link/ })).toBeVisible();
+});
+
+test("a failed sign-in explains and offers to try again", async ({ page }) => {
+  await page.goto("/?fresh&oauthfail");
+  await openAdd(page);
+  await page.getByRole("button", { name: /^Google/ }).click();
+  await expect(page.getByRole("alert")).toContainText("Couldn't complete sign-in");
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/oauth-error.png` });
+});
+
+test("providers without a client ID are shown as needing setup and cannot be started", async ({ page }) => {
+  await page.goto("/?fresh&nomicrosoft");
+  await openAdd(page);
+  await expect(page.getByText("Setup needed")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /^Microsoft/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^Google/ })).toBeEnabled();
+});
+
+test("Reconnect restores an account that needs attention", async ({ page }) => {
+  await page.goto("/?attention");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: /Accounts & calendars/ }).click();
+  await expect(page.getByText(/Sign in again to keep it up to date/)).toBeVisible();
+  await page.getByRole("button", { name: "Reconnect" }).click();
+  await expect(page.getByText(/Sign in again to keep it up to date/)).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "Reconnect" })).toHaveCount(0);
 });

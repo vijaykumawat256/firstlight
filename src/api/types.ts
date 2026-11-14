@@ -54,3 +54,8 @@ export interface SyncSummary {
   offline: boolean;
   needs_attention: boolean;
 }
+
+export interface OAuthAvailability {
+  google: boolean;
+  microsoft: boolean;
+}
