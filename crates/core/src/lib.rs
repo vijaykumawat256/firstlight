@@ -10,6 +10,7 @@ pub mod http;
 pub mod ics;
 pub mod join;
 pub mod model;
+pub mod oauth;
 pub mod providers;
 pub mod secrets;
 pub mod store;

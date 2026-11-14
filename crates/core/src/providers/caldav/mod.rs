@@ -108,15 +108,7 @@ pub fn nearest_palette(hex: &str) -> Option<&'static str> {
         .map(|(n, _)| *n)
 }
 
-/// A stable short id for a calendar URL.
-fn short_hash(s: &str) -> String {
-    format!(
-        "{:016x}",
-        s.bytes()
-            .fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ u64::from(b))
-                .wrapping_mul(0x0100_0000_01b3))
-    )
-}
+use super::short_hash;
 
 impl CaldavProvider {
     pub fn new(http: Arc<dyn HttpClient>, secrets: Arc<dyn SecretStore>, default_tz: Tz) -> Self {

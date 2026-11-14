@@ -9,7 +9,9 @@ use chrono::{DateTime, Utc};
 
 pub mod caldav;
 pub mod fixture;
+pub mod google;
 pub mod ics;
+pub mod microsoft;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Capabilities {
@@ -47,4 +49,14 @@ pub trait Provider: Send + Sync {
         state: Option<&str>,
         window: &Window,
     ) -> Result<SyncResult>;
+}
+
+/// A stable short id for a remote identifier (calendar ids contain characters we'd rather not store in ours).
+pub(crate) fn short_hash(s: &str) -> String {
+    format!(
+        "{:016x}",
+        s.bytes()
+            .fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ u64::from(b))
+                .wrapping_mul(0x0100_0000_01b3))
+    )
 }
