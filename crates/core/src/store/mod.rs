@@ -146,6 +146,16 @@ impl Store {
 
     /// Events from visible calendars touching `[from, to)`, ordered by start.
     /// Timed events are filtered exactly; all-day events by UTC date (the UI refines).
+    /// One event by id, whether or not its calendar is shown.
+    pub fn get_event(&self, id: &str) -> Result<Option<Event>> {
+        let sql = format!("SELECT {EVENT_COLUMNS} FROM events e WHERE e.id = ?1");
+        match self.conn.query_row(&sql, [id], event_from_row) {
+            Ok(e) => Ok(Some(e)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub fn events_between(&self, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<Vec<Event>> {
         if to <= from {
             return Err(Error::Invalid("range end must be after start"));
@@ -158,41 +168,7 @@ impl Store {
              WHERE c.visible = 1
              ORDER BY COALESCE(e.start_utc, CAST(strftime('%s', e.start_date) AS INTEGER)), e.title, e.id",
         )?;
-        let rows = st.query_map([], |r| {
-            let all_day: bool = r.get(5)?;
-            let when = if all_day {
-                let parse =
-                    |s: String| NaiveDate::parse_from_str(&s, "%Y-%m-%d").unwrap_or_default();
-                When::AllDay {
-                    start: parse(r.get(9)?),
-                    end: parse(r.get(10)?),
-                }
-            } else {
-                When::Timed {
-                    start: DateTime::from_timestamp(r.get(6)?, 0).unwrap_or_default(),
-                    end: DateTime::from_timestamp(r.get(7)?, 0).unwrap_or_default(),
-                    tzid: r.get(8)?,
-                }
-            };
-            Ok(Event {
-                id: r.get(0)?,
-                calendar_id: r.get(1)?,
-                remote_id: r.get(2)?,
-                ical_uid: r.get(3)?,
-                title: r.get(4)?,
-                when,
-                location: r.get(11)?,
-                description: r.get(12)?,
-                join_url: r.get(13)?,
-                status: EventStatus::parse(&r.get::<_, String>(14)?)
-                    .unwrap_or(EventStatus::Confirmed),
-                my_response: Response::parse(&r.get::<_, String>(15)?).unwrap_or(Response::None),
-                organizer: r.get(16)?,
-                recurrence_master_id: r.get(17)?,
-                updated_at: DateTime::from_timestamp(r.get(18)?, 0).unwrap_or_default(),
-                also_in: Vec::new(),
-            })
-        })?;
+        let rows = st.query_map([], event_from_row)?;
         let mut out = Vec::new();
         for ev in rows {
             let ev = ev?;
@@ -330,6 +306,46 @@ pub struct SyncInfo {
     pub last_error: Option<String>,
 }
 
+const EVENT_COLUMNS: &str =
+    "e.id, e.calendar_id, e.remote_id, e.ical_uid, e.title, e.all_day, e.start_utc, e.end_utc,
+                    e.start_tzid, e.start_date, e.end_date, e.location, e.description, e.join_url,
+                    e.status, e.my_response, e.organizer, e.recurrence_master_id, e.updated_at";
+
+/// One row of `EVENT_COLUMNS` as an [`Event`].
+fn event_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
+    let all_day: bool = r.get(5)?;
+    let when = if all_day {
+        let parse = |s: String| NaiveDate::parse_from_str(&s, "%Y-%m-%d").unwrap_or_default();
+        When::AllDay {
+            start: parse(r.get(9)?),
+            end: parse(r.get(10)?),
+        }
+    } else {
+        When::Timed {
+            start: DateTime::from_timestamp(r.get(6)?, 0).unwrap_or_default(),
+            end: DateTime::from_timestamp(r.get(7)?, 0).unwrap_or_default(),
+            tzid: r.get(8)?,
+        }
+    };
+    Ok(Event {
+        id: r.get(0)?,
+        calendar_id: r.get(1)?,
+        remote_id: r.get(2)?,
+        ical_uid: r.get(3)?,
+        title: r.get(4)?,
+        when,
+        location: r.get(11)?,
+        description: r.get(12)?,
+        join_url: r.get(13)?,
+        status: EventStatus::parse(&r.get::<_, String>(14)?).unwrap_or(EventStatus::Confirmed),
+        my_response: Response::parse(&r.get::<_, String>(15)?).unwrap_or(Response::None),
+        organizer: r.get(16)?,
+        recurrence_master_id: r.get(17)?,
+        updated_at: DateTime::from_timestamp(r.get(18)?, 0).unwrap_or_default(),
+        also_in: Vec::new(),
+    })
+}
+
 fn insert_event(conn: &Connection, e: &Event) -> Result<()> {
     let (all_day, s, en, tz, sd, ed) = match &e.when {
         When::Timed { start, end, tzid } => (
@@ -444,6 +460,47 @@ impl Store {
     pub fn remove_account(&self, id: &str) -> Result<()> {
         self.conn
             .execute("DELETE FROM accounts WHERE id = ?1", [id])?;
+        if id == crate::local::ACCOUNT_ID {
+            // Their own events live in two places; removing the account removes both.
+            self.conn.execute("DELETE FROM own_events", [])?;
+        }
+        Ok(())
+    }
+
+    // ---- the user's own events (see `local`) --------------------------------------------
+
+    pub fn put_own_event(&self, id: &str, json: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO own_events (id, json) VALUES (?1, ?2)
+             ON CONFLICT(id) DO UPDATE SET json = excluded.json",
+            params![id, json],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_own_event(&self, id: &str) -> Result<Option<String>> {
+        match self
+            .conn
+            .query_row("SELECT json FROM own_events WHERE id = ?1", [id], |r| {
+                r.get(0)
+            }) {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn all_own_events(&self) -> Result<Vec<(String, String)>> {
+        let mut st = self
+            .conn
+            .prepare("SELECT id, json FROM own_events ORDER BY id")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    pub fn delete_own_event(&self, id: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM own_events WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -578,6 +635,7 @@ impl Store {
             "DELETE FROM accounts;      -- cascades to calendars, events and sync state
              DELETE FROM briefing_log;
              DELETE FROM notifications_sent;
+             DELETE FROM own_events;
              DELETE FROM settings;",
         )?;
         self.conn

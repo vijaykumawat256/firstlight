@@ -67,6 +67,8 @@ fn main() {
             "get_mail_digest",
             "enable_apple_mail",
             "enable_account_mail",
+            "get_own_event",
+            "prepare_invite",
             "create_event",
             "update_event",
             "delete_event",

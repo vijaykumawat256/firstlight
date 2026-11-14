@@ -15,6 +15,7 @@ pub mod error;
 mod fuzz;
 pub mod http;
 pub mod ics;
+pub mod invite;
 pub mod join;
 pub mod local;
 pub mod mail;

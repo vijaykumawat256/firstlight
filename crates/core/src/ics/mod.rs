@@ -460,7 +460,8 @@ fn estimated_steps(rule: &str, start: DateTime<Utc>, until: DateTime<Utc>) -> Op
 fn expand(raw: &Raw, window: &Window) -> Vec<Moment> {
     let mut out = vec![raw.start.moment];
     out.extend(raw.rdates.iter().copied());
-    if let Some(rule) = &raw.rrule {
+    if let Some(rule) = raw.rrule.as_deref().map(date_until_to_datetime) {
+        let rule = &rule;
         let dtstart = match (raw.start.moment, raw.start.tz) {
             (Moment::Day(d), _) => format!("DTSTART:{}T000000Z", d.format("%Y%m%d")),
             (Moment::Time(t), None) => format!("DTSTART:{}", t.format("%Y%m%dT%H%M%SZ")),
@@ -504,6 +505,21 @@ fn expand(raw: &Raw, window: &Window) -> Vec<Moment> {
     });
     out.dedup_by_key(|m| m.key());
     out
+}
+
+/// All-day events write their end as a date (`UNTIL=20261119`, which Google and Apple both do), but the
+/// recurrence engine is given a date-time start and rejects a date-only end, which silently dropped every
+/// repeat after the first. The date means "through the end of that day", so it becomes 23:59:59 UTC.
+fn date_until_to_datetime(rule: &str) -> String {
+    rule.split(';')
+        .map(|part| match part.strip_prefix("UNTIL=") {
+            Some(v) if v.len() == 8 && v.bytes().all(|b| b.is_ascii_digit()) => {
+                format!("UNTIL={v}T235959Z")
+            }
+            _ => part.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 /// Parses an `.ics` document into events overlapping `opts.window`, with recurrences expanded.

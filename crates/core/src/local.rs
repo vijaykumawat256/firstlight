@@ -1,16 +1,20 @@
 //! Events the user adds themselves.
 //!
-//! They live in the same tables as every other event, under one account ("On this computer") and one
-//! calendar, so the briefing, notifications, calendar views and "Erase all data" treat them like any
-//! other. Nothing here talks to a provider: the entries never leave this computer, and Firstlight
-//! still asks for no write access to anyone's calendar.
+//! What the user typed (title, times, repeat rule, reminder, invitees) is kept as one record in
+//! `own_events`. The dated events the app shows are generated from it into the ordinary `events` table,
+//! under one account ("On this computer") and one calendar, so the briefing, notifications, calendar
+//! views and "Erase all data" treat them like any other. Repeats are expanded by the same tested
+//! recurrence code that reads calendar feeds. Nothing here talks to a provider: the entries never leave
+//! this computer, and Firstlight still asks for no write access to anyone's calendar.
 
+use crate::invite::{self, IcsExtras};
 use crate::model::*;
 use crate::store::Store;
 use crate::{Error, Result, join};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use chrono_tz::Tz;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 pub const ACCOUNT_ID: &str = "local-account";
 pub const CALENDAR_ID: &str = "local-events";
@@ -19,18 +23,58 @@ const MAX_LOCATION: usize = 300;
 const MAX_NOTES: usize = 4000;
 const MAX_LINK: usize = 2000;
 const MAX_DAYS: i64 = 366;
+const MAX_REPEAT_YEARS: i64 = 20;
+const MAX_INSTANCES: usize = 800;
+const MAX_REMINDER_MINUTES: u32 = 7 * 24 * 60;
+
+/// How an event repeats. Only these shapes exist; a raw recurrence rule is never accepted from the page.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RepeatInput {
+    /// "daily", "weekly", "monthly" or "yearly".
+    pub every: String,
+    /// Every 1..=30 days, weeks, months or years.
+    pub interval: u32,
+    /// The last day it can happen (`YYYY-MM-DD`, inclusive). `None` means no end.
+    pub until: Option<String>,
+}
 
 /// What the form sends. All-day dates are `YYYY-MM-DD` with `end` the *last* day (inclusive);
 /// timed events use RFC 3339 instants.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventInput {
     pub title: String,
     pub all_day: bool,
     pub start: String,
     pub end: String,
+    #[serde(default)]
     pub location: Option<String>,
+    #[serde(default)]
     pub join_url: Option<String>,
+    #[serde(default)]
     pub notes: Option<String>,
+    #[serde(default)]
+    pub repeat: Option<RepeatInput>,
+    /// Notify this many minutes before it starts (timed events only).
+    #[serde(default)]
+    pub reminder_minutes: Option<u32>,
+    /// People to share it with. Kept so the invitation can be sent again; nothing is sent by Firstlight.
+    #[serde(default)]
+    pub invitees: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Stored {
+    input: EventInput,
+    /// The zone the times were entered in, so a repeating 9:00 stays 9:00 across daylight saving.
+    tz: String,
+}
+
+/// An own event as the edit form needs it.
+#[derive(Debug, Clone, Serialize)]
+pub struct OwnEvent {
+    /// The event's id (the series id for a repeating one).
+    pub id: String,
+    pub input: EventInput,
 }
 
 fn clean(s: &Option<String>, max: usize, too_long: &'static str) -> Result<Option<String>> {
@@ -41,10 +85,15 @@ fn clean(s: &Option<String>, max: usize, too_long: &'static str) -> Result<Optio
     Ok((!t.is_empty()).then(|| t.to_string()))
 }
 
-/// Checks the input and builds the event. `remote_id` is `None` for a new event.
+fn parse_date(s: &str) -> Result<NaiveDate> {
+    NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d")
+        .map_err(|_| Error::Invalid("Choose valid dates."))
+}
+
+/// Checks the input and builds the event (the first occurrence, for a repeating one).
 pub fn build_event(
     input: &EventInput,
-    remote_id: Option<&str>,
+    master: Option<&str>,
     tz: Tz,
     now: DateTime<Utc>,
 ) -> Result<Event> {
@@ -74,11 +123,7 @@ pub fn build_event(
     };
 
     let when = if input.all_day {
-        let parse = |s: &str| {
-            NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d")
-                .map_err(|_| Error::Invalid("Choose valid dates."))
-        };
-        let (start, last) = (parse(&input.start)?, parse(&input.end)?);
+        let (start, last) = (parse_date(&input.start)?, parse_date(&input.end)?);
         if last < start {
             return Err(Error::Invalid("The event can't end before it starts."));
         }
@@ -109,7 +154,7 @@ pub fn build_event(
         }
     };
 
-    let remote = remote_id.map_or_else(new_id, str::to_string);
+    let remote = master.map_or_else(new_id, str::to_string);
     Ok(Event {
         id: format!("{CALENDAR_ID}:{remote}"),
         calendar_id: CALENDAR_ID.into(),
@@ -127,6 +172,114 @@ pub fn build_event(
         updated_at: now,
         also_in: vec![],
     })
+}
+
+/// Validates the repeat rule, reminder and invitees. Returns the input with the invitees tidied, and
+/// the recurrence rule text built from the enum (or `None`).
+fn check_extras(input: &EventInput, base: &Event, tz: Tz) -> Result<(EventInput, Option<String>)> {
+    let mut out = input.clone();
+
+    out.invitees = invite::parse_list(&input.invitees.join(","))?;
+
+    if let Some(m) = input.reminder_minutes {
+        if input.all_day {
+            return Err(Error::Invalid("Reminders need a start time."));
+        }
+        if m == 0 || m > MAX_REMINDER_MINUTES {
+            return Err(Error::Invalid("Choose a reminder of up to a week."));
+        }
+    }
+
+    let rule = match &input.repeat {
+        None => None,
+        Some(r) => {
+            let freq = match r.every.as_str() {
+                "daily" => "DAILY",
+                "weekly" => "WEEKLY",
+                "monthly" => "MONTHLY",
+                "yearly" => "YEARLY",
+                _ => return Err(Error::Invalid("Choose how often it repeats.")),
+            };
+            if !(1..=30).contains(&r.interval) {
+                return Err(Error::Invalid(
+                    "It can repeat every 1 to 30 days, weeks, months or years.",
+                ));
+            }
+            let mut rule = format!("FREQ={freq};INTERVAL={}", r.interval);
+            if let Some(until) = &r.until {
+                let day = parse_date(until)?;
+                let first = match &base.when {
+                    When::AllDay { start, .. } => *start,
+                    When::Timed { start, .. } => start.with_timezone(&tz).date_naive(),
+                };
+                if day < first {
+                    return Err(Error::Invalid("It can't stop repeating before it starts."));
+                }
+                if day - first > Duration::days(365 * MAX_REPEAT_YEARS) {
+                    return Err(Error::Invalid("Choose an end date within 20 years."));
+                }
+                if input.all_day {
+                    rule.push_str(&format!(";UNTIL={}", day.format("%Y%m%d")));
+                } else {
+                    // The end of that day where the event happens, as the UTC instant the rule requires.
+                    let eod = day.and_hms_opt(23, 59, 59).unwrap_or_default();
+                    rule.push_str(&format!(
+                        ";UNTIL={}",
+                        crate::tz::local_to_utc(tz, eod).format("%Y%m%dT%H%M%SZ")
+                    ));
+                }
+            }
+            Some(rule)
+        }
+    };
+    Ok((out, rule))
+}
+
+/// The dated events one record produces. A single event is one entry; a repeating one is expanded
+/// across the window by the recurrence engine.
+fn expand(
+    master: &str,
+    stored: &Stored,
+    window: &crate::providers::Window,
+    now: DateTime<Utc>,
+) -> Result<Vec<Event>> {
+    let tz: Tz = stored.tz.parse().unwrap_or(chrono_tz::UTC);
+    let base = build_event(&stored.input, Some(master), tz, now)?;
+    let (_, rule) = check_extras(&stored.input, &base, tz)?;
+    let Some(rule) = rule else {
+        return Ok(vec![base]);
+    };
+    let text = invite::ics(
+        &base,
+        &IcsExtras {
+            tz,
+            rrule: Some(&rule),
+            include_notes: true,
+            now,
+        },
+    );
+    let opts = crate::ics::ParseOptions {
+        calendar_id: CALENDAR_ID,
+        default_tz: tz,
+        window: *window,
+        my_email: None,
+    };
+    let mut out = Vec::new();
+    for mut e in crate::ics::events_from_ics(&text, &opts)?
+        .into_iter()
+        .take(MAX_INSTANCES)
+    {
+        let key = match &e.when {
+            When::Timed { start, .. } => start.timestamp().to_string(),
+            When::AllDay { start, .. } => start.format("%Y%m%d").to_string(),
+        };
+        e.id = format!("{CALENDAR_ID}:{master}:{key}");
+        e.remote_id = format!("{master}:{key}");
+        e.recurrence_master_id = Some(master.to_string());
+        e.my_response = Response::None;
+        out.push(e);
+    }
+    Ok(out)
 }
 
 /// Creates the account and calendar the first time an event is added.
@@ -154,7 +307,28 @@ pub fn ensure_calendar(store: &Store, now: DateTime<Utc>) -> Result<()> {
     })
 }
 
-/// Adds an event (`id` is `None`) or replaces one of our own. Returns the saved event.
+/// Regenerates the dated events from the stored records. Safe to call any time; the app calls it after
+/// every change, at launch, and once a day so repeats keep reaching into the future.
+pub fn refresh(store: &mut Store, now: DateTime<Utc>) -> Result<()> {
+    let rows = store.all_own_events()?;
+    if rows.is_empty() && store.get_account(ACCOUNT_ID)?.is_none() {
+        return Ok(());
+    }
+    ensure_calendar(store, now)?;
+    let window = crate::sync::default_window(now);
+    let mut events = Vec::new();
+    for (id, json) in rows {
+        // A record we cannot read is skipped, never allowed to hide the others.
+        if let Ok(stored) = serde_json::from_str::<Stored>(&json)
+            && let Ok(mut e) = expand(&id, &stored, &window, now)
+        {
+            events.append(&mut e);
+        }
+    }
+    store.replace_events(CALENDAR_ID, &events)
+}
+
+/// Adds an event (`id` is `None`) or changes one of our own, for a repeating one the whole series.
 pub fn save(
     store: &mut Store,
     id: Option<&str>,
@@ -162,149 +336,143 @@ pub fn save(
     tz: Tz,
     now: DateTime<Utc>,
 ) -> Result<Event> {
-    let remote = match id {
+    let master = match id {
         None => None,
-        Some(id) => Some(own_remote_id(id)?),
+        Some(id) => {
+            let m = own_master_id(id)?;
+            if store.get_own_event(m)?.is_none() {
+                return Err(Error::Invalid("That event can't be changed here."));
+            }
+            Some(m)
+        }
     };
-    let event = build_event(input, remote, tz, now)?;
-    ensure_calendar(store, now)?;
-    store.upsert_events(CALENDAR_ID, std::slice::from_ref(&event))?;
-    Ok(event)
+    let base = build_event(input, master, tz, now)?;
+    let (clean_input, _) = check_extras(input, &base, tz)?;
+    let stored = Stored {
+        input: clean_input,
+        tz: tz.name().to_string(),
+    };
+    let json = serde_json::to_string(&stored)
+        .map_err(|_| Error::Invalid("That event couldn't be saved."))?;
+    store.put_own_event(&base.remote_id, &json)?;
+    refresh(store, now)?;
+    Ok(base)
 }
 
-pub fn delete(store: &mut Store, id: &str) -> Result<()> {
-    let remote = own_remote_id(id)?.to_string();
-    store.delete_events_by_remote_id(CALENDAR_ID, &[remote])
+/// The record for the edit form. `id` may be the event or any one occurrence of a series.
+pub fn get(store: &Store, id: &str) -> Result<Option<OwnEvent>> {
+    let master = own_master_id(id)?;
+    Ok(store
+        .get_own_event(master)?
+        .and_then(|j| serde_json::from_str::<Stored>(&j).ok())
+        .map(|s| OwnEvent {
+            id: format!("{CALENDAR_ID}:{master}"),
+            input: s.input,
+        }))
 }
 
-/// Only events in our own calendar can be changed or removed, whatever id the page sends.
-fn own_remote_id(id: &str) -> Result<&str> {
-    id.strip_prefix(&format!("{CALENDAR_ID}:"))
-        .filter(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+/// What to put in an invitation file for one of our own events: the first occurrence and, for a
+/// repeating one, the recurrence rule, so the people invited get the whole series. `None` if `id`
+/// isn't ours.
+pub fn share_parts(store: &Store, id: &str) -> Result<Option<(Event, Option<String>)>> {
+    let master = own_master_id(id)?;
+    let Some(stored) = store
+        .get_own_event(master)?
+        .and_then(|j| serde_json::from_str::<Stored>(&j).ok())
+    else {
+        return Ok(None);
+    };
+    let tz: Tz = stored.tz.parse().unwrap_or(chrono_tz::UTC);
+    let base = build_event(&stored.input, Some(master), tz, Utc::now())?;
+    let (_, rule) = check_extras(&stored.input, &base, tz)?;
+    Ok(Some((base, rule)))
+}
+
+/// Deletes an event, or a whole repeating series.
+pub fn delete(store: &mut Store, id: &str, now: DateTime<Utc>) -> Result<()> {
+    let master = own_master_id(id)?.to_string();
+    store.delete_own_event(&master)?;
+    refresh(store, now)
+}
+
+/// Only events in our own calendar can be changed or removed, whatever id the page sends. Accepts the
+/// event id or one occurrence of a series (`local-events:<id>:<occurrence>`).
+fn own_master_id(id: &str) -> Result<&str> {
+    let rest = id
+        .strip_prefix(&format!("{CALENDAR_ID}:"))
+        .ok_or(Error::Invalid("That event can't be changed here."))?;
+    let (master, occurrence) = rest.split_once(':').unwrap_or((rest, ""));
+    let ok = !master.is_empty()
+        && master
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        && occurrence.bytes().all(|b| b.is_ascii_digit());
+    ok.then_some(master)
         .ok_or(Error::Invalid("That event can't be changed here."))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::secrets::{MemorySecretStore, load_or_create_db_key};
+// ---- reminders ---------------------------------------------------------------------------
 
-    fn store() -> Store {
-        let key = load_or_create_db_key(&MemorySecretStore::default()).unwrap();
-        Store::open_in_memory(&key).unwrap()
-    }
-    fn timed(title: &str) -> EventInput {
-        EventInput {
-            title: title.into(),
-            all_day: false,
-            start: "2026-11-20T15:00:00Z".into(),
-            end: "2026-11-20T16:00:00Z".into(),
-            location: Some(" Room 4 ".into()),
-            join_url: Some("https://meet.google.com/abc-defg-hij".into()),
-            notes: None,
-        }
-    }
-    const NY: Tz = chrono_tz::America::New_York;
-
-    #[test]
-    fn adds_edits_and_removes_an_event_that_the_briefing_sees() {
-        let mut s = store();
-        let now = "2026-11-14T12:00:00Z".parse().unwrap();
-        let e = save(&mut s, None, &timed("Dentist"), NY, now).unwrap();
-        assert_eq!(e.location.as_deref(), Some("Room 4"));
-        assert_eq!(s.list_accounts().unwrap().len(), 1);
-        let (from, to) = (
-            "2026-11-20T00:00:00Z".parse().unwrap(),
-            "2026-11-21T00:00:00Z".parse().unwrap(),
-        );
-        assert_eq!(s.events_between(from, to).unwrap().len(), 1);
-
-        let mut edit = timed("Dentist (moved)");
-        edit.start = "2026-11-21T15:00:00Z".into();
-        edit.end = "2026-11-21T16:00:00Z".into();
-        let moved = save(&mut s, Some(&e.id), &edit, NY, now).unwrap();
-        assert_eq!(moved.id, e.id, "same event, not a copy");
-        assert_eq!(s.events_between(from, to).unwrap().len(), 0);
-
-        delete(&mut s, &e.id).unwrap();
-        let far = "2026-12-01T00:00:00Z".parse().unwrap();
-        assert!(s.events_between(from, far).unwrap().is_empty());
-    }
-
-    #[test]
-    fn all_day_end_is_inclusive_in_the_form_and_exclusive_inside() {
-        let input = EventInput {
-            all_day: true,
-            start: "2026-12-24".into(),
-            end: "2026-12-26".into(),
-            ..timed("Holiday")
-        };
-        let e = build_event(&input, None, NY, Utc::now()).unwrap();
-        assert_eq!(
-            e.when,
-            When::AllDay {
-                start: "2026-12-24".parse().unwrap(),
-                end: "2026-12-27".parse().unwrap()
-            }
-        );
-    }
-
-    #[test]
-    fn bad_input_is_refused_with_a_reason() {
-        let now = Utc::now();
-        let bad = |f: &dyn Fn(&mut EventInput)| {
-            let mut i = timed("x");
-            f(&mut i);
-            build_event(&i, None, NY, now).unwrap_err().to_string()
-        };
-        assert!(bad(&|i| i.title = "  ".into()).contains("title"));
-        assert!(bad(&|i| i.title = "a".repeat(201)).contains("too long"));
-        assert!(bad(&|i| i.title = "a\nb".into()).contains("control"));
-        assert!(bad(&|i| i.end = i.start.clone()).contains("end after"));
-        assert!(bad(&|i| i.start = "tomorrow".into()).contains("valid"));
-        assert!(bad(&|i| i.end = "2030-01-01T00:00:00Z".into()).contains("a year"));
-        assert!(bad(&|i| i.join_url = Some("http://zoom.us/j/1".into())).contains("https"));
-        assert!(bad(&|i| i.join_url = Some("javascript:alert(1)".into())).contains("https"));
-        assert!(bad(&|i| i.join_url = Some("https://a.com/x y".into())).contains("single link"));
-        assert!(bad(&|i| i.notes = Some("n".repeat(4001))).contains("too long"));
-        assert!(
-            bad(&|i| {
-                i.all_day = true;
-                i.start = "2026-12-05".into();
-                i.end = "2026-12-01".into()
-            })
-            .contains("before")
-        );
-    }
-
-    #[test]
-    fn only_our_own_events_can_be_touched() {
-        let mut s = store();
-        let now = Utc::now();
-        for id in [
-            "fixture-work:standup",
-            "local-events:",
-            "local-events:a/b",
-            "../local-events:x",
-            "",
-        ] {
-            assert!(
-                save(&mut s, Some(id), &timed("x"), NY, now).is_err(),
-                "{id}"
-            );
-            assert!(delete(&mut s, id).is_err(), "{id}");
-        }
-    }
-
-    #[test]
-    fn erasing_the_account_removes_the_events() {
-        let mut s = store();
-        let e = save(&mut s, None, &timed("Private"), NY, Utc::now()).unwrap();
-        s.remove_account(ACCOUNT_ID).unwrap();
-        let (a, b) = (
-            "2000-01-01T00:00:00Z".parse().unwrap(),
-            "2100-01-01T00:00:00Z".parse().unwrap(),
-        );
-        assert!(s.events_between(a, b).unwrap().iter().all(|x| x.id != e.id));
-    }
+/// A reminder that is due.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reminder {
+    /// Unique per occurrence and lead time; recorded once shown so a restart never repeats it.
+    pub id: String,
+    pub title: String,
+    pub start: DateTime<Utc>,
 }
+
+/// Reminder lead times by event (series) id.
+pub fn reminder_map(store: &Store) -> Result<HashMap<String, u32>> {
+    Ok(store
+        .all_own_events()?
+        .into_iter()
+        .filter_map(|(id, json)| {
+            let m = serde_json::from_str::<Stored>(&json)
+                .ok()?
+                .input
+                .reminder_minutes?;
+            Some((id, m))
+        })
+        .collect())
+}
+
+fn master_of(e: &Event) -> &str {
+    e.recurrence_master_id
+        .as_deref()
+        .unwrap_or_else(|| e.remote_id.split(':').next().unwrap_or(""))
+}
+
+/// Own events that have a reminder of their own. The general "before each event" heads-up skips these,
+/// so nobody is told twice.
+pub fn has_own_reminder(map: &HashMap<String, u32>, e: &Event) -> bool {
+    e.calendar_id == CALENDAR_ID && map.contains_key(master_of(e))
+}
+
+/// Reminders whose moment has come: it starts later, and `now` is within the lead time.
+pub fn due_reminders(store: &Store, now: DateTime<Utc>) -> Result<Vec<Reminder>> {
+    let map = reminder_map(store)?;
+    if map.is_empty() {
+        return Ok(vec![]);
+    }
+    let mut out = Vec::new();
+    for e in store.events_between(now, now + Duration::days(8))? {
+        if e.calendar_id != CALENDAR_ID {
+            continue;
+        }
+        let (When::Timed { start, .. }, Some(minutes)) = (&e.when, map.get(master_of(&e))) else {
+            continue;
+        };
+        if *start > now && now >= *start - Duration::minutes(i64::from(*minutes)) {
+            out.push(Reminder {
+                id: format!("own-reminder:{}:{minutes}", e.id),
+                title: e.title.clone(),
+                start: *start,
+            });
+        }
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests;

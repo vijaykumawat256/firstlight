@@ -25,8 +25,15 @@ function isoDate(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** Events added in the browser fixture with `createEvent`. */
-const ownEvents: CalEvent[] = [];
+/** Events added in the browser fixture: the record the user typed, like the real app keeps. */
+const ownRecords: { id: string; input: EventInput }[] = [];
+
+/** The dated events those records produce (repeats run 120 days ahead, like the real app's window). */
+function ownEvents(): CalEvent[] {
+  const out: CalEvent[] = [];
+  for (const rec of ownRecords) out.push(...expandOwn(rec.id, rec.input));
+  return out;
+}
 
 export function fixtureEvents(base: Date = new Date()): CalEvent[] {
   const ev = (
@@ -97,7 +104,7 @@ export function fixtureEvents(base: Date = new Date()): CalEvent[] {
     ev("gym", "fixture-personal", "Gym", 3, [7, 0], [8, 0]),
     ev("board", "fixture-work", "Board prep", 4, [14, 0], [16, 30], { join_url: "https://meet.google.com/abc-defg-hij" }),
   ];
-  all.push(...ownEvents);
+  all.push(...ownEvents());
   // `?quietdays`: nothing today or tomorrow, to test the empty-day screen.
   if (typeof location !== "undefined" && new URLSearchParams(location.search).has("quietdays")) {
     const start = new Date(base.getFullYear(), base.getMonth(), base.getDate());
@@ -181,47 +188,97 @@ const listeners = new Set<(s: SyncSummary) => void>();
 const notify = () => listeners.forEach((l) => l({ ok: true, offline: false, needs_attention: false }));
 
 const LOCAL_CAL = "local-events";
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const ymd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
 /** Mirrors the Rust checks (`daybrief_core::local`) closely enough for the browser tests. */
-function saveFixtureEvent(id: string | null, input: EventInput): CalEvent {
+function checkOwn(input: EventInput): EventInput {
   const title = input.title.trim();
   if (!title) throw new Error("Give the event a title.");
   if (title.length > 200) throw new Error("That title is too long.");
   const link = (input.join_url ?? "").trim();
   if (link && !/^https:\/\/[^\s]+$/.test(link)) throw new Error("The meeting link must start with https:// and be a single link.");
-  let when: CalEvent["when"];
   if (input.all_day) {
     if (input.end < input.start) throw new Error("The event can't end before it starts.");
-    const end = new Date(`${input.end}T00:00:00`);
-    end.setDate(end.getDate() + 1);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    when = { kind: "all_day", start: input.start, end: `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}` };
-  } else {
-    if (!(new Date(input.end) > new Date(input.start))) throw new Error("The event must end after it starts.");
-    when = { kind: "timed", start: new Date(input.start).toISOString(), end: new Date(input.end).toISOString(), tzid: null };
+  } else if (!(new Date(input.end) > new Date(input.start))) throw new Error("The event must end after it starts.");
+  if (input.reminder_minutes !== null && input.all_day) throw new Error("Reminders need a start time.");
+  if (input.reminder_minutes !== null && (input.reminder_minutes < 1 || input.reminder_minutes > 10080)) throw new Error("Choose a reminder of up to a week.");
+  const invitees: string[] = [];
+  for (const raw of input.invitees) {
+    const a = raw.trim().toLowerCase();
+    if (!a) continue;
+    if (!/^[a-z0-9._%+'-]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(a)) throw new Error("One of those email addresses doesn't look right.");
+    if (!invitees.includes(a)) invitees.push(a);
   }
-  if (id !== null && !ownEvents.some((e) => e.id === id)) throw new Error("That event can't be changed here.");
-  const key = id ? id.slice(LOCAL_CAL.length + 1) : `own${ownEvents.length + 1}-${Date.now()}`;
-  const event: CalEvent = {
-    id: `${LOCAL_CAL}:${key}`,
+  if (invitees.length > 20) throw new Error("That's too many people for one invitation.");
+  if (input.repeat) {
+    if (!["daily", "weekly", "monthly", "yearly"].includes(input.repeat.every)) throw new Error("Choose how often it repeats.");
+    if (input.repeat.interval < 1 || input.repeat.interval > 30) throw new Error("It can repeat every 1 to 30 days, weeks, months or years.");
+    const first = input.all_day ? input.start : ymd(new Date(input.start));
+    if (input.repeat.until && input.repeat.until < first) throw new Error("It can't stop repeating before it starts.");
+  }
+  return { ...input, title, invitees };
+}
+
+function expandOwn(id: string, input: EventInput): CalEvent[] {
+  const key = id.slice(LOCAL_CAL.length + 1);
+  const base = (when: CalEvent["when"], suffix: string | null): CalEvent => ({
+    id: suffix ? `${id}:${suffix}` : id,
     calendar_id: LOCAL_CAL,
-    remote_id: key,
+    remote_id: suffix ? `${key}:${suffix}` : key,
     ical_uid: `${key}@firstlight.local`,
-    title,
+    title: input.title,
     when,
     location: input.location?.trim() || null,
     description: input.notes?.trim() || null,
-    join_url: link || null,
+    join_url: input.join_url?.trim() || null,
     status: "confirmed",
     my_response: "none",
     organizer: null,
-    recurrence_master_id: null,
+    recurrence_master_id: suffix ? key : null,
     updated_at: new Date().toISOString(),
     also_in: [],
+  });
+  const lastDay = (() => {
+    const end = new Date(`${input.end}T00:00:00`);
+    end.setDate(end.getDate() + 1);
+    return ymd(end);
+  })();
+  const first = input.all_day ? new Date(`${input.start}T00:00:00`) : new Date(input.start);
+  const length = input.all_day ? 0 : new Date(input.end).getTime() - new Date(input.start).getTime();
+  const spanDays = input.all_day ? Math.round((new Date(`${input.end}T00:00:00`).getTime() - first.getTime()) / 86_400_000) : 0;
+  const make = (at: Date, suffix: string | null): CalEvent => {
+    if (!input.all_day) return base({ kind: "timed", start: at.toISOString(), end: new Date(at.getTime() + length).toISOString(), tzid: null }, suffix);
+    const e = new Date(at);
+    e.setDate(e.getDate() + spanDays + 1);
+    return base({ kind: "all_day", start: ymd(at), end: ymd(e) }, suffix);
   };
-  const at = ownEvents.findIndex((e) => e.id === event.id);
-  if (at >= 0) ownEvents[at] = event;
-  else ownEvents.push(event);
+  void lastDay;
+  if (!input.repeat) return [make(first, null)];
+  const out: CalEvent[] = [];
+  const horizon = new Date(Date.now() + 120 * 86_400_000);
+  const until = input.repeat.until ? new Date(`${input.repeat.until}T23:59:59`) : null;
+  for (let n = 0; n < 800; n++) {
+    const at = new Date(first);
+    const k = n * input.repeat.interval;
+    if (input.repeat.every === "daily") at.setDate(at.getDate() + k);
+    else if (input.repeat.every === "weekly") at.setDate(at.getDate() + 7 * k);
+    else if (input.repeat.every === "monthly") at.setMonth(at.getMonth() + k);
+    else at.setFullYear(at.getFullYear() + k);
+    if (at > horizon || (until && at > until)) break;
+    out.push(make(at, input.all_day ? ymd(at).replaceAll("-", "") : String(Math.floor(at.getTime() / 1000))));
+  }
+  return out;
+}
+
+function saveFixtureEvent(id: string | null, input: EventInput): CalEvent {
+  const clean = checkOwn(input);
+  const master = id ? `${LOCAL_CAL}:${id.slice(LOCAL_CAL.length + 1).split(":")[0]}` : null;
+  if (master && !ownRecords.some((r) => r.id === master)) throw new Error("That event can't be changed here.");
+  const recordId = master ?? `${LOCAL_CAL}:own${ownRecords.length + 1}-${Date.now()}`;
+  const at = ownRecords.findIndex((r) => r.id === recordId);
+  if (at >= 0) ownRecords[at] = { id: recordId, input: clean };
+  else ownRecords.push({ id: recordId, input: clean });
   if (!accounts.some((a) => a.id === "local-account")) {
     accounts.push({
       id: "local-account",
@@ -234,7 +291,7 @@ function saveFixtureEvent(id: string | null, input: EventInput): CalEvent {
       last_error: null,
     });
   }
-  return event;
+  return expandOwn(recordId, clean)[0]!;
 }
 
 const visibleCalendarIds = () =>
@@ -368,9 +425,24 @@ export const fixtureBackend: Backend = {
     return saveFixtureEvent(id, input);
   },
   async deleteEvent(id) {
-    const i = ownEvents.findIndex((e) => e.id === id);
+    const master = `${LOCAL_CAL}:${id.slice(LOCAL_CAL.length + 1).split(":")[0]}`;
+    const i = ownRecords.findIndex((r) => r.id === master);
     if (i < 0) throw new Error("That event can't be changed here.");
-    ownEvents.splice(i, 1);
+    ownRecords.splice(i, 1);
+  },
+  async getOwnEvent(id) {
+    const master = `${LOCAL_CAL}:${id.slice(LOCAL_CAL.length + 1).split(":")[0]}`;
+    const rec = ownRecords.find((r) => r.id === master);
+    return rec ? structuredClone(rec) : null;
+  },
+  async prepareInvite(id, recipients, openMail) {
+    await sleep(150);
+    const list = recipients.split(/[\s,;]+/).filter(Boolean);
+    if (list.some((a) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a))) throw new Error("One of those email addresses doesn't look right.");
+    if (openMail && list.length === 0) throw new Error("Add at least one email address.");
+    const w = window as unknown as Record<string, unknown>;
+    w.__invites = [...((w.__invites as unknown[]) ?? []), { id, list, openMail }];
+    return { path: "/Users/you/Downloads/invitation.ics", mail_opened: openMail };
   },
   async openMailMessage(target) {
     if (target.kind === "url" && !target.url.startsWith("https://")) throw new Error("Refusing to open that link.");

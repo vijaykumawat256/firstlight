@@ -64,6 +64,12 @@ const MIGRATIONS: &[&str] = &[
         id TEXT PRIMARY KEY,
         sent_at INTEGER NOT NULL
      );",
+    // 3: events the user adds themselves, as the record they typed (repeat rule, reminder, invitees); the
+    // dated instances the app shows are generated from it into `events`
+    "CREATE TABLE own_events (
+        id TEXT PRIMARY KEY,
+        json TEXT NOT NULL
+     );",
 ];
 
 pub fn run(conn: &mut Connection) -> Result<()> {

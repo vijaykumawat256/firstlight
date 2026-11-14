@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, EventInput, ImapPreset, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, EventInput, ImapPreset, InviteResult, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -16,6 +16,9 @@ export interface Backend {
   enableAccountMail(accountId: string): Promise<AppSettings>;
   /** Add, change or remove an event of your own (stored only on this computer). */
   createEvent(input: EventInput): Promise<CalEvent>;
+  getOwnEvent(id: string): Promise<OwnEvent | null>;
+  /** Saves a calendar file to Downloads and, if asked, opens your mail app with a draft. Nothing is sent. */
+  prepareInvite(id: string, recipients: string, openMail: boolean): Promise<InviteResult>;
   updateEvent(id: string, input: EventInput): Promise<CalEvent>;
   deleteEvent(id: string): Promise<void>;
   addImapMailbox(preset: ImapPreset, address: string, password: string): Promise<AppSettings>;

@@ -192,7 +192,7 @@ test("recording a shortcut, and a refused one is put back with a reason", async 
 test("backing up and restoring settings", async ({ page }) => {
   await openSection(page, "Privacy & data");
   await page.getByRole("button", { name: "Save to Downloads" }).click();
-  await expect(page.getByText("Settings saved")).toBeVisible();
+  await expect(page.getByText("Settings saved").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Import…" }).click();
   const dialog = page.getByRole("dialog", { name: "Import settings" });
@@ -202,7 +202,7 @@ test("backing up and restoring settings", async ({ page }) => {
 
   await dialog.getByLabel("Settings file contents").fill(JSON.stringify({ format: "daybrief-settings", settings: { general: { default_view: "week" } } }));
   await dialog.getByRole("button", { name: "Import" }).click();
-  await expect(page.getByText("Settings imported")).toBeVisible();
+  await expect(page.getByText("Settings imported").first()).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await section(page, "General");
   await expect(page.getByRole("combobox", { name: "Opens to" })).toContainText("Week view");

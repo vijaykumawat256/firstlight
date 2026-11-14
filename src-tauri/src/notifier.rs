@@ -53,7 +53,7 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
     std::thread::Builder::new()
         .name("notifier".into())
         .spawn(move || {
-            let store = match Store::open(&db_path, &key) {
+            let mut store = match Store::open(&db_path, &key) {
                 Ok(s) => s,
                 Err(e) => {
                     log::error!("notifier cannot open the database: {e}");
@@ -61,6 +61,7 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                 }
             };
             let system_24h = system_uses_24h();
+            let mut refreshed_on = None;
             // Give the first sync a moment so we don't announce from stale data at launch.
             std::thread::sleep(StdDuration::from_secs(8));
             loop {
@@ -73,13 +74,45 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                     let ns = settings.notify_for_engine(system_24h);
                     let (bs, rules) = (settings.briefing, settings.unlock);
                     let today = now.with_timezone(&tz).date_naive();
+                    // Repeating events of the user's own are generated for a rolling window: top it up
+                    // once a day (and the first time round after launch).
+                    if refreshed_on != Some(today) {
+                        refreshed_on = Some(today);
+                        let _ = daybrief_core::local::refresh(&mut store, now);
+                    }
                     let (from, _) = day_bounds(today, tz);
                     let (_, to) = day_bounds(today + Duration::days(1), tz);
 
                     if let (Ok(events), Ok(sent)) =
                         (store.events_between(from, to), store.sent_notifications())
                     {
-                        for n in due(&dedupe(events), now, tz, &ns, &bs, &rules, &sent) {
+                        // Events with a reminder of their own are announced by it, not by the general heads-up.
+                        let own = daybrief_core::local::reminder_map(&store).unwrap_or_default();
+                        let events: Vec<_> = dedupe(events)
+                            .into_iter()
+                            .filter(|e| !daybrief_core::local::has_own_reminder(&own, e))
+                            .collect();
+                        for r in
+                            daybrief_core::local::due_reminders(&store, now).unwrap_or_default()
+                        {
+                            if sent.contains(&r.id) {
+                                continue;
+                            }
+                            let _ = store.mark_notification_sent(&r.id, now);
+                            let clock = if ns.time_24h { "%H:%M" } else { "%-I:%M %p" };
+                            let title = if ns.hide_titles {
+                                "Event reminder"
+                            } else {
+                                r.title.as_str()
+                            };
+                            show(
+                                &app,
+                                title,
+                                &format!("Starts at {}", r.start.with_timezone(&tz).format(clock)),
+                            );
+                            log::info!("own reminder shown");
+                        }
+                        for n in due(&events, now, tz, &ns, &bs, &rules, &sent) {
                             // Record first: whatever happens next, we never try this one again.
                             let _ = store.mark_notification_sent(&n.id, now);
                             show(&app, &n.title, &n.body);

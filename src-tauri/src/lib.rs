@@ -370,6 +370,8 @@ pub fn run() {
             mail_ai::get_mail_digest,
             mail_ai::enable_apple_mail,
             mail_ai::enable_account_mail,
+            commands::get_own_event,
+            commands::prepare_invite,
             commands::create_event,
             commands::update_event,
             commands::delete_event,

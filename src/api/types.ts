@@ -47,6 +47,23 @@ export interface EventInput {
   location: string | null;
   join_url: string | null;
   notes: string | null;
+  /** Repeats every `interval` days, weeks, months or years, optionally until a last day (YYYY-MM-DD). */
+  repeat: { every: "daily" | "weekly" | "monthly" | "yearly"; interval: number; until: string | null } | null;
+  /** Notify this many minutes before it starts (timed events only). */
+  reminder_minutes: number | null;
+  /** People it is shared with. Firstlight never sends anything: sharing opens your own mail app. */
+  invitees: string[];
+}
+
+/** One of your own events with everything the edit form needs. */
+export interface OwnEvent {
+  id: string;
+  input: EventInput;
+}
+
+export interface InviteResult {
+  path: string;
+  mail_opened: boolean;
 }
 export type AccountStatus = "ok" | "needs_attention";
 

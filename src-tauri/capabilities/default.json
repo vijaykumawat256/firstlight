@@ -49,6 +49,8 @@
     "allow-get-mail-digest",
     "allow-enable-apple-mail",
     "allow-enable-account-mail",
+    "allow-get-own-event",
+    "allow-prepare-invite",
     "allow-create-event",
     "allow-update-event",
     "allow-delete-event",

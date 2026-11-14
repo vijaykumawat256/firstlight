@@ -92,3 +92,125 @@ test("the new-event form has no accessibility violations", async ({ page }) => {
   const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(r.violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(" ")}`)).toEqual([]);
 });
+
+test("a repeating event shows on every day it repeats, and is edited and deleted as a series", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/");
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByLabel("Title").fill("Pilates");
+  await sheet.getByRole("combobox", { name: "Repeat" }).click();
+  await page.getByRole("option", { name: "Every day" }).click();
+  await sheet.getByRole("combobox", { name: "Reminder" }).click();
+  await page.getByRole("option", { name: "15 minutes before" }).click();
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  await expect(page.getByText("Event added").first()).toBeVisible();
+
+  // Every day in the month grid carries it.
+  await page.getByRole("button", { name: "Calendar" }).click();
+  await page.getByRole("radio", { name: "Month" }).click();
+  const grid = page.getByRole("grid", { name: "Month" });
+  const chips = grid.getByRole("button", { name: /Pilates/ });
+  await expect(chips.first()).toBeVisible();
+  expect(await chips.count()).toBeGreaterThan(3);
+
+  await chips.first().click();
+  const detail = page.getByRole("dialog", { name: "Pilates" });
+  await expect(detail).toContainText("Repeats every day");
+  await expect(detail).toContainText("Reminder 15 minutes before");
+  await detail.getByRole("button", { name: "Edit all" }).click();
+  const edit = page.getByRole("dialog", { name: "Edit event" });
+  await expect(edit).toContainText("Changes apply to every repeat");
+  await edit.getByLabel("Title").fill("Pilates (studio)");
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(grid.getByRole("button", { name: /Pilates \(studio\)/ }).first()).toBeVisible();
+  await expect(grid.getByRole("button", { name: /^\S+ Pilates,? ?$/ })).toHaveCount(0);
+
+  await grid.getByRole("button", { name: /Pilates \(studio\)/ }).first().click();
+  const d2 = page.getByRole("dialog", { name: "Pilates (studio)" });
+  await d2.getByRole("button", { name: "Delete all" }).click();
+  await d2.getByRole("button", { name: "Yes, delete all repeats" }).click();
+  await expect(grid.getByRole("button", { name: /Pilates/ })).toHaveCount(0);
+});
+
+test("a repeat can end on a date, and impossible choices are explained", async ({ page }) => {
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/");
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByLabel("Title").fill("Course");
+  await sheet.getByRole("combobox", { name: "Repeat" }).click();
+  await page.getByRole("option", { name: "Every 2 weeks" }).click();
+  await sheet.getByRole("radio", { name: "On a date" }).click();
+  await sheet.getByLabel("Last day it repeats").fill("2020-01-01"); // before it starts
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  await expect(sheet.getByRole("alert")).toContainText("before it starts");
+});
+
+test("invite people: the invitation opens in your own mail app, nothing is sent by Firstlight", async ({ page }) => {
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/");
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByLabel("Title").fill("Team lunch");
+  await sheet.getByLabel("Start time").fill("18:00");
+  await sheet.getByLabel("End time").fill("19:00");
+  await sheet.getByLabel("Invite people").fill("Sam@Example.com, kim@example.org");
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  await expect(page.getByText("Event added").first()).toBeVisible();
+
+  await page.getByRole("button", { name: /Team lunch/ }).click();
+  const detail = page.getByRole("dialog", { name: "Team lunch" });
+  await expect(detail).toContainText("Invited: sam@example.com, kim@example.org");
+  await detail.getByRole("button", { name: "Send invitation…" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Send invitation" });
+  await expect(dialog.getByLabel("To")).toHaveValue("sam@example.com, kim@example.org");
+  await expect(dialog).toContainText("doesn't send anything");
+
+  await dialog.getByLabel("To").fill("not-an-address");
+  await dialog.getByRole("button", { name: "Open in my mail app" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("doesn't look right");
+
+  await dialog.getByLabel("To").fill("sam@example.com");
+  await dialog.getByRole("button", { name: "Open in my mail app" }).click();
+  await expect(page.getByText("Your mail app is open").first()).toBeVisible();
+  const sent = await page.evaluate(() => (window as unknown as { __invites: { list: string[]; openMail: boolean }[] }).__invites);
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({ list: ["sam@example.com"], openMail: true });
+});
+
+test("the file alone can be saved without any address", async ({ page }) => {
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/");
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByLabel("Title").fill("Solo");
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  await page.getByRole("button", { name: /Solo/ }).first().click();
+  await page.getByRole("dialog", { name: "Solo" }).getByRole("button", { name: "Send invitation…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Send invitation" });
+  await expect(dialog.getByRole("button", { name: "Open in my mail app" })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Just save the file" }).click();
+  await expect(page.getByText("Calendar file saved").first()).toBeVisible();
+});
+
+test("the form with repeat, reminder and invitees, and the invitation dialog, have no accessibility violations", async ({ page }) => {
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/");
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByRole("combobox", { name: "Repeat" }).click();
+  await page.getByRole("option", { name: "Every week" }).click();
+  await sheet.getByRole("radio", { name: "On a date" }).click();
+  const scan = async () => (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze()).violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(" ")}`);
+  expect(await scan()).toEqual([]);
+  await sheet.getByLabel("Title").fill("A11y");
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  await page.getByRole("button", { name: /A11y/ }).first().click();
+  await page.getByRole("dialog", { name: "A11y" }).getByRole("button", { name: "Send invitation…" }).click();
+  await expect(page.getByRole("dialog", { name: "Send invitation" })).toBeVisible();
+  expect(await scan()).toEqual([]);
+});

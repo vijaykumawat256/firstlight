@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-prepare-invite"
+description = "Enables the prepare_invite command without any pre-configured scope."
+commands.allow = ["prepare_invite"]
+
+[[permission]]
+identifier = "deny-prepare-invite"
+description = "Denies the prepare_invite command without any pre-configured scope."
+commands.deny = ["prepare_invite"]

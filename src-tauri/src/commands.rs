@@ -348,10 +348,117 @@ pub async fn update_event(
 pub async fn delete_event(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
     {
         let mut store = lock_store(&state)?;
-        daybrief_core::local::delete(&mut store, &id).map_err(user_input_error)?;
+        daybrief_core::local::delete(&mut store, &id, Utc::now()).map_err(user_input_error)?;
     }
     let _ = app.emit("events-changed", ());
     Ok(())
+}
+
+/// An own event as the edit form needs it (with its repeat rule, reminder and invitees).
+#[tauri::command]
+pub async fn get_own_event(
+    state: State<'_, AppState>,
+    id: String,
+) -> CmdResult<Option<daybrief_core::local::OwnEvent>> {
+    let store = lock_store(&state)?;
+    daybrief_core::local::get(&store, &id).map_err(user_input_error)
+}
+
+#[derive(serde::Serialize)]
+pub struct InviteResult {
+    /// Where the calendar file was saved.
+    path: String,
+    mail_opened: bool,
+}
+
+/// Prepares an invitation: saves a calendar file to Downloads and, if asked, opens the user's own mail
+/// app with a draft addressed to the people they chose. Firstlight never sends anything itself.
+#[tauri::command]
+pub async fn prepare_invite(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    recipients: String,
+    open_mail: bool,
+) -> CmdResult<InviteResult> {
+    use daybrief_core::invite;
+    use tauri::Manager;
+    use tauri_plugin_opener::OpenerExt;
+
+    let to = invite::parse_list(&recipients).map_err(user_input_error)?;
+    if open_mail && to.is_empty() {
+        return Err("Add at least one email address.".into());
+    }
+    let (settings, event, rule, own) = {
+        let store = lock_store(&state)?;
+        let own = daybrief_core::local::share_parts(&store, &id)
+            .ok()
+            .flatten();
+        let event = match &own {
+            Some((e, _)) => e.clone(),
+            None => store
+                .get_event(&id)
+                .map_err(internal("loading the event"))?
+                .ok_or("That event no longer exists.")?,
+        };
+        let rule = own.as_ref().and_then(|(_, r)| r.clone());
+        (store.load_settings(), event, rule, own.is_some())
+    };
+    let tz = crate::local_tz();
+    let h24 = settings
+        .notify_for_engine(crate::notifier::system_uses_24h())
+        .time_24h;
+    let text = invite::ics(
+        &event,
+        &invite::IcsExtras {
+            tz,
+            rrule: rule.as_deref(),
+            include_notes: own,
+            now: Utc::now(),
+        },
+    );
+    let dir = app
+        .path()
+        .download_dir()
+        .map_err(|_| "Couldn't find your Downloads folder.".to_string())?;
+    let slug: String = event
+        .title
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let slug: String = slug.chars().take(40).collect();
+    let slug = if slug.is_empty() {
+        "event".to_string()
+    } else {
+        slug
+    };
+    let mut path = dir.join(format!("{slug}.ics"));
+    // Never overwrite something the user already has.
+    for n in 2..100 {
+        if !path.exists() {
+            break;
+        }
+        path = dir.join(format!("{slug} ({n}).ics"));
+    }
+    std::fs::write(&path, text).map_err(|_| "Couldn't save the invitation file.".to_string())?;
+    let _ = app.opener().reveal_item_in_dir(&path);
+
+    let mut mail_opened = false;
+    if open_mail {
+        let (subject, body) = invite::message(&event, tz, h24, own);
+        app.opener()
+            .open_url(invite::mailto(&to, &subject, &body), None::<&str>)
+            .map_err(|_| "Couldn't open your mail app.".to_string())?;
+        mail_opened = true;
+    }
+    Ok(InviteResult {
+        path: path.display().to_string(),
+        mail_opened,
+    })
 }
 
 fn save_own_event(

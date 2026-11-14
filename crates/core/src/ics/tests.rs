@@ -640,3 +640,29 @@ fn fuzzing_extreme_feed_values_never_panics_or_stalls() {
         started.elapsed()
     );
 }
+
+/// Regression: an all-day recurring event that ends on a date used to show only its first day.
+#[test]
+fn all_day_repeat_with_a_date_until_expands_fully() {
+    let text = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:a@b\r\nDTSTAMP:20261114T000000Z\r\nDTSTART;VALUE=DATE:20261116\r\nDTEND;VALUE=DATE:20261117\r\nRRULE:FREQ=DAILY;UNTIL=20261119\r\nSUMMARY:Holiday\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    let now: chrono::DateTime<chrono::Utc> = "2026-11-14T12:00:00Z".parse().unwrap();
+    let opts = ParseOptions {
+        calendar_id: "t",
+        default_tz: chrono_tz::UTC,
+        window: crate::sync::default_window(now),
+        my_email: None,
+    };
+    let days: Vec<String> = events_from_ics(text, &opts)
+        .unwrap()
+        .iter()
+        .filter_map(|e| match &e.when {
+            crate::model::When::AllDay { start, .. } => Some(start.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        days,
+        ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19"],
+        "UNTIL is inclusive"
+    );
+}
