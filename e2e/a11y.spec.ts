@@ -130,6 +130,14 @@ for (const scheme of ["light", "dark"] as const) {
       await scan(page, "month with the tint");
     });
 
+    test("the public-holidays picker", async ({ page }) => {
+      await page.goto("/?fresh");
+      await page.getByRole("button", { name: "Add a calendar" }).click();
+      await page.getByRole("button", { name: /Public holidays/ }).click();
+      await expect(page.getByRole("dialog", { name: "Public holidays" })).toBeVisible();
+      await scan(page, "public holidays");
+    });
+
     test("the up-next panel", async ({ page }) => {
       await page.setViewportSize({ width: 360, height: 148 });
       await page.clock.install({ time: at(9, 30) });

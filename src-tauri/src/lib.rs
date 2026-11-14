@@ -102,19 +102,78 @@ fn toggle_main(app: &AppHandle) {
     }
 }
 
-/// Registers (or clears) the global shortcut. Returns a plain-language error if the system refuses it.
-pub(crate) fn apply_shortcut(app: &AppHandle, shortcut: Option<&str>) -> Result<(), String> {
+/// Registers (or clears) the global shortcuts: one shows or hides the briefing, the other joins the next
+/// meeting. Returns a plain-language error if the system refuses either.
+pub(crate) fn apply_shortcut(
+    app: &AppHandle,
+    show: Option<&str>,
+    join: Option<&str>,
+) -> Result<(), String> {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
     let gs = app.global_shortcut();
     gs.unregister_all()
         .map_err(|_| "Couldn't clear the old shortcut.".to_string())?;
-    let Some(s) = shortcut else { return Ok(()) };
-    gs.on_shortcut(s, |app, _shortcut, event| {
-        if event.state == ShortcutState::Pressed {
-            toggle_main(app);
+    let taken = || "That shortcut couldn't be used. Another app may already own it.".to_string();
+    if let Some(s) = show {
+        gs.on_shortcut(s, |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                toggle_main(app);
+            }
+        })
+        .map_err(|_| taken())?;
+    }
+    if let Some(s) = join {
+        gs.on_shortcut(s, |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                join_next_meeting(app);
+            }
+        })
+        .map_err(|_| taken())?;
+    }
+    Ok(())
+}
+
+/// Opens the video link of the meeting that is starting soon or already running, or says there is none.
+fn join_next_meeting(app: &AppHandle) {
+    use tauri_plugin_notification::NotificationExt;
+    use tauri_plugin_opener::OpenerExt;
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+    use daybrief_core::briefing::{build, day_bounds};
+    let (now, tz) = (chrono::Utc::now(), local_tz());
+    let url = {
+        let Ok(store) = state.store.lock() else {
+            return;
+        };
+        let settings = store.load_settings();
+        let today = now.with_timezone(&tz).date_naive();
+        let (from, _) = day_bounds(today, tz);
+        let (_, to) = day_bounds(today + chrono::Duration::days(1), tz);
+        let events = store
+            .events_between(from, to)
+            .map(daybrief_core::dedupe::dedupe)
+            .unwrap_or_default();
+        let b = build(&events, now, tz, &settings.briefing);
+        daybrief_core::briefing::glance::join_target(&b, now, settings.unlock.up_next_lead_minutes)
+            .and_then(|i| i.event.join_url.clone())
+    };
+    // Only https links are ever opened (PLAN.md section 3), whatever a calendar put in the field.
+    match url.filter(|u| u.starts_with("https://")) {
+        Some(url) => {
+            if app.opener().open_url(url, None::<&str>).is_err() {
+                log::warn!("could not open the meeting link");
+            }
         }
-    })
-    .map_err(|_| "That shortcut couldn't be used. Another app may already own it.".to_string())
+        None => {
+            let _ = app
+                .notification()
+                .builder()
+                .title("Nothing to join")
+                .body("No meeting with a video link is starting soon or running.")
+                .show();
+        }
+    }
 }
 
 /// Shows the small "up next" panel in the top-right corner, creating it the first time.
@@ -492,6 +551,7 @@ pub fn run() {
             if let Err(e) = apply_shortcut(
                 app.handle(),
                 startup_settings.general.global_shortcut.as_deref(),
+                startup_settings.general.join_shortcut.as_deref(),
             ) {
                 log::warn!("saved shortcut not registered: {e}");
             }

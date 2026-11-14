@@ -72,7 +72,7 @@ export function DayPicker({ days, onChange }: { days: boolean[]; onChange: (d: b
 }
 
 /** Click, then press the keys you want. Escape cancels. */
-export function ShortcutRecorder({ value, onChange }: { value: string | null; onChange: (s: string | null) => void }) {
+export function ShortcutRecorder({ value, onChange, label = "Global shortcut" }: { value: string | null; onChange: (s: string | null) => void; label?: string }) {
   const [recording, setRecording] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
@@ -103,7 +103,7 @@ export function ShortcutRecorder({ value, onChange }: { value: string | null; on
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="secondary" aria-label={`Global shortcut: ${recording ? "Press keys…" : value ? prettyAccelerator(value) : "Not set"}`} aria-pressed={recording} onClick={() => setRecording((r) => !r)} className="min-w-28 tabular-nums">
+        <Button size="sm" variant="secondary" aria-label={`${label}: ${recording ? "Press keys…" : value ? prettyAccelerator(value) : "Not set"}`} aria-pressed={recording} onClick={() => setRecording((r) => !r)} className="min-w-28 tabular-nums">
           {recording ? "Press keys…" : value ? prettyAccelerator(value) : "Not set"}
         </Button>
         {value && !recording && (

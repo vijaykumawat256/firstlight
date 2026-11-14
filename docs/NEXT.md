@@ -49,6 +49,7 @@ See [PHASE7_DESIGN.md](PHASE7_DESIGN.md). Waiting for your decisions at the end 
 - Apple Developer account, Windows signing certificate, an update host, a privacy contact (docs/RELEASE.md).
 
 ## 6. Built but never seen working (try these)
+- The menu-bar text next to the icon and the Join-next-meeting shortcut (turn both on in Settings, General).
 - Reminder notifications actually appearing; Send invitation opening a draft in Mail.
 - Notification click bringing the app forward (needs a bundled build, not `tauri dev`).
 - Wake-from-sleep fallback (close the lid, open it, wait 20 seconds) and full-screen detection (put a video or presentation full screen, then unlock): both are tested as logic and the window reading is proven on this Mac, but the real sleep and a real full-screen app have not been seen.

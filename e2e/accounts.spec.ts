@@ -243,3 +243,22 @@ test("Calendar app option is hidden where it is unsupported", async ({ page }) =
   await expect(page.getByRole("button", { name: /Calendar link/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Calendar app on this computer/ })).toHaveCount(0);
 });
+
+test("public holidays are added with one tap and are an ordinary read-only calendar", async ({ page }) => {
+  await page.goto("/?fresh");
+  await openAdd(page);
+  await page.getByRole("button", { name: /Public holidays/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Public holidays" });
+  await expect(sheet).toContainText("published by Google");
+  await expect(sheet.getByRole("button", { name: "United Kingdom" })).toBeVisible();
+  await sheet.getByRole("button", { name: "Back" }).click();
+  await expect(page.getByRole("dialog", { name: "Add a calendar" })).toBeVisible();
+
+  await page.getByRole("button", { name: /Public holidays/ }).click();
+  await page.getByRole("dialog", { name: "Public holidays" }).getByRole("button", { name: "United Kingdom" }).click();
+  await expect(page.getByRole("heading", { name: "Your day is clear" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^Accounts & calendars/ }).click();
+  await expect(page.getByRole("region", { name: "Holidays: United Kingdom" })).toBeVisible();
+});

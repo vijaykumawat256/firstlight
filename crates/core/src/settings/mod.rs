@@ -87,6 +87,11 @@ pub struct GeneralSettings {
     pub time_format: TimeFormat,
     /// A global shortcut that shows or hides the briefing, e.g. `CmdOrCtrl+Shift+Space`.
     pub global_shortcut: Option<String>,
+    /// A global shortcut that opens the video link of the meeting that is starting or running.
+    pub join_shortcut: Option<String>,
+    /// Show the next meeting next to the menu-bar icon. Off by default: titles in a menu bar are visible to
+    /// anyone looking at the screen, including in a screen share.
+    pub tray_next_meeting: bool,
     /// Look for a new version about once a day. Sends only the app's version and operating system.
     pub check_for_updates: bool,
     pub update_channel: UpdateChannel,
@@ -100,6 +105,8 @@ impl Default for GeneralSettings {
             week_start: WeekStart::Auto,
             time_format: TimeFormat::Auto,
             global_shortcut: None,
+            join_shortcut: None,
+            tray_next_meeting: false,
             check_for_updates: true,
             update_channel: UpdateChannel::Stable,
         }
@@ -377,6 +384,16 @@ impl AppSettings {
         {
             self.general.global_shortcut = None;
         }
+        if self
+            .general
+            .join_shortcut
+            .as_deref()
+            .is_some_and(|s| !valid_shortcut(s))
+            || self.general.join_shortcut == self.general.global_shortcut
+        {
+            // Not valid, or the same key as the other shortcut: one key cannot do two things.
+            self.general.join_shortcut = None;
+        }
 
         let b = &mut self.briefing;
         b.min_gap_minutes = b.min_gap_minutes.clamp(5, 240);
@@ -474,6 +491,19 @@ impl AppSettings {
             .is_some_and(|s| !valid_shortcut(s))
         {
             return Err("That shortcut isn't valid. Use at least one modifier key (such as Cmd or Ctrl) plus a letter, number or function key.".into());
+        }
+        if self
+            .general
+            .join_shortcut
+            .as_deref()
+            .is_some_and(|s| !valid_shortcut(s))
+        {
+            return Err("That shortcut isn't valid. Use at least one modifier key (such as Cmd or Ctrl) plus a letter, number or function key.".into());
+        }
+        if self.general.join_shortcut.is_some()
+            && self.general.join_shortcut == self.general.global_shortcut
+        {
+            return Err("Choose a different key for each shortcut.".into());
         }
         if self.briefing.work_end_hour <= self.briefing.work_start_hour {
             return Err("Working hours must end after they start.".into());

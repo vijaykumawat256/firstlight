@@ -169,7 +169,7 @@ if (params.has("attention")) {
 let oauthCancelled = false;
 export const DEFAULT_SETTINGS: AppSettings = {
   version: 1,
-  general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null, check_for_updates: true, update_channel: "stable" },
+  general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null, join_shortcut: null, tray_next_meeting: false, check_for_updates: true, update_channel: "stable" },
   briefing: { show_declined: false, min_gap_minutes: 30, work_start_hour: 9, work_end_hour: 18, early_hour: 8 },
   sections: { tomorrow: true, free_time: true, attention: true },
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },
@@ -539,6 +539,9 @@ export const fixtureBackend: Backend = {
     const sc = next.general.global_shortcut;
     if (sc && !/^((cmd|ctrl|alt|shift|cmdorctrl)\+)+[a-z0-9]$/i.test(sc)) throw new Error("That shortcut isn't valid. Use at least one modifier key (such as Cmd or Ctrl) plus a letter, number or function key.");
     if (sc === "Cmd+Q") throw new Error("That shortcut couldn't be used. Another app may already own it.");
+    const js = next.general.join_shortcut;
+    if (js && !/^((cmd|ctrl|alt|shift|cmdorctrl)\+)+[a-z0-9]$/i.test(js)) throw new Error("That shortcut isn't valid. Use at least one modifier key (such as Cmd or Ctrl) plus a letter, number or function key.");
+    if (js && js === sc) throw new Error("Choose a different key for each shortcut.");
     const fixed = structuredClone(next);
     fixed.email.imap = settings.email.imap; // mailboxes change only through add/remove
     fixed.ai.consented = settings.ai.consented; // consent is only ever given by the enable action

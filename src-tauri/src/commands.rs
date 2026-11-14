@@ -930,7 +930,11 @@ fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdR
     s.email.imap = stored.email.imap;
     s.sanitize();
     // Try the shortcut first: if the system refuses it, nothing is saved and the user is told why.
-    crate::apply_shortcut(app, s.general.global_shortcut.as_deref())?;
+    crate::apply_shortcut(
+        app,
+        s.general.global_shortcut.as_deref(),
+        s.general.join_shortcut.as_deref(),
+    )?;
     lock_store(state)?
         .save_settings(&s)
         .map_err(internal("saving settings"))?;
@@ -1001,7 +1005,7 @@ pub async fn erase_all_data(app: AppHandle, state: State<'_, AppState>) -> CmdRe
         report.credentials
     );
     let _ = app.autolaunch().disable();
-    let _ = crate::apply_shortcut(&app, None);
+    let _ = crate::apply_shortcut(&app, None, None);
     let _ = app.emit("settings-changed", ());
     let _ = app.emit(
         "sync-finished",

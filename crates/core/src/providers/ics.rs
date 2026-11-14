@@ -342,4 +342,61 @@ mod live {
             second.changed.len()
         );
     }
+
+    /// Every country offered in the add-calendar sheet (`src/features/accounts/holidays.ts`) must be a feed
+    /// the production client can fetch and the calendar reader can parse. Keep the ids in step with that list.
+    #[test]
+    #[ignore = "network"]
+    fn live_every_offered_holiday_calendar_parses() {
+        let ids = [
+            "en.australian",
+            "pt_br.brazilian",
+            "en.canadian",
+            "fr.french",
+            "de.german",
+            "en.indian",
+            "en.irish",
+            "it.italian",
+            "ja.japanese",
+            "en.malaysia",
+            "nl.dutch",
+            "en.new_zealand",
+            "en.philippines",
+            "en.singapore",
+            "es.spain",
+            "en.uk",
+            "en.usa",
+        ];
+        let now = Utc::now();
+        let w = Window {
+            from: now - Duration::days(30),
+            to: now + Duration::days(365),
+        };
+        for id in ids {
+            let url = format!(
+                "https://calendar.google.com/calendar/ical/{id}%23holiday%40group.v.calendar.google.com/public/basic.ics"
+            );
+            let key = IcsProvider::secret_key(id);
+            let secrets = Arc::new(MemorySecretStore::default());
+            secrets.set(&key, &url).unwrap();
+            let p = IcsProvider::new(
+                Arc::new(ReqwestClient::new().unwrap()),
+                secrets,
+                chrono_tz::UTC,
+            );
+            let acct = Account {
+                id: id.into(),
+                provider: ProviderKind::Ics,
+                display_name: id.into(),
+                email: None,
+                status: AccountStatus::Ok,
+                secret_ref: Some(key),
+                created_at: now,
+            };
+            let cal = p.list_calendars(&acct).unwrap().remove(0);
+            let n = p.sync_events(&cal, None, &w).unwrap().changed.len();
+            println!("{id}: {n} events in the next year");
+            assert!(n > 5, "{id} returned only {n} events");
+        }
+    }
 }

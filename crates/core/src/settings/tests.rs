@@ -503,3 +503,44 @@ fn a_custom_mailbox_with_a_bad_server_is_dropped_and_a_good_one_kept() {
     let file = r#"{"format":"daybrief-settings","settings":{"email":{"imap":[{"id":"z9","preset":"custom","address":"a@b.co","host":"imap.fastmail.com"}]}}}"#;
     assert!(AppSettings::import(file).unwrap().email.imap.is_empty());
 }
+
+#[test]
+fn the_join_shortcut_and_menu_bar_text_default_off_and_are_kept_honest() {
+    let d = AppSettings::default();
+    assert_eq!(
+        (d.general.join_shortcut.clone(), d.general.tray_next_meeting),
+        (None, false)
+    );
+
+    let ok = parse(r#"{"general":{"join_shortcut":"CmdOrCtrl+Shift+J","tray_next_meeting":true}}"#);
+    assert_eq!(
+        ok.general.join_shortcut.as_deref(),
+        Some("CmdOrCtrl+Shift+J")
+    );
+    assert!(ok.general.tray_next_meeting);
+
+    // Not a real shortcut, or the same key as the show/hide one: dropped rather than left to fail later.
+    assert_eq!(
+        parse(r#"{"general":{"join_shortcut":"J"}}"#)
+            .general
+            .join_shortcut,
+        None
+    );
+    let same = parse(
+        r#"{"general":{"global_shortcut":"CmdOrCtrl+Shift+Space","join_shortcut":"CmdOrCtrl+Shift+Space"}}"#,
+    );
+    assert_eq!(same.general.join_shortcut, None);
+    assert_eq!(
+        same.general.global_shortcut.as_deref(),
+        Some("CmdOrCtrl+Shift+Space")
+    );
+
+    let mut s = AppSettings::default();
+    s.general.join_shortcut = Some("K".into());
+    assert!(s.validate().unwrap_err().contains("isn't valid"));
+    s.general.join_shortcut = Some("CmdOrCtrl+Shift+Space".into());
+    s.general.global_shortcut = Some("CmdOrCtrl+Shift+Space".into());
+    assert!(s.validate().unwrap_err().contains("different key"));
+    s.general.join_shortcut = Some("CmdOrCtrl+Shift+J".into());
+    assert!(s.validate().is_ok());
+}

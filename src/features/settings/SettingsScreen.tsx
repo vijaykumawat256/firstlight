@@ -163,6 +163,12 @@ export function SettingsScreen() {
               <SettingRow title="Show or hide the briefing" description="A shortcut that works from any app.">
                 <ShortcutRecorder value={s.general.global_shortcut} onChange={(v) => update((d) => void (d.general.global_shortcut = v))} />
               </SettingRow>
+              <SettingRow title="Join the next meeting" description="Opens the video link of the meeting that is starting soon or running.">
+                <ShortcutRecorder label="Join shortcut" value={s.general.join_shortcut} onChange={(v) => update((d) => void (d.general.join_shortcut = v))} />
+              </SettingRow>
+              <SettingRow title="Next meeting in the menu bar" description="Shows its name and a countdown next to the icon. Anyone who can see your screen can read it.">
+                <Switch label="Show the next meeting in the menu bar" checked={s.general.tray_next_meeting} onCheckedChange={(v) => update((d) => void (d.general.tray_next_meeting = v))} />
+              </SettingRow>
             </Group>
 
             <Group title="Sync">

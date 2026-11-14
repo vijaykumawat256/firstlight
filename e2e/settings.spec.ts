@@ -293,3 +293,32 @@ test("staying quiet while another app is full screen can be turned off and on", 
   await sw.click();
   await expect(sw).toHaveAttribute("aria-checked", "true");
 });
+
+test("the join-next-meeting shortcut can be recorded, must differ from the other, and can be cleared", async ({ page }) => {
+  await openSection(page, "General");
+  const show = page.getByRole("button", { name: "Global shortcut" });
+  const join = page.getByRole("button", { name: "Join shortcut" });
+  await expect(join).toHaveText("Not set");
+  await join.click();
+  await page.keyboard.press("Meta+Shift+J");
+  await expect(join).toHaveText("⌘⇧ J");
+
+  // The same key cannot do two things: the second choice is refused and the first stays.
+  await show.click();
+  await page.keyboard.press("Meta+Shift+J");
+  await expect(page.getByText("Couldn't save that setting").first()).toBeVisible();
+  await expect(show).toHaveText("Not set");
+  await expect(join).toHaveText("⌘⇧ J");
+
+  await join.locator("xpath=following-sibling::button").click(); // Clear
+  await expect(join).toHaveText("Not set");
+});
+
+test("the menu-bar text is off by default and warns that a screen can be read", async ({ page }) => {
+  await openSection(page, "General");
+  const sw = page.getByRole("switch", { name: "Show the next meeting in the menu bar" });
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByText(/Anyone who can see your screen can read it/)).toBeVisible();
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+});

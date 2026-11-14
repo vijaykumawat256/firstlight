@@ -150,6 +150,8 @@ export interface AppSettings {
     week_start: WeekStart;
     time_format: TimeFormat;
     global_shortcut: string | null;
+    join_shortcut: string | null;
+    tray_next_meeting: boolean;
     check_for_updates: boolean;
     update_channel: "stable" | "beta";
   };

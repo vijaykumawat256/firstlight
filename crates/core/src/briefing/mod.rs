@@ -9,6 +9,7 @@ use chrono::{DateTime, Duration, NaiveDate, Timelike, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 
+pub mod glance;
 pub mod notify;
 pub mod rules;
 

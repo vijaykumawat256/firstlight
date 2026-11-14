@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, KeyRound, Laptop, Link2, Mail, Sparkles } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, Flag, KeyRound, Laptop, Link2, Mail, Sparkles } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { api, errorMessage } from "@/api";
 import { Badge, Button, ListGroup, Select, Sheet, TextField } from "@/design";
+import { HOLIDAY_CALENDARS } from "./holidays";
 import { CALDAV_PRESETS, OTHER_SERVER } from "./presets";
 
-type Step = "choose" | "ics" | "caldav" | "oauth" | "system";
+type Step = "choose" | "ics" | "caldav" | "oauth" | "system" | "holidays";
 type OAuthProvider = "google" | "microsoft";
 const OAUTH_LABEL: Record<OAuthProvider, string> = { google: "Google", microsoft: "Microsoft" };
 
@@ -64,6 +65,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
         oauth.reset();
         sys.reset();
         demo.reset();
+        holiday.reset();
       }, 250);
     }
   };
@@ -95,6 +97,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
     onSettled: () => void system.refetch(),
   });
   const demo = useMutation({ mutationFn: () => api.addDemoAccount(), onSuccess: done });
+  const holiday = useMutation({ mutationFn: (h: (typeof HOLIDAY_CALENDARS)[number]) => api.addIcsAccount(`Holidays: ${h.label}`, h.url), onSuccess: done });
 
   const linkError = touched && !LINK_RE.test(url.trim()) ? "Enter an https:// or webcal:// link." : undefined;
 
@@ -112,8 +115,8 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
     <Sheet
       open={open}
       onOpenChange={close}
-      title={step === "choose" ? "Add a calendar" : step === "system" ? "Calendar app" : step === "ics" ? "Calendar link" : step === "oauth" ? `Sign in with ${OAUTH_LABEL[oauthProvider]}` : "iCloud, Yahoo and others"}
-      description={step === "choose" ? "Choose how to connect." : step === "system" ? "Use the calendars already on this computer." : step === "ics" ? "Paste the address of a published calendar." : step === "oauth" ? "Firstlight only asks to view your calendar." : "Sign in with an app password."}
+      title={step === "choose" ? "Add a calendar" : step === "system" ? "Calendar app" : step === "holidays" ? "Public holidays" : step === "ics" ? "Calendar link" : step === "oauth" ? `Sign in with ${OAUTH_LABEL[oauthProvider]}` : "iCloud, Yahoo and others"}
+      description={step === "choose" ? "Choose how to connect." : step === "system" ? "Use the calendars already on this computer." : step === "holidays" ? "Choose a country. Its holidays appear alongside your events." : step === "ics" ? "Paste the address of a published calendar." : step === "oauth" ? "Firstlight only asks to view your calendar." : "Sign in with an app password."}
       footer={
         step === "system" ? (
           <>
@@ -139,6 +142,10 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
               </Button>
             </>
           )
+        ) : step === "holidays" ? (
+          <Button variant="secondary" leading={<ChevronLeft className="size-4" />} onClick={() => setStep("choose")} disabled={holiday.isPending}>
+            Back
+          </Button>
         ) : step !== "choose" ? (
           <>
             <Button variant="secondary" leading={<ChevronLeft className="size-4" />} onClick={() => setStep("choose")} disabled={busy}>
@@ -165,6 +172,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
           )}
           <ListGroup>
             <Choice icon={<Link2 />} title="Calendar link" subtitle="Any published calendar (ICS or webcal)" onClick={() => setStep("ics")} />
+            <Choice icon={<Flag />} title="Public holidays" subtitle="Pick a country; nothing to sign in to" onClick={() => setStep("holidays")} />
             <Choice
               icon={<Mail />}
               title="Google"
@@ -189,6 +197,30 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
             </ListGroup>
           )}
           {demo.isError && <p role="alert" className="px-1 text-footnote text-danger">{errorMessage(demo.error)}</p>}
+        </div>
+      ) : step === "holidays" ? (
+        <div className="flex flex-col gap-3 pb-4">
+          {holiday.isError && (
+            <p role="alert" className="rounded-card bg-danger-soft px-3 py-2 text-body text-danger">
+              {errorMessage(holiday.error)}
+            </p>
+          )}
+          <ListGroup>
+            {HOLIDAY_CALENDARS.map((h) => (
+              <li key={h.id}>
+                <button
+                  type="button"
+                  disabled={holiday.isPending}
+                  onClick={() => holiday.mutate(h)}
+                  className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-headline text-fg transition-colors duration-150 ease-standard enabled:hover:bg-fill enabled:active:bg-fill-strong disabled:opacity-55"
+                >
+                  {h.label}
+                  {holiday.isPending && holiday.variables?.id === h.id ? <span className="text-footnote text-fg-2">Adding…</span> : <ChevronRight className="size-4 text-fg-3" aria-hidden />}
+                </button>
+              </li>
+            ))}
+          </ListGroup>
+          <p className="px-1 text-footnote text-fg-2">These are public calendars published by Google. Birthdays from your Contacts already appear if you connect the Calendar app on this computer.</p>
         </div>
       ) : step === "system" ? (
         <div className="flex flex-col gap-4 pb-4">

@@ -49,6 +49,25 @@ fn show(app: &AppHandle, title: &str, body: &str) {
     }
 }
 
+/// Puts text next to the menu-bar icon (macOS) and in its tooltip, or clears it. Only touches the tray when
+/// the text changed, so an idle app does no work.
+fn set_tray_text(app: &AppHandle, text: Option<&str>) {
+    use std::sync::Mutex;
+    static LAST: Mutex<Option<String>> = Mutex::new(None);
+    let owned = text.map(String::from);
+    {
+        let Ok(mut last) = LAST.lock() else { return };
+        if *last == owned {
+            return;
+        }
+        *last = owned.clone();
+    }
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_title(owned.as_deref());
+        let _ = tray.set_tooltip(Some(owned.as_deref().unwrap_or("Firstlight")));
+    }
+}
+
 pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
     std::thread::Builder::new()
         .name("notifier".into())
@@ -72,6 +91,7 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                     // Re-read every tick so a change in Settings applies at once, without a restart.
                     let settings = store.load_settings();
                     let ns = settings.notify_for_engine(system_24h);
+                    let general = settings.general.clone();
                     let (bs, rules) = (settings.briefing, settings.unlock);
                     let today = now.with_timezone(&tz).date_naive();
                     // Repeating events of the user's own are generated for a rolling window: top it up
@@ -86,6 +106,23 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                     if let (Ok(events), Ok(sent)) =
                         (store.events_between(from, to), store.sent_notifications())
                     {
+                        // The menu-bar text, refreshed every tick (empty when the setting is off).
+                        let next =
+                            daybrief_core::briefing::build(&dedupe(events.clone()), now, tz, &bs)
+                                .next;
+                        let label = general
+                            .tray_next_meeting
+                            .then(|| {
+                                daybrief_core::briefing::glance::tray_label(
+                                    next.as_ref(),
+                                    now,
+                                    ns.hide_titles,
+                                    ns.time_24h,
+                                    tz,
+                                )
+                            })
+                            .flatten();
+                        set_tray_text(&app, label.as_deref());
                         // Events with a reminder of their own are announced by it, not by the general heads-up.
                         let own = daybrief_core::local::reminder_map(&store).unwrap_or_default();
                         let events: Vec<_> = dedupe(events)
