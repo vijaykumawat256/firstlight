@@ -283,3 +283,13 @@ test("the default accent follows the system colour, and a chosen one wins", asyn
   await page.getByRole("radio", { name: "Default" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-accent", "purple");
 });
+
+test("staying quiet while another app is full screen can be turned off and on", async ({ page }) => {
+  await openSection(page, "When it appears");
+  const sw = page.getByRole("switch", { name: "Stay quiet while another app is full screen" });
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+});

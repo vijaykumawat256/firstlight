@@ -307,6 +307,9 @@ export function SettingsScreen() {
               <SettingRow title="Days" description="It stays quiet on the others." stack>
                 <DayPicker days={s.unlock.days} onChange={(days) => update((d) => void (d.unlock.days = days))} />
               </SettingRow>
+              <SettingRow title="While another app is full screen" description="Stay quiet during presentations, films and games.">
+                <Switch label="Stay quiet while another app is full screen" checked={s.unlock.skip_when_fullscreen} onCheckedChange={(v) => update((d) => void (d.unlock.skip_when_fullscreen = v))} />
+              </SettingRow>
               <SettingRow title="Quiet hours" description="Nothing appears, and no summaries are sent.">
                 <Switch
                   label="Quiet hours"

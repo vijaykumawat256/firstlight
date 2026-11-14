@@ -5,6 +5,7 @@
 mod commands;
 mod crash_reports;
 mod eventkit;
+mod fullscreen;
 mod keychain;
 mod mail_ai;
 mod notifier;
@@ -210,8 +211,9 @@ fn on_unlock(app: &AppHandle) {
         .filter(|n| !n.in_progress)
         .map(|n| n.start);
 
-    // Detecting another app in full screen is not implemented yet, so this is always false.
-    let action = decide(now, tz, &rules, &rule_state, next_start, false);
+    // Only looked at when the rule is on, so the window list is not read for nothing.
+    let covered = rules.skip_when_fullscreen && fullscreen::another_app_is_full_screen();
+    let action = decide(now, tz, &rules, &rule_state, next_start, covered);
     log::info!("unlock decision: {action:?}");
     match action {
         Action::ShowFull => {

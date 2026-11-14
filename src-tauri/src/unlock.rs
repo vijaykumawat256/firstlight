@@ -3,15 +3,45 @@
 //! macOS: observes the distributed notification `com.apple.screenIsUnlocked`.
 //! Windows: session-change notifications. Other platforms: not available.
 
+/// After waking from sleep we wait this long for the real unlock notification before acting on the wake alone.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+const WAKE_GRACE: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Whether the wake should count as an unlock: only if no real unlock was seen since the Mac woke. A Mac with
+/// no password after sleep never sends one; a locked Mac sends it when the user signs in, and then the
+/// wake must not count twice.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn wake_counts_as_unlock(
+    last_unlock: Option<std::time::Instant>,
+    woke_at: std::time::Instant,
+) -> bool {
+    last_unlock.is_none_or(|t| t < woke_at)
+}
+
+/// macOS: `com.apple.screenIsUnlocked` is the real signal. As a fallback (PLAN.md section 6), waking from
+/// sleep counts as an unlock if no real unlock notification follows within [`WAKE_GRACE`]. The rules in
+/// `briefing::rules` (minimum interval, first-unlock-of-the-day) make a repeat harmless.
 #[cfg(target_os = "macos")]
 pub fn start(on_unlock: impl Fn() + Send + Sync + 'static) {
     use block2::RcBlock;
+    use objc2_app_kit::NSWorkspace;
     use objc2_foundation::{NSDistributedNotificationCenter, NSNotification, NSString};
     use std::ptr::NonNull;
+    use std::sync::{Arc, Mutex};
+    use std::time::Instant;
+
+    let on_unlock = Arc::new(on_unlock);
+    let last_unlock: Arc<Mutex<Option<Instant>>> = Arc::new(Mutex::new(None));
 
     let center = NSDistributedNotificationCenter::defaultCenter();
     let name = NSString::from_str("com.apple.screenIsUnlocked");
-    let block = RcBlock::new(move |_n: NonNull<NSNotification>| on_unlock());
+    let (cb, seen) = (on_unlock.clone(), last_unlock.clone());
+    let block = RcBlock::new(move |_n: NonNull<NSNotification>| {
+        if let Ok(mut t) = seen.lock() {
+            *t = Some(Instant::now());
+        }
+        cb()
+    });
     // SAFETY: the block is `'static` and only calls the Send + Sync closure.
     let token = unsafe {
         center.addObserverForName_object_queue_usingBlock(Some(&name), None, None, &block)
@@ -19,6 +49,34 @@ pub fn start(on_unlock: impl Fn() + Send + Sync + 'static) {
     // The observer must live for the whole process; dropping the token would not remove it,
     // but we keep it alive explicitly for clarity.
     std::mem::forget(token);
+
+    // Wake from sleep, announced by the workspace's own notification centre.
+    let workspace_center = NSWorkspace::sharedWorkspace().notificationCenter();
+    let wake_name = NSString::from_str("NSWorkspaceDidWakeNotification");
+    let wake_block = RcBlock::new(move |_n: NonNull<NSNotification>| {
+        let woke_at = Instant::now();
+        let (cb, seen) = (on_unlock.clone(), last_unlock.clone());
+        std::thread::spawn(move || {
+            std::thread::sleep(WAKE_GRACE);
+            let last = seen.lock().ok().and_then(|t| *t);
+            if wake_counts_as_unlock(last, woke_at) {
+                log::info!(
+                    "woke from sleep with no unlock notification: treating the wake as an unlock"
+                );
+                cb();
+            }
+        });
+    });
+    // SAFETY: as above; the block only spawns a thread.
+    let wake_token = unsafe {
+        workspace_center.addObserverForName_object_queue_usingBlock(
+            Some(&wake_name),
+            None,
+            None,
+            &wake_block,
+        )
+    };
+    std::mem::forget(wake_token);
 }
 
 /// Windows: a hidden message-only window registered for session notifications (`WTSRegisterSessionNotification`)
@@ -119,4 +177,32 @@ pub fn start(on_unlock: impl Fn() + Send + Sync + 'static) {
 #[cfg(not(any(target_os = "macos", windows)))]
 pub fn start(_on_unlock: impl Fn() + Send + Sync + 'static) {
     log::warn!("unlock detection is not available on this platform");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_wake_with_no_unlock_counts_as_one() {
+        let woke = Instant::now();
+        assert!(wake_counts_as_unlock(None, woke));
+        // An unlock from before the sleep says nothing about this wake.
+        assert!(wake_counts_as_unlock(
+            woke.checked_sub(Duration::from_secs(3600)),
+            woke
+        ));
+    }
+
+    #[test]
+    fn a_real_unlock_after_the_wake_means_the_wake_does_not_count_twice() {
+        let woke = Instant::now();
+        assert!(!wake_counts_as_unlock(
+            Some(woke + Duration::from_secs(5)),
+            woke
+        ));
+        // An unlock at the very moment of waking is the real one.
+        assert!(!wake_counts_as_unlock(Some(woke), woke));
+    }
 }
