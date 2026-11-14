@@ -3,7 +3,7 @@ name = "daybrief-core"
 description = "Platform-independent calendar logic. Must never depend on Tauri."
 edition.workspace = true
 version.workspace = true
-license.workspace = true
+publish = false
 
 [dependencies]
 chrono = { version = "0.4.45", features = ["serde"] }

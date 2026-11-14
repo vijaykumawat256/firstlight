@@ -5,7 +5,6 @@ members = ["crates/core", "src-tauri"]
 [workspace.package]
 edition = "2024"
 version = "0.1.0"
-license = "UNLICENSED"
 
 [profile.release]
 codegen-units = 1
