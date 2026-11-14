@@ -3,10 +3,9 @@
 The full brief is `PLAN.md`; read it first. This file records what is true *now* and what you'd otherwise rediscover.
 
 ## Status
-Phases 1 and 2 built, except what is listed under "Not yet verified". Phase 3 (briefing) is IN PROGRESS.
-Phase 3 done: briefing engine (`crates/core/src/briefing`), unlock rules (`briefing/rules.rs`), `get_briefing`, event detail sheet, compact up-next window, UI now renders engine output.
-Phase 3 TODO: notifications (10 min before, morning briefing, evening look-ahead; must not duplicate after restart), day and week calendar views, settings UI for rules (Phase 4), full-screen-app detection (rule exists; detection is stubbed to false).
-Phase 2 delivered: ICS links, CalDAV (iCloud/Yahoo/Fastmail/other), Google and Microsoft OAuth, sync engine/scheduler, dedupe, accounts UI.
+Phases 1, 2 and 3 built, except what is listed under "Not yet verified". Next: Phase 4 (settings). Do not build ahead.
+Phase 3 delivered: briefing engine (`crates/core/src/briefing`), unlock rules (`rules.rs`), notifications (`notify.rs` + `src-tauri/src/notifier.rs`), `get_briefing`, event detail sheet, compact up-next window, day and week calendar views (`src/features/calendar`).
+Phase 3 gaps: full-screen-app detection (the rule exists; detection is stubbed to false); clicking a notification does not open the app; the settings that tune all this (rules, notification times, 12/24h) have defaults and are read from the `unlock_rules`, `notify` and `briefing` settings keys, but have no UI until Phase 4.
 Calendar app (macOS EventKit) provider: built; its permission prompt has not been clicked through yet.
 Queued, not built: Apple Mail digest (unread, important senders, invitations) via AppleScript; planned with Phase 5.
 
@@ -47,3 +46,10 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Start-at-login across an actual logout/login; toggling was not exercised.
 - Windows: nothing built or run locally; CI covers it once pushed. Unlock detection is a stub there.
 - Wake-from-sleep fallback for unlock detection is not implemented.
+
+## Phase 3 notes
+- Notification ids embed the date or start time and live in the `notifications_sent` table, so restarts never repeat one and a moved meeting gets a fresh heads-up.
+- Heads-ups ignore quiet hours on purpose; the morning and evening summaries obey them.
+- Notification times use 12/24h from the `notify` setting; the default is read from macOS (`AppleICUForce24HourTime`).
+- Calendar views hide cancelled and declined events (same rule as the briefing). Hour rows use the wall clock, so daylight-saving days line up.
+- Notifications in `tauri dev` appear to come from the terminal app; a signed bundle (Phase 6) fixes the attribution.

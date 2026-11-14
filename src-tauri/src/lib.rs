@@ -5,6 +5,7 @@
 mod commands;
 mod eventkit;
 mod keychain;
+mod notifier;
 mod providers;
 mod scheduler;
 mod unlock;
@@ -241,6 +242,7 @@ pub fn run() {
             show_main(app)
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
@@ -312,6 +314,7 @@ pub fn run() {
                 deps.clone(),
             );
             sync.trigger(Trigger::Launch);
+            let (db_path_for_notifier, key_for_notifier) = (db_path.clone(), key.clone());
             app.manage(AppState {
                 store: Mutex::new(store),
                 db_path,
@@ -323,6 +326,12 @@ pub fn run() {
                 oauth_lock: Arc::new(Mutex::new(())),
             });
 
+            notifier::spawn(
+                app.handle().clone(),
+                db_path_for_notifier,
+                key_for_notifier,
+                tz,
+            );
             build_tray(app.handle())?;
 
             // Unlock: refresh calendars, then apply the rules (first unlock of the day, up-next, quiet hours...).

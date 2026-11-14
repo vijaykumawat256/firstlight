@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarX, CloudOff, RefreshCw, Settings as SettingsIcon } from "lucide-react";
+import { CalendarDays, CalendarX, CloudOff, RefreshCw, Settings as SettingsIcon } from "lucide-react";
+import { useNav } from "@/app/nav";
 import { useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
 import { Button, EmptyState, IconButton, Skeleton, Tooltip, useToasts } from "@/design";
@@ -27,6 +28,7 @@ export function BriefingScreen() {
   const now = useNow();
   const online = useOnline();
   const push = useToasts((s) => s.push);
+  const go = useNav((s) => s.go);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // The engine works out today and tomorrow; refetch each minute so past/next stay accurate while open.
@@ -57,6 +59,11 @@ export function BriefingScreen() {
     <div className="flex h-full flex-col">
       {/* Draggable title-bar strip; the traffic lights sit at the left. */}
       <div data-tauri-drag-region className="flex h-11 shrink-0 items-center justify-end px-3">
+        <Tooltip content="Calendar">
+          <IconButton label="Calendar" onClick={() => go("calendar")}>
+            <CalendarDays className="size-[18px]" />
+          </IconButton>
+        </Tooltip>
         <Tooltip content="Refresh">
           <IconButton label="Refresh" onClick={refresh} disabled={refreshing}>
             <RefreshCw className={`size-[17px] ${refreshing ? "animate-spin" : ""}`} />

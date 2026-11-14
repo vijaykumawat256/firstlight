@@ -59,6 +59,11 @@ const MIGRATIONS: &[&str] = &[
         shown_at INTEGER NOT NULL
      );
      CREATE INDEX briefing_log_date ON briefing_log(date, kind);",
+    // 2: notifications already sent, so a restart never repeats one
+    "CREATE TABLE notifications_sent (
+        id TEXT PRIMARY KEY,
+        sent_at INTEGER NOT NULL
+     );",
 ];
 
 pub fn run(conn: &mut Connection) -> Result<()> {

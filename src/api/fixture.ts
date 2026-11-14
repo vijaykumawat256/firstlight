@@ -88,6 +88,11 @@ export function fixtureEvents(base: Date = new Date()): CalEvent[] {
     ev("flight", "fixture-personal", "Flight to Berlin", 1, [6, 45], [9, 30], { location: "Terminal 2" }),
     ev("tomorrow-sync", "fixture-work", "Partner sync", 1, [11, 0], [11, 45]),
     ev("tomorrow-dinner", "fixture-personal", "Dinner at Nopi", 1, [19, 30], [21, 0]),
+    ev("retro", "fixture-work", "Sprint retro", -1, [15, 0], [16, 0]),
+    ev("offsite", "fixture-work", "Planning offsite", 2, [9, 30], [12, 0], { location: "Granary Square" }),
+    ev("offsite-lunch", "fixture-personal", "Lunch with Dev", 2, [11, 0], [12, 30]),
+    ev("gym", "fixture-personal", "Gym", 3, [7, 0], [8, 0]),
+    ev("board", "fixture-work", "Board prep", 4, [14, 0], [16, 30], { join_url: "https://meet.google.com/abc-defg-hij" }),
   ];
 }
 

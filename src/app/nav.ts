@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type View = "briefing" | "accounts";
+export type View = "briefing" | "accounts" | "calendar";
 
 interface Nav {
   view: View;

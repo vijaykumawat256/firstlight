@@ -7,6 +7,7 @@ import { Gallery } from "@/design/Gallery";
 import { AccountsScreen } from "@/features/accounts/AccountsScreen";
 import { Onboarding } from "@/features/accounts/Onboarding";
 import { BriefingScreen } from "@/features/briefing/BriefingScreen";
+import { CalendarScreen } from "@/features/calendar/CalendarScreen";
 import { UpNextPanel } from "@/features/briefing/UpNextPanel";
 
 const queryClient = new QueryClient({
@@ -54,7 +55,9 @@ function Shell() {
     );
   }
   if ((accounts.data ?? []).length === 0) return <Onboarding />;
-  return view === "accounts" ? <AccountsScreen /> : <BriefingScreen />;
+  if (view === "accounts") return <AccountsScreen />;
+  if (view === "calendar") return <CalendarScreen />;
+  return <BriefingScreen />;
 }
 
 export default function App() {

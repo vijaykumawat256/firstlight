@@ -291,6 +291,30 @@ impl Store {
         )?)
     }
 
+    /// Ids of notifications already shown, so a restart never repeats one.
+    pub fn sent_notifications(&self) -> Result<std::collections::HashSet<String>> {
+        let mut st = self.conn.prepare("SELECT id FROM notifications_sent")?;
+        let rows = st.query_map([], |r| r.get::<_, String>(0))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    pub fn mark_notification_sent(&self, id: &str, at: DateTime<Utc>) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO notifications_sent (id, sent_at) VALUES (?1, ?2)",
+            params![id, at.timestamp()],
+        )?;
+        Ok(())
+    }
+
+    /// Forgets old records; ids embed dates and start times, so they can never match again.
+    pub fn prune_notifications(&self, older_than: DateTime<Utc>) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM notifications_sent WHERE sent_at < ?1",
+            [older_than.timestamp()],
+        )?;
+        Ok(())
+    }
+
     pub fn schema_version(&self) -> Result<i64> {
         Ok(self
             .conn
@@ -761,6 +785,21 @@ mod tests {
             Some(later),
             "plain unlock log entries do not count as appearances"
         );
+    }
+
+    #[test]
+    fn sent_notifications_persist_and_old_ones_are_pruned() {
+        let s = seeded();
+        let now = Utc.with_ymd_and_hms(2026, 3, 10, 12, 0, 0).unwrap();
+        s.mark_notification_sent("a", now - Duration::days(5))
+            .unwrap();
+        s.mark_notification_sent("b", now).unwrap();
+        s.mark_notification_sent("b", now + Duration::hours(1))
+            .unwrap(); // marking twice is harmless
+        assert_eq!(s.sent_notifications().unwrap().len(), 2);
+        s.prune_notifications(now - Duration::days(3)).unwrap();
+        let left: Vec<_> = s.sent_notifications().unwrap().into_iter().collect();
+        assert_eq!(left, ["b"]);
     }
 
     #[test]
