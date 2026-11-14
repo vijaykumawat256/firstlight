@@ -1,7 +1,8 @@
-import { AlertTriangle, CalendarCheck, Clock, MapPin, Video } from "lucide-react";
+import { AlertTriangle, CalendarCheck, Clock, Copy, MapPin, Video } from "lucide-react";
 import clsx from "clsx";
 import type { Briefing, BriefingItem, CalEvent, NextUp } from "@/api";
-import { Badge, Button, Card, ListGroup, SectionHeader, calendarColour } from "@/design";
+import { Badge, Button, Card, ListGroup, SectionHeader, calendarColour, useToasts } from "@/design";
+import { copyLink } from "./copyLink";
 import { formatCountdown, formatDuration, formatTime } from "./format";
 import { timeRange } from "./summary";
 
@@ -21,6 +22,7 @@ const subtitleOf = (i: BriefingItem) => [i.event.location, formatDuration(minute
 /* -------------------------------------------------------------- Up next */
 
 export function UpNextCard({ next, now, colourOf, onJoin, onOpen }: { next: NextUp; now: Date; colourOf: ColourOf; onJoin: (url: string) => void; onOpen: Open }) {
+  const push = useToasts((t) => t.push);
   const label = next.in_progress
     ? `Happening now · ends ${formatCountdown(at(next.end).getTime() - now.getTime())}`
     : `Up next · ${formatCountdown(at(next.start).getTime() - now.getTime())}`;
@@ -41,9 +43,14 @@ export function UpNextCard({ next, now, colourOf, onJoin, onOpen }: { next: Next
             </p>
           )}
           {next.event.join_url && (
-            <Button variant="primary" className="mt-3" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(next.event.join_url!)}>
-              Join
-            </Button>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button variant="primary" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(next.event.join_url!)}>
+                Join
+              </Button>
+              <Button variant="secondary" leading={<Copy className="size-4" aria-hidden />} onClick={() => void copyLink(next.event.join_url!, push)}>
+                Copy link
+              </Button>
+            </div>
           )}
         </div>
       </div>

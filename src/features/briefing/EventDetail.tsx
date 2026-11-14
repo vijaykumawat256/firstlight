@@ -1,6 +1,7 @@
-import { Calendar as CalendarIcon, MapPin, User, Users, Video } from "lucide-react";
+import { Calendar as CalendarIcon, Copy, MapPin, User, Users, Video } from "lucide-react";
 import type { CalEvent, CalendarInfo } from "@/api";
-import { Badge, Button, Sheet, calendarColour } from "@/design";
+import { Badge, Button, Sheet, calendarColour, useToasts } from "@/design";
+import { copyLink } from "./copyLink";
 import { formatDate, formatTime } from "./format";
 
 const RESPONSE: Record<CalEvent["my_response"], string | null> = {
@@ -30,6 +31,7 @@ export function EventDetail({ event, calendars, onClose, onJoin }: { event: CalE
   const others = event ? event.also_in.map((id) => calendars.find((c) => c.id === id)?.name).filter(Boolean) : [];
   const t = event && when(event);
   const response = event && RESPONSE[event.my_response];
+  const push = useToasts((s) => s.push);
   return (
     <Sheet open={event !== null} onOpenChange={(o) => !o && onClose()} title={event?.title ?? ""} description={t ? `${t.day} · ${t.time}` : undefined}>
       {event && (
@@ -41,9 +43,14 @@ export function EventDetail({ event, calendars, onClose, onJoin }: { event: CalE
             {event.recurrence_master_id && <Badge>Repeats</Badge>}
           </div>
           {event.join_url && (
-            <Button variant="primary" className="self-start" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(event.join_url!)}>
-              Join
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="primary" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(event.join_url!)}>
+                Join
+              </Button>
+              <Button variant="secondary" leading={<Copy className="size-4" aria-hidden />} onClick={() => void copyLink(event.join_url!, push)}>
+                Copy link
+              </Button>
+            </div>
           )}
           <dl className="flex flex-col gap-3 text-body">
             {event.location && (

@@ -83,3 +83,15 @@ test("only https join links are accepted", async ({ page }) => {
     nope: false,
   });
 });
+
+test("a meeting link can be joined or copied", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.clock.install({ time: todayAt(9, 30) });
+  await page.goto("/");
+  const card = page.getByLabel("Up next");
+  await expect(card.getByRole("button", { name: "Join" })).toBeVisible();
+  await card.getByRole("button", { name: "Copy link" }).click();
+  await expect(page.getByText("Meeting link copied").first()).toBeVisible();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toMatch(/^https:\/\//);
+});

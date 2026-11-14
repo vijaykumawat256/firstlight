@@ -49,7 +49,7 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - macOS Calendar-app provider: mapping logic is unit-tested with a mock source, and the real EventKit permission check runs (state was NotDetermined). The prompt itself, and reading real events, still need a human to click Allow in the running app. `src-tauri/Info.plist` is embedded in the dev binary (verified with otool).
 - Real-window appearance (vibrancy/titlebar overlay): could not screenshot the desktop app.
 - Start-at-login across an actual logout/login; toggling was not exercised.
-- Windows: nothing built or run locally; CI covers it once pushed. Unlock detection is a stub there.
+- Windows: nothing built or run locally; CI covers it once pushed. Unlock detection is implemented (`src-tauri/src/unlock.rs`, WTSRegisterSessionNotification) but has never been compiled or run on Windows.
 - Wake-from-sleep fallback for unlock detection is not implemented.
 
 ## Phase 3 notes
