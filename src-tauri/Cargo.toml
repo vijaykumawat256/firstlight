@@ -1,0 +1,33 @@
+[package]
+name = "daybrief"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Daybrief desktop shell"
+
+[lib]
+name = "daybrief_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+chrono = { version = "0.4.45", features = ["serde"] }
+chrono-tz = "0.10.4"
+daybrief-core = { path = "../crates/core" }
+iana-time-zone = "0.1.65"
+keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native"] }
+log = "0.4.35"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.12.5", features = ["tray-icon", "macos-private-api", "image-png"] }
+tauri-plugin-autostart = "2.7.0"
+tauri-plugin-log = "2.10.2"
+tauri-plugin-opener = "2.7.3"
+tauri-plugin-single-instance = "2.5.5"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSNotification", "NSString", "NSOperation", "NSDistributedNotificationCenter", "block2"] }
