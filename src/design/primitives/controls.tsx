@@ -22,7 +22,7 @@ const buttonBase =
   "disabled:opacity-40 disabled:pointer-events-none";
 
 const buttonVariants: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-accent-fg hover:brightness-110 active:brightness-95",
+  primary: "bg-accent-fill text-accent-fg hover:brightness-110 active:brightness-95",
   secondary: "bg-fill text-fg hover:bg-fill-strong",
   plain: "text-accent hover:bg-accent-soft",
   danger: "bg-danger-soft text-danger hover:brightness-95",
@@ -154,7 +154,7 @@ export function Select({ value, onValueChange, options, label }: SelectProps) {
                 value={o.value}
                 className={clsx(
                   "relative flex h-7 cursor-default items-center rounded-control pl-7 pr-3 text-body text-fg outline-none",
-                  "data-[highlighted]:bg-accent data-[highlighted]:text-accent-fg",
+                  "data-[highlighted]:bg-accent-fill data-[highlighted]:text-accent-fg",
                 )}
               >
                 <RSelect.ItemIndicator className="absolute left-2">

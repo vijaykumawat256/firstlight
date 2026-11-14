@@ -34,7 +34,7 @@ export function minutesOfDay(t: Date, day: Date): number {
  * Places a day's events into side-by-side columns. Events that overlap (directly or through a chain)
  * share a cluster and split its width; events that don't overlap anything use the full width.
  */
-export function layoutColumn(blocks: Block[], day: Date, minMinutes = 20): Placed[] {
+export function layoutColumn(blocks: Block[], day: Date, minMinutes = 28): Placed[] {
   const items = blocks
     .map((b) => ({ id: b.id, s: minutesOfDay(b.start, day), e: minutesOfDay(b.end, day), raw: b }))
     .filter((b) => b.e > b.s || (b.raw.start.getTime() === b.raw.end.getTime() && b.raw.start >= startOfLocalDay(day) && b.raw.start < startOfLocalDay(day, 1)))

@@ -16,16 +16,18 @@
   --fill: rgb(0 0 0 / 0.05);
   --fill-strong: rgb(0 0 0 / 0.09);
   --fg: #1d1d1f;
-  --fg-2: #6e6e73;
-  --fg-3: #8e8e93;
+  --fg-2: #545459;
+  --fg-3: #636366;
   --separator: rgb(0 0 0 / 0.08);
-  --accent: #007aff;
+  /* Every text colour here is checked against every background it appears on (WCAG AA, 4.5:1). */
+  --accent: #0066cc; /* text and icons */
+  --accent-fill: #0066cc; /* solid backgrounds that carry white text */
   --accent-fg: #ffffff;
-  --accent-soft: rgb(0 122 255 / 0.12);
-  --danger: #ff3b30;
-  --danger-soft: rgb(255 59 48 / 0.12);
-  --warning: #ff9500;
-  --warning-soft: rgb(255 149 0 / 0.14);
+  --accent-soft: rgb(0 102 204 / 0.1);
+  --danger: #c4001a;
+  --danger-soft: rgb(196 0 26 / 0.1);
+  --warning: #a04900;
+  --warning-soft: rgb(160 73 0 / 0.12);
   --success: #34c759;
   --overlay: rgb(0 0 0 / 0.3);
 
@@ -54,15 +56,16 @@
     --fill: rgb(255 255 255 / 0.08);
     --fill-strong: rgb(255 255 255 / 0.14);
     --fg: #f5f5f7;
-    --fg-2: #98989d;
-    --fg-3: #6c6c70;
+    --fg-2: #c2c2c7;
+    --fg-3: #a8a8ad;
     --separator: rgb(255 255 255 / 0.1);
-    --accent: #0a84ff;
-    --accent-soft: rgb(10 132 255 / 0.2);
-    --danger: #ff453a;
-    --danger-soft: rgb(255 69 58 / 0.2);
-    --warning: #ff9f0a;
-    --warning-soft: rgb(255 159 10 / 0.2);
+    --accent: #64aaff; /* lighter than the fill: it has to read as text on dark surfaces */
+    --accent-fill: #0a6bd6; /* darker: it has to carry white text */
+    --accent-soft: rgb(100 170 255 / 0.12);
+    --danger: #ff9a92;
+    --danger-soft: rgb(255 154 146 / 0.1);
+    --warning: #ffb340;
+    --warning-soft: rgb(255 179 64 / 0.16);
     --success: #30d158;
     --overlay: rgb(0 0 0 / 0.5);
     --sh-card: none;
@@ -88,15 +91,16 @@
   --fill: rgb(255 255 255 / 0.08);
   --fill-strong: rgb(255 255 255 / 0.14);
   --fg: #f5f5f7;
-  --fg-2: #98989d;
-  --fg-3: #6c6c70;
+  --fg-2: #c2c2c7;
+  --fg-3: #a8a8ad;
   --separator: rgb(255 255 255 / 0.1);
-  --accent: #0a84ff;
-  --accent-soft: rgb(10 132 255 / 0.2);
-  --danger: #ff453a;
-  --danger-soft: rgb(255 69 58 / 0.2);
-  --warning: #ff9f0a;
-  --warning-soft: rgb(255 159 10 / 0.2);
+  --accent: #64aaff;
+  --accent-fill: #0a6bd6;
+  --accent-soft: rgb(100 170 255 / 0.12);
+  --danger: #ff9a92;
+  --danger-soft: rgb(255 154 146 / 0.1);
+  --warning: #ffb340;
+  --warning-soft: rgb(255 179 64 / 0.16);
   --success: #30d158;
   --overlay: rgb(0 0 0 / 0.5);
   --sh-card: none;
@@ -125,6 +129,7 @@
   --color-fg-3: var(--fg-3);
   --color-separator: var(--separator);
   --color-accent: var(--accent);
+  --color-accent-fill: var(--accent-fill);
   --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
   --color-danger: var(--danger);
@@ -164,6 +169,32 @@
   --animate-pop-in: pop-in 220ms var(--ease-standard);
   --animate-sheet-in: sheet-in 280ms var(--ease-standard);
   --animate-slide-up: slide-up 220ms var(--ease-standard);
+}
+
+/* A custom accent colour (Settings > Appearance) is derived from the palette so it is readable by construction:
+   darkened in light mode and lightened in dark mode for text, and darkened for fills that carry white text. */
+:root[data-accent="red"] { --accent-base: var(--cal-red); }
+:root[data-accent="orange"] { --accent-base: var(--cal-orange); }
+:root[data-accent="green"] { --accent-base: var(--cal-green); }
+:root[data-accent="teal"] { --accent-base: var(--cal-teal); }
+:root[data-accent="indigo"] { --accent-base: var(--cal-indigo); }
+:root[data-accent="purple"] { --accent-base: var(--cal-purple); }
+:root[data-accent="pink"] { --accent-base: var(--cal-pink); }
+
+:root[data-accent] {
+  --accent: color-mix(in srgb, var(--accent-base) 60%, black);
+  --accent-fill: var(--accent);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-accent] {
+    --accent: color-mix(in srgb, var(--accent-base) 55%, white);
+    --accent-fill: color-mix(in srgb, var(--accent-base) 50%, black);
+  }
+}
+:root[data-theme="dark"][data-accent] {
+  --accent: color-mix(in srgb, var(--accent-base) 55%, white);
+  --accent-fill: color-mix(in srgb, var(--accent-base) 50%, black);
 }
 
 @keyframes fade-in {

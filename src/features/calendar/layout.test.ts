@@ -48,8 +48,8 @@ describe("layoutColumn", () => {
   });
 
   it("keeps very short events tall enough to click", () => {
-    expect(layoutColumn([blk("s", t(9), t(9, 5))], day)[0]!.height).toBe(20);
-    expect(layoutColumn([blk("z", t(9), t(9))], day)[0]!.height).toBe(20);
+    expect(layoutColumn([blk("s", t(9), t(9, 5))], day)[0]!.height).toBe(28);
+    expect(layoutColumn([blk("z", t(9), t(9))], day)[0]!.height).toBe(28);
   });
 
   it("is deterministic regardless of input order", () => {

@@ -12,13 +12,9 @@ const THEME_CACHE = "daybrief.theme";
 
 function applyAccent(accent: string) {
   const root = document.documentElement;
-  if (accent === "system" || !(CALENDAR_COLOURS as readonly string[]).includes(accent)) {
-    root.style.removeProperty("--accent");
-    root.style.removeProperty("--accent-soft");
-    return;
-  }
-  root.style.setProperty("--accent", `var(--cal-${accent})`);
-  root.style.setProperty("--accent-soft", `color-mix(in srgb, var(--cal-${accent}) 16%, transparent)`);
+  // The stylesheet derives readable text and fill colours from the palette colour (see tokens.css).
+  if (accent === "system" || !(CALENDAR_COLOURS as readonly string[]).includes(accent)) root.removeAttribute("data-accent");
+  else root.setAttribute("data-accent", accent);
 }
 
 /**

@@ -18,7 +18,7 @@ async function openCalendar(page: Page, at: Date = todayAt(9, 30)) {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
   await page.getByRole("button", { name: "Calendar" }).click();
-  await expect(page.getByRole("grid", { name: "Day" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Day", exact: true })).toBeVisible();
 }
 
 for (const scheme of ["light", "dark"] as const) {
@@ -43,8 +43,8 @@ for (const scheme of ["light", "dark"] as const) {
       await page.setViewportSize({ width: 760, height: 760 });
       await openCalendar(page, WEDNESDAY);
       await page.getByRole("radio", { name: "Week" }).click();
-      await expect(page.getByRole("grid", { name: "Week" })).toBeVisible();
-      await expect(page.getByRole("columnheader")).toHaveCount(7);
+      await expect(page.getByRole("region", { name: "Week", exact: true })).toBeVisible();
+      await expect(page.locator("[data-day-column]")).toHaveCount(7);
       await expect(page.getByRole("button", { name: "Planning offsite" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Maya's birthday" })).toBeVisible();
       await page.screenshot({ path: `${SHOTS}/calendar-week-${scheme}.png` });

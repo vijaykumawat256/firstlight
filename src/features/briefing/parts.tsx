@@ -96,21 +96,19 @@ export function AttentionSection({ b }: { b: Briefing }) {
 /* ------------------------------------------------------------- Timeline */
 
 function TimelineRow({ item, colourOf, dim, conflicted, onOpen }: { item: BriefingItem; colourOf: ColourOf; dim?: boolean; conflicted?: boolean; onOpen: Open }) {
+  // Past events are quieter through colour, not opacity: fading text would drop it below readable contrast.
   return (
     <li>
       <button
         type="button"
         onClick={() => onOpen(item.event)}
-        className={clsx(
-          "flex min-h-12 w-full items-stretch gap-3 px-4 py-2 text-left transition-[background-color,opacity] duration-150 ease-standard hover:bg-fill active:bg-fill-strong",
-          dim && "opacity-50",
-        )}
+        className="flex min-h-12 w-full items-stretch gap-3 px-4 py-2 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong"
       >
-        <span className="w-[68px] shrink-0 whitespace-nowrap pt-0.5 text-body font-medium text-fg-2 tabular-nums">{formatTime(at(item.start))}</span>
-        <Bar colour={colourOf(item.event.calendar_id)} />
+        <span className={clsx("w-[68px] shrink-0 whitespace-nowrap pt-0.5 text-body font-medium tabular-nums", dim ? "text-fg-3" : "text-fg-2")}>{formatTime(at(item.start))}</span>
+        <Bar colour={colourOf(item.event.calendar_id)} dim={dim} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-headline font-medium text-fg">{item.event.title}</p>
-          <p className="truncate text-footnote text-fg-2">{subtitleOf(item)}</p>
+          <p className={clsx("truncate text-headline font-medium", dim ? "text-fg-2" : "text-fg")}>{item.event.title}</p>
+          <p className={clsx("truncate text-footnote", dim ? "text-fg-3" : "text-fg-2")}>{subtitleOf(item)}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {conflicted && <AlertTriangle className="size-3.5 text-warning" aria-label="Conflict" />}

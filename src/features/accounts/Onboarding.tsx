@@ -10,7 +10,7 @@ export function Onboarding() {
     <div className="flex h-full flex-col">
       <div data-tauri-drag-region className="h-11 shrink-0" />
       <main className="flex flex-1 flex-col items-center justify-center gap-6 px-8 pb-16 text-center animate-fade-in">
-        <div className="flex size-20 items-center justify-center rounded-[22px] bg-accent text-accent-fg shadow-float">
+        <div className="flex size-20 items-center justify-center rounded-[22px] bg-accent-fill text-accent-fg shadow-float">
           <CalendarDays className="size-10" strokeWidth={1.5} aria-hidden />
         </div>
         <div>

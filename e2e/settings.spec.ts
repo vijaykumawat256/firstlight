@@ -82,9 +82,9 @@ test("theme and accent apply at once", async ({ page }) => {
 
   await page.getByRole("radio", { name: "purple" }).click();
   await expect(page.getByRole("radio", { name: "purple" })).toHaveAttribute("aria-checked", "true");
-  await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--accent"))).toBe("var(--cal-purple)");
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "purple");
   await page.getByRole("radio", { name: "Default" }).click();
-  await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--accent"))).toBe("");
+  await expect(page.locator("html")).not.toHaveAttribute("data-accent", /.+/);
 });
 
 test("quiet hours reveal their times; days toggle", async ({ page }) => {
@@ -187,7 +187,7 @@ test("erase all data asks first, then returns to the welcome screen", async ({ p
 test("the app can open straight to the week view", async ({ page }) => {
   await page.clock.install({ time: todayAt(9, 30) });
   await page.goto("/?defaultview=week");
-  await expect(page.getByRole("grid", { name: "Week" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Week", exact: true })).toBeVisible();
 });
 
 test("changing 'Opens to' does not move you off the settings screen", async ({ page }) => {

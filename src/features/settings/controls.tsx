@@ -61,7 +61,7 @@ export function DayPicker({ days, onChange }: { days: boolean[]; onChange: (d: b
           key={d.full}
           value={d.full}
           aria-label={d.full}
-          className="flex size-8 items-center justify-center rounded-full bg-fill text-body font-medium text-fg-2 transition-colors duration-150 ease-standard data-[state=on]:bg-accent data-[state=on]:text-accent-fg"
+          className="flex size-8 items-center justify-center rounded-full bg-fill text-body font-medium text-fg-2 transition-colors duration-150 ease-standard data-[state=on]:bg-accent-fill data-[state=on]:text-accent-fg"
         >
           {d.short}
         </RToggleGroup.Item>
@@ -102,7 +102,7 @@ export function ShortcutRecorder({ value, onChange }: { value: string | null; on
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="secondary" aria-label="Global shortcut" aria-pressed={recording} onClick={() => setRecording((r) => !r)} className="min-w-28 tabular-nums">
+        <Button size="sm" variant="secondary" aria-label={`Global shortcut: ${recording ? "Press keys…" : value ? prettyAccelerator(value) : "Not set"}`} aria-pressed={recording} onClick={() => setRecording((r) => !r)} className="min-w-28 tabular-nums">
           {recording ? "Press keys…" : value ? prettyAccelerator(value) : "Not set"}
         </Button>
         {value && !recording && (

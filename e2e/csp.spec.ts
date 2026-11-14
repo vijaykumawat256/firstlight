@@ -51,9 +51,9 @@ test("the whole UI works under the strict release CSP with zero violations", asy
 
   // Calendar views (inline positioning styles, colour-mix backgrounds)
   await page.getByRole("button", { name: "Calendar" }).click();
-  await expect(page.getByRole("grid", { name: "Day" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Day", exact: true })).toBeVisible();
   await page.getByRole("radio", { name: "Week" }).click();
-  await expect(page.getByRole("grid", { name: "Week" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Week", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Briefing" }).click();
 
   // Settings: every kind of control, dropdowns (portals), accent (inline CSS variables), dialogs
