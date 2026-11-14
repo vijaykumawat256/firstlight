@@ -84,6 +84,11 @@ export function SettingsScreen() {
     onSuccess: (path) => push({ title: "Settings saved", description: path }),
     onError: (e) => push({ title: "Couldn't save the file", description: errorMessage(e), tone: "danger" }),
   });
+  const exportEvents = useMutation({
+    mutationFn: () => api.exportOwnEvents(),
+    onSuccess: (r) => push({ title: `${r.count} ${r.count === 1 ? "event" : "events"} exported`, description: r.path }),
+    onError: (e) => push({ title: "Couldn't export your events", description: errorMessage(e), tone: "danger" }),
+  });
   const copy = useMutation({
     mutationFn: async () => navigator.clipboard.writeText(await api.exportSettings()),
     onSuccess: () => push({ title: "Settings copied" }),
@@ -407,6 +412,11 @@ export function SettingsScreen() {
             </Group>
 
             <Group title="Your data" footer="Firstlight has no server and no account. Your events stay on this computer, your passwords and sign-ins live in the system keychain, and nothing is sent anywhere except to your own calendar providers.">
+              <SettingRow title="Export my own events" description="The events you added yourself, as a calendar file you can open in any calendar app.">
+                <Button size="sm" variant="secondary" disabled={exportEvents.isPending} onClick={() => exportEvents.mutate()}>
+                  Export…
+                </Button>
+              </SettingRow>
               <SettingRow title="Erase all data" description="Removes every account, saved password and link, event and setting from this computer.">
                 <Button size="sm" variant="danger" onClick={() => setErasing(true)}>
                   Erase…

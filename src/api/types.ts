@@ -61,6 +61,11 @@ export interface OwnEvent {
   input: EventInput;
 }
 
+export interface ExportResult {
+  path: string;
+  count: number;
+}
+
 export interface InviteResult {
   path: string;
   mail_opened: boolean;

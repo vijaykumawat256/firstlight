@@ -34,8 +34,25 @@ pub(crate) fn system_uses_24h() -> bool {
     }
 }
 
-/// Shows one notification, asking macOS for permission the first time it is needed.
-fn show(app: &AppHandle, title: &str, body: &str) {
+/// The action-type id of notifications that offer a "Snooze" button.
+pub(crate) const SNOOZABLE: &str = "snoozable";
+/// The id of the snooze button's action.
+pub(crate) const SNOOZE_ACTION: &str = "snooze";
+
+/// Snoozed notifications waiting for their time (in memory; see `briefing::snooze`).
+static SNOOZED: std::sync::Mutex<daybrief_core::briefing::snooze::SnoozeQueue> =
+    std::sync::Mutex::new(daybrief_core::briefing::snooze::SnoozeQueue::new());
+
+/// Called when the user presses Snooze on a notification: it comes back in ten minutes with the same words.
+pub(crate) fn snooze(title: &str, body: &str) {
+    if let Ok(mut q) = SNOOZED.lock() {
+        q.add(Utc::now(), title, body);
+    }
+}
+
+/// Shows one notification, asking macOS for permission the first time it is needed. `snoozable` adds a
+/// "Snooze 10 min" button (heads-ups and reminders; the daily summaries have none).
+fn show(app: &AppHandle, title: &str, body: &str, snoozable: bool) {
     let n = app.notification();
     if matches!(
         n.permission_state(),
@@ -43,7 +60,11 @@ fn show(app: &AppHandle, title: &str, body: &str) {
     ) {
         let _ = n.request_permission();
     }
-    if let Err(e) = n.builder().title(title).body(body).show() {
+    let mut builder = n.builder().title(title).body(body);
+    if snoozable {
+        builder = builder.action_type_id(SNOOZABLE);
+    }
+    if let Err(e) = builder.show() {
         // The error says nothing about the content; the content itself is never logged.
         log::warn!("could not show a notification: {e}");
     }
@@ -146,13 +167,28 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                                 &app,
                                 title,
                                 &format!("Starts at {}", r.start.with_timezone(&tz).format(clock)),
+                                true,
                             );
                             log::info!("own reminder shown");
+                        }
+                        // Snoozed ones whose ten minutes are up (shown again with the same words).
+                        let again = SNOOZED
+                            .lock()
+                            .map(|mut q| q.take_due(now))
+                            .unwrap_or_default();
+                        for s in again {
+                            show(&app, &s.title, &s.body, true);
+                            log::info!("snoozed notification shown again");
                         }
                         for n in due(&events, now, tz, &ns, &bs, &rules, &sent) {
                             // Record first: whatever happens next, we never try this one again.
                             let _ = store.mark_notification_sent(&n.id, now);
-                            show(&app, &n.title, &n.body);
+                            show(
+                                &app,
+                                &n.title,
+                                &n.body,
+                                n.kind == daybrief_core::briefing::notify::Kind::Before,
+                            );
                             log::info!("notification shown: {:?}", n.kind);
                         }
                     }

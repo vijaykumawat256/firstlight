@@ -15,6 +15,7 @@ export const tauriBackend: Backend = {
   enableAccountMail: (accountId) => invoke<AppSettings>("enable_account_mail", { accountId }),
   createEvent: (event) => invoke("create_event", { event }),
   getOwnEvent: (id) => invoke("get_own_event", { id }),
+  exportOwnEvents: () => invoke("export_own_events"),
   skipOccurrence: (id) => invoke("skip_event_occurrence", { id }),
   getSystemAccent: () => invoke("get_system_accent"),
   prepareInvite: (id, recipients, openMail) => invoke("prepare_invite", { id, recipients, openMail }),

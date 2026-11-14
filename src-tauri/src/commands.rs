@@ -354,6 +354,53 @@ pub async fn delete_event(app: AppHandle, state: State<'_, AppState>, id: String
     Ok(())
 }
 
+/// `dir/stem.ext`, or `dir/stem (2).ext` and so on: never overwrites something the user already has.
+fn unique_path(dir: &std::path::Path, stem: &str, ext: &str) -> std::path::PathBuf {
+    let mut path = dir.join(format!("{stem}.{ext}"));
+    for n in 2..100 {
+        if !path.exists() {
+            break;
+        }
+        path = dir.join(format!("{stem} ({n}).{ext}"));
+    }
+    path
+}
+
+#[derive(serde::Serialize)]
+pub struct ExportResult {
+    path: String,
+    count: usize,
+}
+
+/// Saves everything the user added as one calendar file in Downloads and shows it in Finder.
+#[tauri::command]
+pub async fn export_own_events(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<ExportResult> {
+    use tauri::Manager;
+    use tauri_plugin_opener::OpenerExt;
+    let exported = {
+        let store = lock_store(&state)?;
+        daybrief_core::local::export_all(&store, Utc::now())
+            .map_err(internal("exporting events"))?
+    };
+    let Some((text, count)) = exported else {
+        return Err("You haven't added any events of your own yet.".into());
+    };
+    let dir = app
+        .path()
+        .download_dir()
+        .map_err(|_| "Couldn't find your Downloads folder.".to_string())?;
+    let path = unique_path(&dir, "firstlight-events", "ics");
+    std::fs::write(&path, text).map_err(|_| "Couldn't save the file.".to_string())?;
+    let _ = app.opener().reveal_item_in_dir(&path);
+    Ok(ExportResult {
+        path: path.display().to_string(),
+        count,
+    })
+}
+
 /// An own event as the edit form needs it (with its repeat rule, reminder and invitees).
 #[tauri::command]
 pub async fn get_own_event(
@@ -463,6 +510,8 @@ pub async fn prepare_invite(
             rrule: rule.as_deref(),
             include_notes: own,
             now: Utc::now(),
+            removed: &[],
+            alarm_minutes: None,
         },
     );
     let dir = app
@@ -484,14 +533,7 @@ pub async fn prepare_invite(
     } else {
         slug
     };
-    let mut path = dir.join(format!("{slug}.ics"));
-    // Never overwrite something the user already has.
-    for n in 2..100 {
-        if !path.exists() {
-            break;
-        }
-        path = dir.join(format!("{slug} ({n}).ics"));
-    }
+    let path = unique_path(&dir, &slug, "ics");
     std::fs::write(&path, text).map_err(|_| "Couldn't save the invitation file.".to_string())?;
     let _ = app.opener().reveal_item_in_dir(&path);
 

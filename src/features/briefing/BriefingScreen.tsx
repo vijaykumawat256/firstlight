@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, CalendarX, CloudOff, Plus, RefreshCw, Settings as SettingsIcon } from "lucide-react";
+import { CalendarDays, CalendarX, CloudOff, Plus, RefreshCw, Search, Settings as SettingsIcon } from "lucide-react";
 import { useNav } from "@/app/nav";
 import { useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
@@ -11,6 +11,7 @@ import { useSettings } from "@/features/settings/useSettings";
 import { EventDetail } from "./EventDetail";
 import { ClearWeek } from "./ClearWeek";
 import { EventForm } from "@/features/events/EventForm";
+import { useSearch } from "@/features/search/store";
 import { InboxSection } from "./InboxSection";
 import { summarise } from "./summary";
 
@@ -68,6 +69,11 @@ export function BriefingScreen() {
     <div className="flex h-full flex-col">
       {/* Draggable title-bar strip; the traffic lights sit at the left. */}
       <div data-tauri-drag-region className="flex h-11 shrink-0 items-center justify-end px-3">
+        <Tooltip content="Search (⌘K)">
+          <IconButton label="Search" onClick={() => useSearch.getState().setOpen(true)}>
+            <Search className="size-[18px]" />
+          </IconButton>
+        </Tooltip>
         <Tooltip content="New event">
           <IconButton label="New event" onClick={() => setAdding(true)}>
             <Plus className="size-[19px]" />

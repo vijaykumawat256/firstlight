@@ -259,6 +259,8 @@ fn expand(
             rrule: Some(&rule),
             include_notes: true,
             now,
+            removed: &[],
+            alarm_minutes: None,
         },
     );
     let opts = crate::ics::ParseOptions {
@@ -435,6 +437,60 @@ pub fn skip_occurrence(store: &mut Store, id: &str, now: DateTime<Utc>) -> Resul
         .map_err(|_| Error::Invalid("That event couldn't be saved."))?;
     store.put_own_event(master, &json)?;
     refresh(store, now)
+}
+
+/// Everything the user added, as one calendar file: repeats as repeats (with the days removed from them)
+/// and reminders as alarms, so it can be imported into any calendar app or kept as a backup. Returns the
+/// text and how many events (series count once), or `None` if there is nothing to export.
+pub fn export_all(store: &Store, now: DateTime<Utc>) -> Result<Option<(String, usize)>> {
+    struct Row {
+        event: Event,
+        rule: Option<String>,
+        removed: Vec<String>,
+        alarm: Option<u32>,
+        tz: Tz,
+    }
+    let mut rows = Vec::new();
+    for (id, json) in store.all_own_events()? {
+        // A record we cannot read is skipped, like everywhere else.
+        let Ok(stored) = serde_json::from_str::<Stored>(&json) else {
+            continue;
+        };
+        let tz: Tz = stored.tz.parse().unwrap_or(chrono_tz::UTC);
+        let Ok(event) = build_event(&stored.input, Some(&id), tz, now) else {
+            continue;
+        };
+        let Ok((_, rule)) = check_extras(&stored.input, &event, tz) else {
+            continue;
+        };
+        rows.push(Row {
+            event,
+            rule,
+            removed: stored.skipped.clone(),
+            alarm: stored.input.reminder_minutes,
+            tz,
+        });
+    }
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    let parts: Vec<(Event, IcsExtras)> = rows
+        .iter()
+        .map(|r| {
+            (
+                r.event.clone(),
+                IcsExtras {
+                    tz: r.tz,
+                    rrule: r.rule.as_deref(),
+                    include_notes: true,
+                    now,
+                    removed: &r.removed,
+                    alarm_minutes: r.alarm,
+                },
+            )
+        })
+        .collect();
+    Ok(Some((invite::ics_many(&parts), rows.len())))
 }
 
 /// Deletes an event, or a whole repeating series.

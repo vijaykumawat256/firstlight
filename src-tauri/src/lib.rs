@@ -437,6 +437,7 @@ pub fn run() {
             mail_ai::enable_apple_mail,
             mail_ai::enable_account_mail,
             commands::get_own_event,
+            commands::export_own_events,
             commands::skip_event_occurrence,
             commands::get_system_accent,
             commands::prepare_invite,
@@ -558,11 +559,26 @@ pub fn run() {
             // Clicking a notification brings the app forward. Registered before the first one is shown.
             {
                 use tauri_plugin_notification::NotificationExt;
+                use tauri_plugin_notification::{Action, ActionType};
                 let handle = app.handle().clone();
-                let _ = app
-                    .handle()
-                    .notification()
-                    .on_action(move |_| show_main(&handle));
+                // Heads-ups carry a "Snooze 10 min" button; pressing it brings the same words back later.
+                let _ = app.handle().notification().register_action_types(vec![
+                    ActionType::builder(notifier::SNOOZABLE)
+                        .actions(vec![
+                            Action::builder(notifier::SNOOZE_ACTION, "Snooze 10 min").build(),
+                        ])
+                        .build(),
+                ]);
+                let _ = app.handle().notification().on_action(move |performed| {
+                    if performed.action_id() == notifier::SNOOZE_ACTION {
+                        if let Some(n) = performed.notification() {
+                            notifier::snooze(n.title().unwrap_or(""), n.body().unwrap_or(""));
+                        }
+                    } else {
+                        // A click on the notification itself.
+                        show_main(&handle);
+                    }
+                });
             }
             spawn_update_checks(app.handle().clone());
             notifier::spawn(app.handle().clone(), db_path_for_notifier, key_for_notifier);

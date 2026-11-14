@@ -49,6 +49,7 @@ See [PHASE7_DESIGN.md](PHASE7_DESIGN.md). Waiting for your decisions at the end 
 - Apple Developer account, Windows signing certificate, an update host, a privacy contact (docs/RELEASE.md).
 
 ## 6. Built but never seen working (try these)
+- The Snooze button on a meeting heads-up (needs a bundled app; in `tauri dev` notifications come from the terminal).
 - The menu-bar text next to the icon and the Join-next-meeting shortcut (turn both on in Settings, General).
 - Reminder notifications actually appearing; Send invitation opening a draft in Mail.
 - Notification click bringing the app forward (needs a bundled build, not `tauri dev`).

@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 pub mod glance;
 pub mod notify;
 pub mod rules;
+pub mod snooze;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]

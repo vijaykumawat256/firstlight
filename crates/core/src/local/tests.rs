@@ -451,3 +451,79 @@ fn only_a_day_of_a_real_series_can_be_removed() {
     }
     assert_eq!(all(&s).len(), 1);
 }
+
+#[test]
+fn the_export_is_a_calendar_file_that_reads_back_as_the_same_events() {
+    let mut s = store();
+    let now = t("2026-11-14T12:00:00Z");
+    assert!(
+        export_all(&s, now).unwrap().is_none(),
+        "nothing to export yet"
+    );
+
+    save(&mut s, None, &timed("Dentist"), NY, now).unwrap();
+    let mut rep = timed("Standup");
+    rep.start = "2026-11-16T15:00:00Z".into();
+    rep.end = "2026-11-16T15:30:00Z".into();
+    rep.repeat = Some(RepeatInput {
+        every: "daily".into(),
+        interval: 1,
+        until: Some("2026-11-22".into()),
+    });
+    rep.reminder_minutes = Some(15);
+    rep.notes = Some("Bring the notes, please; line two".into());
+    let series = save(&mut s, None, &rep, NY, now).unwrap();
+    let victim = all(&s)
+        .into_iter()
+        .find(|e| {
+            e.id.starts_with(&format!("{CALENDAR_ID}:{}:", series.remote_id))
+        })
+        .unwrap();
+    skip_occurrence(&mut s, &victim.id, now).unwrap();
+    let allday = EventInput {
+        all_day: true,
+        start: "2026-12-24".into(),
+        end: "2026-12-26".into(),
+        repeat: None,
+        reminder_minutes: None,
+        ..timed("Holiday")
+    };
+    save(&mut s, None, &allday, NY, now).unwrap();
+
+    let (text, count) = export_all(&s, now).unwrap().unwrap();
+    assert_eq!(count, 3, "a series counts once");
+    assert_eq!(text.matches("BEGIN:VEVENT").count(), 3);
+    assert!(text.contains("BEGIN:VALARM") && text.contains("TRIGGER:-PT15M"));
+    assert!(
+        text.contains("EXDATE;TZID=America/New_York:"),
+        "the removed day is written as an exception"
+    );
+    assert!(text.lines().all(|l| l.len() <= 75), "folded");
+
+    // Reading it back gives exactly the events the app shows, removed day included.
+    let w = crate::sync::default_window(now);
+    let back = crate::ics::events_from_ics(
+        &text,
+        &crate::ics::ParseOptions {
+            calendar_id: "x",
+            default_tz: NY,
+            window: w,
+            my_email: None,
+        },
+    )
+    .unwrap();
+    let key = |e: &Event| match &e.when {
+        When::Timed { start, .. } => (e.title.clone(), start.timestamp().to_string()),
+        When::AllDay { start, .. } => (e.title.clone(), start.to_string()),
+    };
+    let mut here: Vec<_> = all(&s).iter().map(key).collect();
+    let mut there: Vec<_> = back.iter().map(key).collect();
+    here.sort();
+    there.sort();
+    assert_eq!(here, there);
+    assert_eq!(
+        back.iter().filter(|e| e.title == "Standup").count(),
+        6,
+        "7 days minus the one removed"
+    );
+}

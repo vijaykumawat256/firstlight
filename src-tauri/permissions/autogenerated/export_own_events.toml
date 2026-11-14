@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-export-own-events"
+description = "Enables the export_own_events command without any pre-configured scope."
+commands.allow = ["export_own_events"]
+
+[[permission]]
+identifier = "deny-export-own-events"
+description = "Denies the export_own_events command without any pre-configured scope."
+commands.deny = ["export_own_events"]

@@ -12,6 +12,7 @@ const SettingsScreen = lazy(() => import("@/features/settings/SettingsScreen").t
 import { BriefingScreen } from "@/features/briefing/BriefingScreen";
 const CalendarScreen = lazy(() => import("@/features/calendar/CalendarScreen").then((m) => ({ default: m.CalendarScreen })));
 import { UpNextPanel } from "@/features/briefing/UpNextPanel";
+import { SearchHost } from "@/features/search/SearchPalette";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: true, retry: 1 } },
@@ -72,7 +73,12 @@ function Shell() {
   if ((accounts.data ?? []).length === 0) return <Onboarding />;
   // The briefing is what opens at every unlock, so it is in the main bundle. The screens reached from it load on demand.
   const screen = view === "accounts" ? <AccountsScreen /> : view === "calendar" ? <CalendarScreen /> : view === "settings" ? <SettingsScreen /> : view === "about" ? <AboutScreen /> : <BriefingScreen />;
-  return <Suspense fallback={<ScreenSkeleton />}>{screen}</Suspense>;
+  return (
+    <>
+      <Suspense fallback={<ScreenSkeleton />}>{screen}</Suspense>
+      <SearchHost />
+    </>
+  );
 }
 
 export default function App() {

@@ -322,3 +322,22 @@ test("the menu-bar text is off by default and warns that a screen can be read", 
   await sw.click();
   await expect(sw).toHaveAttribute("aria-checked", "true");
 });
+
+test("your own events can be exported, and the button says so when there are none", async ({ page }) => {
+  await openSection(page, "Privacy & data");
+  await page.getByRole("button", { name: "Export…" }).click();
+  await expect(page.getByText("You haven't added any events of your own yet.").first()).toBeVisible();
+
+  // Add one, then export.
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Briefing", exact: true }).click();
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByLabel("Title").fill("Export me");
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  await expect(page.getByText("Event added").first()).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await section(page, "Privacy & data");
+  await page.getByRole("button", { name: "Export…" }).click();
+  await expect(page.getByText("1 event exported").first()).toBeVisible();
+});

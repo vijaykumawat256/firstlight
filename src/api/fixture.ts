@@ -440,6 +440,10 @@ export const fixtureBackend: Backend = {
     if (!rec || !key || !rec.input.repeat) throw new Error("Only one day of a repeating event can be removed.");
     rec.skipped = [...new Set([...(rec.skipped ?? []), key])];
   },
+  async exportOwnEvents() {
+    if (ownRecords.length === 0) throw new Error("You haven't added any events of your own yet.");
+    return { path: "/Users/you/Downloads/firstlight-events.ics", count: ownRecords.length };
+  },
   async getSystemAccent() {
     return params.get("sysaccent");
   },

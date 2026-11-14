@@ -184,19 +184,60 @@ pub struct IcsExtras<'a> {
     pub rrule: Option<&'a str>,
     pub include_notes: bool,
     pub now: DateTime<Utc>,
+    /// Days removed from a repeating event, as the occurrence keys `local` uses (a start timestamp for a
+    /// timed event, `YYYYMMDD` for an all-day one). Written as `EXDATE`. Empty when sharing.
+    pub removed: &'a [String],
+    /// A reminder before the start, written as an alarm. `None` when sharing: an invitation must not set
+    /// alarms on other people's calendars.
+    pub alarm_minutes: Option<u32>,
 }
 
 /// A one-event calendar file. Timed events are written in the event's own zone when they repeat (so a
 /// 9:00 meeting stays at 9:00 across daylight saving) and in UTC otherwise (which every app reads).
 pub fn ics(event: &Event, x: &IcsExtras) -> String {
-    let stamp = |d: DateTime<Utc>| d.format("%Y%m%dT%H%M%SZ").to_string();
-    let local = |d: DateTime<Utc>| d.with_timezone(&x.tz).format("%Y%m%dT%H%M%S").to_string();
-    let mut l: Vec<String> = vec![
-        "BEGIN:VCALENDAR".into(),
+    let mut lines = vec![
+        "BEGIN:VCALENDAR".to_string(),
         "VERSION:2.0".into(),
         "PRODID:-//Firstlight//Calendar//EN".into(),
         "CALSCALE:GREGORIAN".into(),
         "METHOD:PUBLISH".into(),
+    ];
+    lines.extend(vevent(event, x));
+    lines.push("END:VCALENDAR".into());
+    lines
+        .iter()
+        .map(|x| fold(x))
+        .collect::<Vec<_>>()
+        .join("\r\n")
+        + "\r\n"
+}
+
+/// Several events in one calendar file (the export of everything the user added).
+pub fn ics_many(events: &[(Event, IcsExtras)]) -> String {
+    let mut lines = vec![
+        "BEGIN:VCALENDAR".to_string(),
+        "VERSION:2.0".into(),
+        "PRODID:-//Firstlight//Calendar//EN".into(),
+        "CALSCALE:GREGORIAN".into(),
+        "METHOD:PUBLISH".into(),
+    ];
+    for (event, x) in events {
+        lines.extend(vevent(event, x));
+    }
+    lines.push("END:VCALENDAR".into());
+    lines
+        .iter()
+        .map(|x| fold(x))
+        .collect::<Vec<_>>()
+        .join("\r\n")
+        + "\r\n"
+}
+
+/// The lines of one `VEVENT`, unfolded.
+fn vevent(event: &Event, x: &IcsExtras) -> Vec<String> {
+    let stamp = |d: DateTime<Utc>| d.format("%Y%m%dT%H%M%SZ").to_string();
+    let local = |d: DateTime<Utc>| d.with_timezone(&x.tz).format("%Y%m%dT%H%M%S").to_string();
+    let mut l: Vec<String> = vec![
         "BEGIN:VEVENT".into(),
         format!("UID:{}", escape_text(&event.ical_uid)),
         format!("DTSTAMP:{}", stamp(x.now)),
@@ -217,6 +258,24 @@ pub fn ics(event: &Event, x: &IcsExtras) -> String {
     }
     if let Some(r) = x.rrule {
         l.push(format!("RRULE:{r}"));
+        for key in x.removed {
+            match &event.when {
+                When::Timed { .. } => {
+                    if let Some(at) = key
+                        .parse::<i64>()
+                        .ok()
+                        .and_then(|s| DateTime::from_timestamp(s, 0))
+                    {
+                        l.push(format!("EXDATE;TZID={}:{}", x.tz.name(), local(at)));
+                    }
+                }
+                When::AllDay { .. } => {
+                    if key.len() == 8 && key.bytes().all(|b| b.is_ascii_digit()) {
+                        l.push(format!("EXDATE;VALUE=DATE:{key}"));
+                    }
+                }
+            }
+        }
     }
     l.push(format!("SUMMARY:{}", escape_text(&event.title)));
     if let Some(v) = &event.location {
@@ -235,9 +294,15 @@ pub fn ics(event: &Event, x: &IcsExtras) -> String {
     if !desc.is_empty() {
         l.push(format!("DESCRIPTION:{}", escape_text(&desc.join("\n\n"))));
     }
+    if let (Some(m), When::Timed { .. }) = (x.alarm_minutes, &event.when) {
+        l.push("BEGIN:VALARM".into());
+        l.push("ACTION:DISPLAY".into());
+        l.push(format!("DESCRIPTION:{}", escape_text(&event.title)));
+        l.push(format!("TRIGGER:-PT{m}M"));
+        l.push("END:VALARM".into());
+    }
     l.push("END:VEVENT".into());
-    l.push("END:VCALENDAR".into());
-    l.iter().map(|x| fold(x)).collect::<Vec<_>>().join("\r\n") + "\r\n"
+    l
 }
 
 #[cfg(test)]
@@ -367,6 +432,8 @@ mod tests {
             rrule: None,
             include_notes: true,
             now: Utc::now(),
+            removed: &[],
+            alarm_minutes: None,
         };
         let text = ics(&event(), &x);
         assert!(text.contains("\r\n") && !text.contains("\n\n"));
@@ -450,6 +517,8 @@ mod tests {
                 rrule: None,
                 include_notes: false,
                 now: Utc::now(),
+                removed: &[],
+                alarm_minutes: None,
             },
         );
         // Real lines only: the hostile text must have become plain text inside SUMMARY and LOCATION.

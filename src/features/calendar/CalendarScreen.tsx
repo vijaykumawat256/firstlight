@@ -23,7 +23,7 @@ export function CalendarScreen() {
   const push = useToasts((s) => s.push);
   const now = useNow(60_000);
   const [mode, setMode] = useState<Mode>(() => useNav.getState().calendarMode);
-  const [anchor, setAnchor] = useState(() => startOfLocalDay(new Date()));
+  const [anchor, setAnchor] = useState(() => startOfLocalDay(useNav.getState().calendarDate ?? new Date()));
   const [detail, setDetail] = useState<CalEvent | null>(null);
   const [adding, setAdding] = useState(false);
 

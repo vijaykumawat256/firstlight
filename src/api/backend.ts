@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, EventInput, ImapPreset, InviteResult, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, EventInput, ExportResult, ImapPreset, InviteResult, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -17,6 +17,8 @@ export interface Backend {
   /** Add, change or remove an event of your own (stored only on this computer). */
   createEvent(input: EventInput): Promise<CalEvent>;
   getOwnEvent(id: string): Promise<OwnEvent | null>;
+  /** Saves everything you added as one calendar file in Downloads. */
+  exportOwnEvents(): Promise<ExportResult>;
   /** Removes one day of a repeating event of your own; the rest of the series stays. */
   skipOccurrence(id: string): Promise<void>;
   /** The macOS accent colour as a palette name, or null (default blue, graphite, other systems). */
