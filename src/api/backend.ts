@@ -25,7 +25,8 @@ export interface Backend {
   prepareInvite(id: string, recipients: string, openMail: boolean): Promise<InviteResult>;
   updateEvent(id: string, input: EventInput): Promise<CalEvent>;
   deleteEvent(id: string): Promise<void>;
-  addImapMailbox(preset: ImapPreset, address: string, password: string): Promise<AppSettings>;
+  /** `host` is only used for a custom mailbox (an IMAP server on port 993). */
+  addImapMailbox(preset: ImapPreset, address: string, password: string, host?: string): Promise<AppSettings>;
   removeImapMailbox(mailboxId: string): Promise<AppSettings>;
   openMailMessage(target: OpenTarget): Promise<void>;
   aiStatus(): Promise<AiStatus>;

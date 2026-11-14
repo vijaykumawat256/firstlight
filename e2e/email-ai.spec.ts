@@ -266,3 +266,27 @@ test("iCloud shows its own password instructions, and a refused login explains i
   await expect(dialog.getByRole("alert")).toContainText("iCloud Mail didn't accept that");
   await expect(email.getByText("sam@icloud.com")).toHaveCount(0);
 });
+
+test("any other provider can be added with its server name, and a bad server name is refused", async ({ page }) => {
+  await openSettings(page, "?mailon");
+  const email = page.getByRole("region", { name: "Email", exact: true });
+  await email.getByRole("button", { name: "Add mailbox…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a mailbox" });
+  await expect(dialog.getByLabel("Mail server")).toHaveCount(0); // only for "Other"
+  await dialog.getByRole("radio", { name: "Other" }).click();
+  await expect(dialog.getByLabel("Mail server")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Connect" })).toBeDisabled();
+
+  await dialog.getByLabel("Email address").fill("sam@fastmail.com");
+  await dialog.getByLabel("App-specific password").fill("abcd-efgh");
+  await dialog.getByLabel("Mail server").fill("127.0.0.1");
+  await dialog.getByRole("button", { name: "Connect" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("mail server's name");
+
+  await dialog.getByLabel("Mail server").fill("imap.fastmail.com");
+  await dialog.getByRole("button", { name: "Connect" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(email.getByText("sam@fastmail.com (imap.fastmail.com) · reading unread mail.")).toBeVisible();
+  await email.getByRole("button", { name: "Remove sam@fastmail.com" }).click();
+  await expect(email.getByText(/imap\.fastmail\.com/)).toHaveCount(0);
+});

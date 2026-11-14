@@ -436,6 +436,7 @@ fn mailbox(id: &str, address: &str) -> crate::mail::imap::ImapMailbox {
         id: id.into(),
         preset: crate::mail::imap::ImapPreset::Yahoo,
         address: address.into(),
+        host: None,
     }
 }
 
@@ -477,4 +478,28 @@ fn a_bad_preset_cannot_name_another_server_and_costs_nothing_else() {
     );
     assert!(s.email.imap.is_empty());
     assert_eq!(s.email.days_back, 5);
+}
+
+#[test]
+fn a_custom_mailbox_with_a_bad_server_is_dropped_and_a_good_one_kept() {
+    let mk = |id: &str, host: Option<&str>| crate::mail::imap::ImapMailbox {
+        id: id.into(),
+        preset: crate::mail::imap::ImapPreset::Custom,
+        address: "me@example.com".into(),
+        host: host.map(String::from),
+    };
+    let mut s = AppSettings::default();
+    s.email.imap = vec![
+        mk("a1", Some("imap.fastmail.com")),
+        mk("b2", Some("127.0.0.1")),
+        mk("c3", Some("localhost")),
+        mk("d4", None),
+    ];
+    s.sanitize();
+    assert_eq!(s.email.imap.len(), 1);
+    assert_eq!(s.email.imap[0].id, "a1");
+    // Never exported, never imported.
+    assert!(!s.export().contains("fastmail"));
+    let file = r#"{"format":"daybrief-settings","settings":{"email":{"imap":[{"id":"z9","preset":"custom","address":"a@b.co","host":"imap.fastmail.com"}]}}}"#;
+    assert!(AppSettings::import(file).unwrap().email.imap.is_empty());
 }

@@ -127,11 +127,13 @@ export interface Briefing {
 }
 
 /** A Yahoo or iCloud mailbox (IMAP). Its app password stays in the keychain, so it is not here. */
-export type ImapPreset = "yahoo" | "icloud";
+export type ImapPreset = "yahoo" | "icloud" | "custom";
 export interface ImapMailbox {
   id: string;
   preset: ImapPreset;
   address: string;
+  /** The server of a custom mailbox; null for Yahoo and iCloud. */
+  host: string | null;
 }
 
 /** Mirrors `daybrief_core::settings::AppSettings`. */
@@ -180,7 +182,7 @@ export interface AiStatus {
 }
 
 /** Mirrors `daybrief_core::mail`. */
-export type OpenTarget = { kind: "url"; url: string } | { kind: "apple_mail"; message_id: string };
+export type OpenTarget = { kind: "url"; url: string } | { kind: "apple_mail"; message_id: string } | { kind: "none" };
 
 export interface MailMessage {
   id: string;

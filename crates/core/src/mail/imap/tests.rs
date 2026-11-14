@@ -49,7 +49,7 @@ fn serve(
 
 struct Local(u16);
 impl Connect for Local {
-    fn connect(&self, _: ImapPreset) -> Result<Box<dyn Io>> {
+    fn connect(&self, _: &str) -> Result<Box<dyn Io>> {
         let s = TcpStream::connect(("127.0.0.1", self.0)).map_err(|_| Error::Offline)?;
         s.set_read_timeout(Some(StdDuration::from_secs(5))).unwrap();
         Ok(Box::new(s))
@@ -69,6 +69,7 @@ fn mailbox() -> ImapMailbox {
         id: "m1".into(),
         preset: ImapPreset::Yahoo,
         address: "me@yahoo.com".into(),
+        host: None,
     }
 }
 
@@ -283,8 +284,8 @@ fn credentials_cannot_inject_commands() {
 
 #[test]
 fn presets_are_fixed_hosts_and_unknown_names_are_refused() {
-    assert_eq!(ImapPreset::Yahoo.host(), "imap.mail.yahoo.com");
-    assert_eq!(ImapPreset::Icloud.host(), "imap.mail.me.com");
+    assert_eq!(ImapPreset::Yahoo.host(), Some("imap.mail.yahoo.com"));
+    assert_eq!(ImapPreset::Icloud.host(), Some("imap.mail.me.com"));
     assert_eq!(ImapPreset::parse("yahoo"), Some(ImapPreset::Yahoo));
     assert_eq!(ImapPreset::parse("evil.example.com"), None);
     assert!(serde_json::from_str::<ImapPreset>("\"evil.example.com\"").is_err());
@@ -399,7 +400,7 @@ fn stale_dates_and_formats() {
 fn check_login_signs_in_and_out() {
     let fake = good_server("");
     source(fake.port, None)
-        .check_login(ImapPreset::Yahoo, "me@yahoo.com", "p")
+        .check_login("imap.mail.yahoo.com", "me@yahoo.com", "p")
         .unwrap();
     let seen = fake.seen.lock().unwrap().clone();
     assert!(seen.iter().any(|c| c.starts_with("LOGIN")));
@@ -421,7 +422,9 @@ fn unused_read_import_guard() {
 #[ignore]
 fn live_imap_greeting_over_verified_tls() {
     for preset in [ImapPreset::Yahoo, ImapPreset::Icloud] {
-        let io = TlsConnect.connect(preset).expect("tls connect");
+        let io = TlsConnect
+            .connect(preset.host().unwrap())
+            .expect("tls connect");
         let mut conn = wire::Conn::new(io, Instant::now() + StdDuration::from_secs(20));
         conn.greeting().expect("greeting");
         let caps = conn.run("CAPABILITY").expect("capability");
@@ -434,7 +437,107 @@ fn live_imap_greeting_over_verified_tls() {
                 _ => None,
             })
             .collect();
-        println!("{}: {}", preset.host(), text.join(" | "));
+        println!("{}: {}", preset.host().unwrap(), text.join(" | "));
         let _ = conn.run("LOGOUT");
     }
+}
+
+#[test]
+fn custom_servers_must_be_plain_public_style_host_names() {
+    for ok in [
+        "imap.fastmail.com",
+        "mail.example.co.uk",
+        "imap-1.mail.example.org",
+        "a.bc",
+    ] {
+        assert!(valid_host(ok), "{ok}");
+    }
+    for bad in [
+        "",
+        "localhost",
+        "127.0.0.1",
+        "10.0.0.5",
+        "192.168.1.10",
+        "[::1]",
+        "::1",
+        "0x7f.1",
+        "1.2.3.4",
+        "intranet",
+        "mail.local",
+        "nas.lan",
+        "printer.home",
+        "x.internal",
+        "x.localhost",
+        "x.localdomain",
+        "Imap.Example.com",
+        "imap.example.com:993",
+        "imap.example.com/",
+        "imap example.com",
+        "imap.example..com",
+        "-imap.example.com",
+        "imap-.example.com",
+        "imap.exa_mple.com",
+        "imap.example.com.",
+        "user@imap.example.com",
+        "imap.ex\u{e4}mple.com",
+    ] {
+        assert!(!valid_host(bad), "{bad:?}");
+    }
+    assert!(!valid_host(&format!("{}.com", "a".repeat(64))));
+    assert!(!valid_host(&"a.".repeat(130)));
+}
+
+#[test]
+fn a_mailbox_record_is_valid_only_with_the_right_server_for_its_kind() {
+    let custom = |host: Option<&str>| ImapMailbox {
+        id: "c1".into(),
+        preset: ImapPreset::Custom,
+        address: "me@fastmail.com".into(),
+        host: host.map(String::from),
+    };
+    assert!(custom(Some("imap.fastmail.com")).is_valid());
+    assert!(!custom(None).is_valid(), "a custom mailbox needs a server");
+    assert!(!custom(Some("127.0.0.1")).is_valid());
+    assert_eq!(
+        custom(Some("imap.fastmail.com")).server(),
+        Some("imap.fastmail.com")
+    );
+    // Yahoo and iCloud keep their built-in server and cannot be redirected with a host field.
+    let mut yahoo = mailbox();
+    assert!(yahoo.is_valid());
+    yahoo.host = Some("imap.evil.example".into());
+    assert!(!yahoo.is_valid());
+    assert_eq!(yahoo.server(), Some("imap.mail.yahoo.com"));
+}
+
+#[test]
+fn the_real_connector_refuses_names_it_should_never_dial() {
+    for bad in [
+        "127.0.0.1",
+        "localhost",
+        "router.local",
+        "",
+        "imap.example.com:25",
+    ] {
+        assert!(
+            matches!(TlsConnect.connect(bad), Err(Error::Invalid(_))),
+            "{bad} should be refused before any network use"
+        );
+    }
+}
+
+#[test]
+fn a_custom_mailbox_reads_mail_but_has_no_web_address_to_open() {
+    let fake = good_server("ID");
+    let custom = ImapMailbox {
+        id: "m1".into(),
+        preset: ImapPreset::Custom,
+        address: "me@fastmail.com".into(),
+        host: Some("imap.fastmail.com".into()),
+    };
+    let batch = source(fake.port, Some("pw"))
+        .fetch(&custom, 3, 10, "2026-11-09T12:00:00Z".parse().unwrap())
+        .unwrap();
+    assert_eq!(batch.messages.len(), 2);
+    assert!(batch.messages.iter().all(|m| m.open == OpenTarget::None));
 }

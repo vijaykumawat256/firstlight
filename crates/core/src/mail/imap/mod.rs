@@ -1,7 +1,10 @@
 //! IMAP mail for Yahoo and iCloud, read-only.
 //!
-//! * The servers are fixed presets (`imap.mail.yahoo.com`, `imap.mail.me.com`, port 993, TLS from the
-//!   first byte). A settings file or the page can never point this at another host.
+//! * Yahoo and iCloud are fixed presets. Any other provider is a "custom" mailbox: the user types the
+//!   server name, which must be a plain public-style host name (no addresses, no `localhost`, no
+//!   internal suffixes). Every server is reached on port 993 with TLS from the first byte and a
+//!   certificate checked for that exact name; there is no plain-text or STARTTLS fallback.
+//!   A settings file can never add or change a mailbox: imports clear them.
 //! * The mailbox is opened with `EXAMINE`, which cannot change anything, and headers are fetched with
 //!   `BODY.PEEK`, so nothing is marked read. No command that writes (`STORE`, `APPEND`, `COPY`,
 //!   `DELETE`, `EXPUNGE`) exists in this module, and a test checks the commands actually sent.
@@ -32,19 +35,23 @@ const IO_TIMEOUT: StdDuration = StdDuration::from_secs(20);
 const TOTAL_BUDGET: StdDuration = StdDuration::from_secs(45);
 pub const MAX_MAILBOXES: usize = 4;
 
-/// The providers we know. Adding one is a code change on purpose: the host list is part of the trust model.
+/// Which kind of mailbox. Yahoo and iCloud come with their server built in; `Custom` uses the host the
+/// user typed (see [`valid_host`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ImapPreset {
     Yahoo,
     Icloud,
+    Custom,
 }
 
 impl ImapPreset {
-    pub fn host(self) -> &'static str {
+    /// The built-in server, or `None` for a custom mailbox.
+    pub fn host(self) -> Option<&'static str> {
         match self {
-            Self::Yahoo => "imap.mail.yahoo.com",
-            Self::Icloud => "imap.mail.me.com",
+            Self::Yahoo => Some("imap.mail.yahoo.com"),
+            Self::Icloud => Some("imap.mail.me.com"),
+            Self::Custom => None,
         }
     }
 
@@ -52,13 +59,16 @@ impl ImapPreset {
         match self {
             Self::Yahoo => "Yahoo Mail",
             Self::Icloud => "iCloud Mail",
+            Self::Custom => "Email",
         }
     }
 
-    pub fn webmail(self) -> &'static str {
+    /// Where to read mail on the web, when we know it.
+    pub fn webmail(self) -> Option<&'static str> {
         match self {
-            Self::Yahoo => "https://mail.yahoo.com/",
-            Self::Icloud => "https://www.icloud.com/mail/",
+            Self::Yahoo => Some("https://mail.yahoo.com/"),
+            Self::Icloud => Some("https://www.icloud.com/mail/"),
+            Self::Custom => None,
         }
     }
 
@@ -66,9 +76,44 @@ impl ImapPreset {
         match s {
             "yahoo" => Some(Self::Yahoo),
             "icloud" => Some(Self::Icloud),
+            "custom" => Some(Self::Custom),
             _ => None,
         }
     }
+}
+
+/// A server name we are willing to connect to: lower-case letters, digits and hyphens in dot-separated
+/// labels, at least two labels, not an IP address, not `localhost`, and not a name that only means
+/// something on a private network.
+pub fn valid_host(h: &str) -> bool {
+    const INTERNAL_SUFFIXES: [&str; 6] = [
+        ".local",
+        ".localhost",
+        ".internal",
+        ".localdomain",
+        ".lan",
+        ".home",
+    ];
+    if h.is_empty() || h.len() > 253 || h != h.to_ascii_lowercase() {
+        return false;
+    }
+    let labels: Vec<&str> = h.split('.').collect();
+    let well_formed = labels.len() >= 2
+        && labels.iter().all(|l| {
+            !l.is_empty()
+                && l.len() <= 63
+                && !l.starts_with('-')
+                && !l.ends_with('-')
+                && l.bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        });
+    // "1.2.3.4" or "0x7f.1": a final label that is all digits (or hex-looking) is an address, not a name.
+    let last = labels.last().copied().unwrap_or("");
+    let looks_like_address = last.bytes().all(|b| b.is_ascii_digit());
+    well_formed
+        && !looks_like_address
+        && h != "localhost"
+        && !INTERNAL_SUFFIXES.iter().any(|s| h.ends_with(s))
 }
 
 /// A mailbox the user connected. Contains no secret: the app password is in the keychain under
@@ -79,12 +124,26 @@ pub struct ImapMailbox {
     pub preset: ImapPreset,
     /// The login name, normally the full email address.
     pub address: String,
+    /// The server for a custom mailbox; always `None` for Yahoo and iCloud.
+    #[serde(default)]
+    pub host: Option<String>,
 }
 
 impl ImapMailbox {
-    /// Whether the fields are sane: bounded, printable ASCII, and an id we generate ourselves.
+    /// The server to connect to.
+    pub fn server(&self) -> Option<&str> {
+        self.preset.host().or(self.host.as_deref())
+    }
+
+    /// Whether the fields are sane: bounded, printable ASCII, an id we generate ourselves, and a server
+    /// that is either built in or a valid custom host.
     pub fn is_valid(&self) -> bool {
-        valid_address(&self.address)
+        let host_ok = match self.preset {
+            ImapPreset::Custom => self.host.as_deref().is_some_and(valid_host),
+            _ => self.host.is_none(),
+        };
+        host_ok
+            && valid_address(&self.address)
             && !self.id.is_empty()
             && self.id.len() <= 64
             && self
@@ -104,16 +163,21 @@ pub fn secret_key(mailbox_id: &str) -> String {
 
 /// Opens connections. A trait so tests can talk to a local fake server.
 pub trait Connect: Send + Sync {
-    fn connect(&self, preset: ImapPreset) -> Result<Box<dyn Io>>;
+    fn connect(&self, host: &str) -> Result<Box<dyn Io>>;
 }
 
 /// The real thing: TLS to the preset's host, certificate checked by the operating system.
 pub struct TlsConnect;
 
 impl Connect for TlsConnect {
-    fn connect(&self, preset: ImapPreset) -> Result<Box<dyn Io>> {
+    fn connect(&self, host: &str) -> Result<Box<dyn Io>> {
         use rustls_platform_verifier::BuilderVerifierExt;
-        let host = preset.host();
+        if !(ImapPreset::Yahoo.host() == Some(host)
+            || ImapPreset::Icloud.host() == Some(host)
+            || valid_host(host))
+        {
+            return Err(Error::Invalid("That mail server name isn't valid."));
+        }
         // Try every address the name resolves to: the first may be IPv6 on a network without it.
         let tcp = (host, PORT)
             .to_socket_addrs()
@@ -174,7 +238,10 @@ impl ImapSource {
             .secrets
             .get(&secret_key(&mailbox.id))?
             .ok_or(Error::AuthRevoked)?;
-        let io = self.connect.connect(mailbox.preset)?;
+        let host = mailbox
+            .server()
+            .ok_or(Error::Invalid("That mailbox has no server."))?;
+        let io = self.connect.connect(host)?;
         let since = now - Duration::days(days_back.clamp(1, 30));
         let inbox = fetch_inbox(
             io,
@@ -197,8 +264,10 @@ impl ImapSource {
                 snippet: String::new(),
                 unread: true,
                 ics: None,
-                open: OpenTarget::Url {
-                    url: mailbox.preset.webmail().into(),
+                open: match mailbox.preset.webmail() {
+                    Some(url) => OpenTarget::Url { url: url.into() },
+                    // A server we only know by name has no web address we can trust.
+                    None => OpenTarget::None,
                 },
             })
             .collect();
@@ -209,8 +278,8 @@ impl ImapSource {
     }
 
     /// Signs in and out, to check an address and app password before saving them.
-    pub fn check_login(&self, preset: ImapPreset, address: &str, password: &str) -> Result<()> {
-        let io = self.connect.connect(preset)?;
+    pub fn check_login(&self, host: &str, address: &str, password: &str) -> Result<()> {
+        let io = self.connect.connect(host)?;
         let mut conn = Conn::new(io, Instant::now() + TOTAL_BUDGET);
         conn.greeting()?;
         login(&mut conn, address, password)?;

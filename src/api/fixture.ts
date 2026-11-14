@@ -400,15 +400,19 @@ export const fixtureBackend: Backend = {
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
   },
-  async addImapMailbox(preset, address, password) {
+  async addImapMailbox(preset, address, password, host) {
     await sleep(400);
     if (!address.includes("@")) throw new Error("Enter your full email address.");
     if (!password.trim()) throw new Error("Enter the app-specific password (not your normal password).");
-    const label = preset === "yahoo" ? "Yahoo Mail" : "iCloud Mail";
+    const label = preset === "yahoo" ? "Yahoo Mail" : preset === "icloud" ? "iCloud Mail" : "Your mail server";
+    const server = host?.trim().toLowerCase() ?? "";
+    if (preset === "custom" && !/^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]*$/.test(server)) throw new Error("Enter the mail server's name, like imap.example.com (not an address or a port).");
+    if (preset === "custom" && (server === "localhost" || /\.(local|lan|home|internal|localhost|localdomain)$/.test(server))) throw new Error("Enter the mail server's name, like imap.example.com (not an address or a port).");
     if (params.has("imapbad")) throw new Error(`${label} didn't accept that. Use an app-specific password, and make sure IMAP access is allowed for the account.`);
     (window as unknown as Record<string, unknown>).__imapPasswordsSent = ((window as unknown as Record<string, number>).__imapPasswordsSent ?? 0) + 1;
-    const existing = settings.email.imap.find((m) => m.preset === preset && m.address.toLowerCase() === address.trim().toLowerCase());
-    const imap = existing ? settings.email.imap : [...settings.email.imap, { id: `imap-${settings.email.imap.length + 1}`, preset, address: address.trim() }];
+    const wanted = preset === "custom" ? server : null;
+    const existing = settings.email.imap.find((m) => m.preset === preset && m.host === wanted && m.address.toLowerCase() === address.trim().toLowerCase());
+    const imap = existing ? settings.email.imap : [...settings.email.imap, { id: `imap-${settings.email.imap.length + 1}`, preset, address: address.trim(), host: wanted }];
     settings = { ...settings, email: { ...settings.email, enabled: true, imap } };
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);

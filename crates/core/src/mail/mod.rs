@@ -32,6 +32,9 @@ pub enum OpenTarget {
     Url { url: String },
     /// Apple Mail, opened by its message-id.
     AppleMail { message_id: String },
+    /// A mailbox on a server we only know by name: there is no address to open, so the message is shown
+    /// but not clickable.
+    None,
 }
 
 /// What a source reports for one message.

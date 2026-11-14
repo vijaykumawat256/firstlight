@@ -35,7 +35,10 @@ export function InboxSection() {
   const push = useToasts((s) => s.push);
   const go = useNav((s) => s.go);
   const digest = useQuery({ queryKey: ["mail-digest"], queryFn: () => api.getMailDigest(false), refetchInterval: 5 * 60_000, staleTime: 60_000, retry: false });
-  const open = (target: OpenTarget) => api.openMailMessage(target).catch(() => push({ title: "Couldn't open the message", tone: "danger" }));
+  const open = (target: OpenTarget) =>
+    target.kind === "none"
+      ? push({ title: "Open your mail app to read this message" })
+      : api.openMailMessage(target).catch(() => push({ title: "Couldn't open the message", tone: "danger" }));
 
   const r = digest.data;
   if (!r?.enabled) return null;

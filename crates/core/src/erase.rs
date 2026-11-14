@@ -128,6 +128,7 @@ mod tests {
             id: "m1".into(),
             preset: crate::mail::imap::ImapPreset::Icloud,
             address: "me@icloud.com".into(),
+            host: None,
         });
         store.save_settings(&settings).unwrap();
         secrets.set("imap-mail:m1", "APP-PASSWORD").unwrap();

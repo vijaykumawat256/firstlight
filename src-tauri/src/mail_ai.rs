@@ -239,7 +239,11 @@ fn collect(
             match source.fetch(mailbox, days, 15, now) {
                 Ok(b) => batches.push(b),
                 Err(e) => problems.push(MailProblem {
-                    source: mailbox.preset.label().into(),
+                    // A custom mailbox is named by its address; the label alone ("Email") would say little.
+                    source: match mailbox.preset {
+                        ImapPreset::Custom => mailbox.address.clone(),
+                        p => p.label().into(),
+                    },
                     kind: problem_kind(&e),
                 }),
             }
@@ -412,8 +416,9 @@ pub async fn enable_account_mail(
     })
 }
 
-/// Connects a Yahoo or iCloud mailbox with an app-specific password. The login is tested first; the
-/// password goes to the keychain and is never returned to the page or written to settings.
+/// Connects a mailbox (Yahoo, iCloud, or another provider's server on port 993) with an app password.
+/// The login is tested first; the password goes to the keychain and is never returned to the page or
+/// written to settings.
 #[tauri::command]
 pub async fn add_imap_mailbox(
     app: AppHandle,
@@ -421,8 +426,24 @@ pub async fn add_imap_mailbox(
     preset: String,
     address: String,
     password: String,
+    host: Option<String>,
 ) -> CmdResult<AppSettings> {
-    let preset = ImapPreset::parse(&preset).ok_or("Choose Yahoo Mail or iCloud Mail.")?;
+    let preset = ImapPreset::parse(&preset).ok_or("Choose a mail provider.")?;
+    // Only a custom mailbox takes a server name from the page, and it must be a plain host name.
+    let host = match preset {
+        ImapPreset::Custom => {
+            let h = host.unwrap_or_default().trim().to_ascii_lowercase();
+            if !imap::valid_host(&h) {
+                return Err("Enter the mail server's name, like imap.example.com (not an address or a port).".into());
+            }
+            Some(h)
+        }
+        _ => None,
+    };
+    let server = host
+        .clone()
+        .or_else(|| preset.host().map(String::from))
+        .ok_or("Choose a mail provider.")?;
     let address = address.trim().to_string();
     let password: String = password.split_whitespace().collect(); // app passwords are shown in groups
     if !imap::valid_address(&address) || !address.contains('@') {
@@ -438,7 +459,7 @@ pub async fn add_imap_mailbox(
     let secrets = state.deps.secrets.clone();
     let (check_addr, check_pw) = (address.clone(), password.clone());
     tauri::async_runtime::spawn_blocking(move || {
-        ImapSource::new(Arc::new(TlsConnect), secrets).check_login(preset, &check_addr, &check_pw)
+        ImapSource::new(Arc::new(TlsConnect), secrets).check_login(&server, &check_addr, &check_pw)
     })
     .await
     .map_err(|_| "mail failed".to_string())?
@@ -457,7 +478,7 @@ pub async fn add_imap_mailbox(
         .email
         .imap
         .into_iter()
-        .find(|m| m.preset == preset && m.address.eq_ignore_ascii_case(&address));
+        .find(|m| m.preset == preset && m.host == host && m.address.eq_ignore_ascii_case(&address));
     if existing.is_none()
         && lock_store(&state)?.load_settings().email.imap.len() >= imap::MAX_MAILBOXES
     {
@@ -478,6 +499,7 @@ pub async fn add_imap_mailbox(
                 id: id.clone(),
                 preset,
                 address: address.clone(),
+                host: host.clone(),
             });
         }
         s.email.enabled = true;
@@ -535,6 +557,7 @@ pub async fn open_mail_message(app: AppHandle, target: OpenTarget) -> CmdResult<
         OpenTarget::AppleMail { message_id } => {
             applemail::message_url(&message_id).ok_or("That message can't be opened.")?
         }
+        OpenTarget::None => return Err("Open your mail app to read this message.".into()),
     };
     app.opener()
         .open_url(url, None::<&str>)

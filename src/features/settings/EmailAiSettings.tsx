@@ -90,7 +90,7 @@ export function EmailGroup() {
           })}
 
           {e.imap.map((m) => (
-            <SettingRow key={m.id} title={m.preset === "yahoo" ? "Yahoo Mail" : "iCloud Mail"} description={`${m.address} · reading unread mail.`}>
+            <SettingRow key={m.id} title={m.preset === "yahoo" ? "Yahoo Mail" : m.preset === "icloud" ? "iCloud Mail" : "Email"} description={`${m.address}${m.host ? ` (${m.host})` : ""} · reading unread mail.`}>
               <Button size="sm" variant="danger" disabled={removeMailbox.isPending} aria-label={`Remove ${m.address}`} onClick={() => removeMailbox.mutate(m.id)}>
                 Remove
               </Button>
@@ -146,22 +146,27 @@ export function EmailGroup() {
 const IMAP_HELP: Record<ImapPreset, string> = {
   yahoo: "In Yahoo: Account info, then Account security, then Generate app password.",
   icloud: "At account.apple.com: Sign-In and Security, then App-Specific Passwords.",
+  custom: "Use an app password if your provider offers one, and make sure IMAP is switched on for the account.",
 };
+
+const SENT_TO: Record<ImapPreset, string> = { yahoo: "Yahoo", icloud: "Apple", custom: "your mail server" };
 
 function ImapDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: (s: AppSettings) => void }) {
   const [preset, setPreset] = useState<ImapPreset>("yahoo");
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
+  const [host, setHost] = useState("");
   const add = useMutation({
-    mutationFn: () => api.addImapMailbox(preset, address.trim(), password),
+    mutationFn: () => api.addImapMailbox(preset, address.trim(), password, preset === "custom" ? host.trim() : undefined),
     onSuccess: (saved) => {
       onDone(saved);
       setPassword("");
       setAddress("");
+      setHost("");
       onOpenChange(false);
     },
   });
-  const ready = address.includes("@") && password.trim().length > 0;
+  const ready = address.includes("@") && password.trim().length > 0 && (preset !== "custom" || host.trim().includes("."));
   return (
     <Dialog
       open={open}
@@ -173,7 +178,7 @@ function ImapDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChang
         }
       }}
       title="Add a mailbox"
-      description="Yahoo and iCloud need an app-specific password, not your normal one."
+      description="Yahoo and iCloud need an app-specific password, not your normal one. Other providers work too."
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -197,6 +202,7 @@ function ImapDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChang
           options={[
             { value: "yahoo", label: "Yahoo Mail" },
             { value: "icloud", label: "iCloud Mail" },
+            { value: "custom", label: "Other" },
           ]}
         />
         {add.isError && (
@@ -204,8 +210,11 @@ function ImapDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChang
             {errorMessage(add.error)}
           </p>
         )}
-        <TextField label="Email address" type="email" value={address} onChange={(ev) => setAddress(ev.target.value)} placeholder={preset === "yahoo" ? "you@yahoo.com" : "you@icloud.com"} autoComplete="off" spellCheck={false} maxLength={254} />
-        <TextField label="App-specific password" type="password" value={password} onChange={(ev) => setPassword(ev.target.value)} hint={`${IMAP_HELP[preset]} Stored in the system keychain and sent only to ${preset === "yahoo" ? "Yahoo" : "Apple"}.`} autoComplete="off" spellCheck={false} />
+        <TextField label="Email address" type="email" value={address} onChange={(ev) => setAddress(ev.target.value)} placeholder={preset === "yahoo" ? "you@yahoo.com" : preset === "icloud" ? "you@icloud.com" : "you@example.com"} autoComplete="off" spellCheck={false} maxLength={254} />
+        {preset === "custom" && (
+          <TextField label="Mail server" value={host} onChange={(ev) => setHost(ev.target.value)} placeholder="imap.example.com" hint="Your provider's IMAP server. It must support encrypted IMAP on port 993." autoComplete="off" spellCheck={false} maxLength={253} />
+        )}
+        <TextField label="App-specific password" type="password" value={password} onChange={(ev) => setPassword(ev.target.value)} hint={`${IMAP_HELP[preset]} Stored in the system keychain and sent only to ${SENT_TO[preset]}.`} autoComplete="off" spellCheck={false} />
         <button type="submit" hidden />
       </form>
     </Dialog>
