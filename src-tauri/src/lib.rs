@@ -38,7 +38,6 @@ pub(crate) struct AppState {
     pub store: Mutex<Store>,
     pub db_path: PathBuf,
     pub key: Redacted,
-    pub tz: Tz,
     pub deps: Deps,
     pub sync: SyncHandle,
     /// Set to abort a sign-in that is waiting for the browser.
@@ -52,7 +51,9 @@ pub(crate) struct AppState {
 
 // ---- helpers --------------------------------------------------------------
 
-fn local_tz() -> Tz {
+/// The system's time zone, read fresh on every call so travelling (or changing the zone in System
+/// Settings) takes effect without restarting. `iana_time_zone` resets the OS's cached value itself.
+pub(crate) fn local_tz() -> Tz {
     iana_time_zone::get_timezone()
         .ok()
         .and_then(|n| n.parse().ok())
@@ -177,7 +178,7 @@ fn on_unlock(app: &AppHandle) {
         return;
     };
     let now = Utc::now();
-    let tz = state.tz;
+    let tz = local_tz();
     let Ok(store) = state.store.lock() else {
         return;
     };
@@ -427,11 +428,9 @@ pub fn run() {
                 e.to_string()
             })?;
 
-            let tz = local_tz();
             let deps = Deps {
                 http: Arc::new(ReqwestClient::new().map_err(|e| e.to_string())?),
                 secrets: Arc::new(keychain),
-                tz,
                 oauth: providers::OAuthConfigs::from_build(),
                 system: Arc::new(eventkit::EventKitSource),
                 ai_http: Arc::new(
@@ -461,7 +460,6 @@ pub fn run() {
                 store: Mutex::new(store),
                 db_path,
                 key,
-                tz,
                 deps,
                 sync,
                 oauth_cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -484,12 +482,7 @@ pub fn run() {
                 log::warn!("saved shortcut not registered: {e}");
             }
             spawn_update_checks(app.handle().clone());
-            notifier::spawn(
-                app.handle().clone(),
-                db_path_for_notifier,
-                key_for_notifier,
-                tz,
-            );
+            notifier::spawn(app.handle().clone(), db_path_for_notifier, key_for_notifier);
             build_tray(app.handle())?;
 
             // Unlock: refresh calendars, then apply the rules (first unlock of the day, up-next, quiet hours...).

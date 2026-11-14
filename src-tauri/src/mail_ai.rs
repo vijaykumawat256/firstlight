@@ -263,7 +263,7 @@ fn collect(
 
 /// Today's meeting organisers: their email counts as important too.
 fn organisers_today(state: &AppState, settings: &AppSettings) -> Vec<String> {
-    let (now, tz) = (Utc::now(), state.tz);
+    let (now, tz) = (Utc::now(), crate::local_tz());
     let today = now.with_timezone(&tz).date_naive();
     let (from, to) = (day_bounds(today, tz).0, day_bounds(today, tz).1);
     let Ok(store) = lock_store(state) else {
@@ -599,7 +599,7 @@ fn make_summariser(state: &AppState, settings: &AppSettings) -> Option<Box<dyn S
 
 /// Today's briefing for the prompt (the same data the briefing screen uses).
 fn current_briefing(state: &AppState, settings: &AppSettings) -> CmdResult<Briefing> {
-    let (now, tz) = (Utc::now(), state.tz);
+    let (now, tz) = (Utc::now(), crate::local_tz());
     let today = now.with_timezone(&tz).date_naive();
     let (from, _) = day_bounds(today, tz);
     let (_, to) = day_bounds(today + Duration::days(1), tz);
@@ -630,7 +630,12 @@ fn current_prompt(state: &AppState, settings: &AppSettings) -> CmdResult<Prompt>
     let use_24h = settings
         .notify_for_engine(crate::notifier::system_uses_24h())
         .time_24h;
-    Ok(build_prompt(&b, digest.as_ref(), state.tz, use_24h))
+    Ok(build_prompt(
+        &b,
+        digest.as_ref(),
+        crate::local_tz(),
+        use_24h,
+    ))
 }
 
 /// The exact text that would be sent, for the user to read before agreeing.

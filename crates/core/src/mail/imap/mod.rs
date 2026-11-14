@@ -24,7 +24,9 @@ use std::time::{Duration as StdDuration, Instant};
 use wire::{Conn, Io, Piece, Tok, Value, parse_value, quote, tokenize};
 
 const PORT: u16 = 993;
-const CONNECT_TIMEOUT: StdDuration = StdDuration::from_secs(10);
+const CONNECT_TIMEOUT: StdDuration = StdDuration::from_secs(6);
+/// Addresses tried before giving up, so a dead network fails in well under a minute.
+const MAX_ADDRESSES: usize = 4;
 const IO_TIMEOUT: StdDuration = StdDuration::from_secs(20);
 /// The whole fetch, however slow the server is.
 const TOTAL_BUDGET: StdDuration = StdDuration::from_secs(45);
@@ -112,12 +114,13 @@ impl Connect for TlsConnect {
     fn connect(&self, preset: ImapPreset) -> Result<Box<dyn Io>> {
         use rustls_platform_verifier::BuilderVerifierExt;
         let host = preset.host();
-        let addr = (host, PORT)
+        // Try every address the name resolves to: the first may be IPv6 on a network without it.
+        let tcp = (host, PORT)
             .to_socket_addrs()
             .map_err(|_| Error::Offline)?
-            .next()
+            .take(MAX_ADDRESSES)
+            .find_map(|addr| TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT).ok())
             .ok_or(Error::Offline)?;
-        let tcp = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT).map_err(|_| Error::Offline)?;
         let _ = tcp.set_read_timeout(Some(IO_TIMEOUT));
         let _ = tcp.set_write_timeout(Some(IO_TIMEOUT));
         let _ = tcp.set_nodelay(true);

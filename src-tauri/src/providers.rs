@@ -24,7 +24,6 @@ use std::sync::Arc;
 pub struct Deps {
     pub http: Arc<dyn HttpClient>,
     pub secrets: Arc<dyn SecretStore>,
-    pub tz: Tz,
     pub oauth: OAuthConfigs,
     /// The operating system's own calendars (macOS Calendar app).
     pub system: Arc<dyn SystemSource>,
@@ -32,6 +31,13 @@ pub struct Deps {
     pub ai_http: Arc<dyn HttpClient>,
     /// For a model on this computer: https, or plain http to loopback only.
     pub local_http: Arc<dyn HttpClient>,
+}
+
+impl Deps {
+    /// The current system time zone (never cached: see `local_tz`).
+    pub fn tz(&self) -> Tz {
+        crate::local_tz()
+    }
 }
 
 /// Sign-in configuration baked into this build; `None` when the build has no client ID.
@@ -57,18 +63,18 @@ impl OAuthConfigs {
 pub fn provider_for(kind: ProviderKind, deps: &Deps) -> Option<Box<dyn Provider>> {
     match kind {
         ProviderKind::Fixture => {
-            let today = Utc::now().with_timezone(&deps.tz).date_naive();
-            Some(Box::new(FixtureProvider::new(today, deps.tz)))
+            let today = Utc::now().with_timezone(&deps.tz()).date_naive();
+            Some(Box::new(FixtureProvider::new(today, deps.tz())))
         }
         ProviderKind::Ics => Some(Box::new(IcsProvider::new(
             deps.http.clone(),
             deps.secrets.clone(),
-            deps.tz,
+            deps.tz(),
         ))),
         ProviderKind::Caldav => Some(Box::new(CaldavProvider::new(
             deps.http.clone(),
             deps.secrets.clone(),
-            deps.tz,
+            deps.tz(),
         ))),
         ProviderKind::Google => deps.oauth.google.clone().map(|cfg| {
             Box::new(GoogleProvider::new(
@@ -84,6 +90,9 @@ pub fn provider_for(kind: ProviderKind, deps: &Deps) -> Option<Box<dyn Provider>
                 cfg,
             )) as Box<dyn Provider>
         }),
-        ProviderKind::System => Some(Box::new(SystemProvider::new(deps.system.clone(), deps.tz))),
+        ProviderKind::System => Some(Box::new(SystemProvider::new(
+            deps.system.clone(),
+            deps.tz(),
+        ))),
     }
 }

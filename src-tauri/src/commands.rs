@@ -386,7 +386,7 @@ pub async fn set_autostart(app: AppHandle, enabled: bool) -> CmdResult<()> {
 
 #[tauri::command]
 pub async fn get_unlock_count_today(state: State<'_, AppState>) -> CmdResult<i64> {
-    let today = Utc::now().with_timezone(&state.tz).date_naive();
+    let today = Utc::now().with_timezone(&crate::local_tz()).date_naive();
     lock_store(&state)?
         .count_briefing_log(today, "unlock")
         .map_err(internal("reading unlock log"))
@@ -681,7 +681,7 @@ pub async fn get_briefing(
 ) -> CmdResult<daybrief_core::briefing::Briefing> {
     use daybrief_core::briefing::{build, day_bounds};
     let now = Utc::now();
-    let tz = state.tz;
+    let tz = crate::local_tz();
     let store = lock_store(&state)?;
     let settings = store.load_settings().briefing;
     let today = now.with_timezone(&tz).date_naive();

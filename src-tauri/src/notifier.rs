@@ -5,7 +5,6 @@
 //! inputs, shows the result, and records that it was shown.
 
 use chrono::{Duration, Utc};
-use chrono_tz::Tz;
 use daybrief_core::briefing::day_bounds;
 use daybrief_core::briefing::notify::due;
 use daybrief_core::dedupe::dedupe;
@@ -50,7 +49,7 @@ fn show(app: &AppHandle, title: &str, body: &str) {
     }
 }
 
-pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted, tz: Tz) {
+pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
     std::thread::Builder::new()
         .name("notifier".into())
         .spawn(move || {
@@ -67,6 +66,8 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted, tz: Tz) {
             loop {
                 if daybrief_core::contain::contained(|| {
                     let now = Utc::now();
+                    // Read each tick: a changed system time zone applies without a restart.
+                    let tz = crate::local_tz();
                     // Re-read every tick so a change in Settings applies at once, without a restart.
                     let settings = store.load_settings();
                     let ns = settings.notify_for_engine(system_24h);

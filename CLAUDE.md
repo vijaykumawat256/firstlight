@@ -88,3 +88,6 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Mailboxes live in `settings.email.imap` (no secret); the app password is keychain key `imap-mail:{id}`. They change only via `add_imap_mailbox`/`remove_imap_mailbox`; `apply_and_save` preserves the stored list, export omits it, import clears it, erase deletes the passwords.
 - No snippet and no calendar attachment for IMAP: invitations are detected from the subject and top-level Content-Type only, so they show without details.
 - Not verified: an actual LOGIN/FETCH against Yahoo or iCloud (needs the user's app password). Yahoo wants an `ID` command before login; we send it when advertised (it is). Apple's IMAP username may need the Apple ID rather than an @icloud.com alias.
+
+## Time zone
+- Never store the time zone: call `crate::local_tz()` (or `deps.tz()`) each time. It reads the system zone fresh, so travel or a changed zone applies without a restart. Not exercised by actually changing the system zone; the webview's own clock formatting may still need a relaunch.
