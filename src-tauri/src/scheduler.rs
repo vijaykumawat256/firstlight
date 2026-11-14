@@ -70,7 +70,14 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted, deps: Deps) -> Syn
                     Err(RecvTimeoutError::Timeout) => None,
                     Err(RecvTimeoutError::Disconnected) => break,
                 };
-                if let Some(summary) = run_round(&mut store, &deps, &mut entries, trigger) {
+                // A bug triggered by a hostile feed fails this round, never the app (see `contained`).
+                let round = daybrief_core::contain::contained(|| {
+                    run_round(&mut store, &deps, &mut entries, trigger)
+                });
+                if round.is_none() {
+                    log::error!("a sync round panicked and was contained");
+                }
+                if let Some(summary) = round.flatten() {
                     let _ = app.emit("sync-finished", summary);
                 }
             }

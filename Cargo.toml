@@ -10,5 +10,7 @@ version = "0.1.0"
 codegen-units = 1
 lto = true
 opt-level = 3
-panic = "abort"
+# Unwinding (not abort) on purpose: a bug triggered by untrusted data (a calendar feed, a mail message) must fail
+# that one task, not crash the whole app. The sync and notifier threads contain panics; see `contained`.
+panic = "unwind"
 strip = true

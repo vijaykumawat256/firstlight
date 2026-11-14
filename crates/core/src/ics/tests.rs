@@ -363,3 +363,280 @@ fn durations_parse() {
         assert_eq!(parse_duration(bad), None, "{bad}");
     }
 }
+
+/// A feed from the internet is untrusted. A pathological rule must never stall the sync thread.
+#[test]
+fn hostile_recurrence_rules_finish_quickly_and_keep_the_event() {
+    let started = std::time::Instant::now();
+    for rule in [
+        "FREQ=SECONDLY",
+        "FREQ=MINUTELY;INTERVAL=1",
+        "FREQ=SECONDLY;INTERVAL=1;COUNT=999999999",
+        "FREQ=DAILY;BYHOUR=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23;BYMINUTE=0,5,10,15,20,25,30,35,40,45,50,55;BYSECOND=0,10,20,30,40,50",
+        "FREQ=SECONDLY;BYSECOND=0,1,2,3",
+    ] {
+        let body = format!(
+            "BEGIN:VEVENT\r\nUID:h\r\nDTSTART:19900101T090000Z\r\nDTEND:19900101T090100Z\r\nRRULE:{rule}\r\nSUMMARY:hostile\r\nEND:VEVENT"
+        );
+        let evs = parse(&body, window((2026, 3, 1), (2026, 4, 30)));
+        assert!(evs.len() <= 1000, "{rule}: {} events", evs.len());
+    }
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(5),
+        "took {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn a_hostile_rule_still_shows_the_first_occurrence_when_it_is_in_the_window() {
+    let body = "BEGIN:VEVENT\r\nUID:h\r\nDTSTART:20260310T090000Z\r\nDTEND:20260310T090100Z\r\nRRULE:FREQ=SECONDLY\r\nSUMMARY:fast\r\nEND:VEVENT";
+    // Starting inside the window, the step estimate is tiny, so it expands (and is capped at the instance limit).
+    let evs = parse(body, window((2026, 3, 10), (2026, 3, 11)));
+    assert!(!evs.is_empty() && evs.len() <= 1000);
+}
+
+#[test]
+fn ordinary_long_running_rules_still_expand_correctly() {
+    // Daily since 1990, weekly since 2000, hourly since 2020: realistic, and well under the step budget.
+    for (rule, dtstart, expected_min) in [
+        ("FREQ=DAILY", "19900101T090000Z", 30),
+        ("FREQ=WEEKLY;BYDAY=MO,WE,FR", "20000103T090000Z", 6),
+        ("FREQ=HOURLY;INTERVAL=6", "20200101T000000Z", 100),
+        ("FREQ=MONTHLY;BYMONTHDAY=1,15", "19950101T090000Z", 2),
+        ("FREQ=YEARLY", "19000310T090000Z", 0),
+    ] {
+        let body = format!(
+            "BEGIN:VEVENT\r\nUID:r\r\nDTSTART:{dtstart}\r\nDTEND:{dtstart}\r\nRRULE:{rule}\r\nSUMMARY:r\r\nEND:VEVENT"
+        );
+        let evs = parse(&body, window((2026, 3, 1), (2026, 4, 30)));
+        assert!(
+            evs.len() >= expected_min,
+            "{rule} from {dtstart}: only {} events",
+            evs.len()
+        );
+    }
+}
+
+#[test]
+fn the_step_estimate_separates_real_rules_from_hostile_ones() {
+    let t = |y| Utc.with_ymd_and_hms(y, 1, 1, 0, 0, 0).unwrap();
+    let steps = |rule, from| estimated_steps(rule, from, t(2026));
+    assert!(steps("FREQ=DAILY", t(1990)).unwrap() < 20_000);
+    assert!(steps("FREQ=HOURLY", t(2000)).unwrap() < MAX_EXPANSION_STEPS);
+    assert!(steps("FREQ=SECONDLY", t(2025)).unwrap() > MAX_EXPANSION_STEPS);
+    assert!(steps("FREQ=MINUTELY", t(2020)).unwrap() > MAX_EXPANSION_STEPS);
+    assert!(steps("FREQ=DAILY;BYHOUR=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23;BYMINUTE=0,5,10,15,20,25,30,35,40,45,50,55", t(1990)).unwrap() > MAX_EXPANSION_STEPS);
+    assert_eq!(steps("FREQ=NONSENSE", t(2020)), None);
+    assert_eq!(steps("not a rule", t(2020)), None);
+    assert!(
+        steps("FREQ=DAILY;INTERVAL=0", t(1990)).is_some(),
+        "a zero interval cannot divide by zero"
+    );
+    assert_eq!(
+        steps("FREQ=DAILY", t(2030)).unwrap(),
+        0,
+        "a start after the window needs no scanning"
+    );
+}
+
+/// With `panic = "abort"` in release builds, one panic on untrusted input would crash the whole app at every
+/// launch (the sync thread runs at startup). Extreme values must produce an error or a skipped event, never a panic.
+#[test]
+fn extreme_values_in_a_feed_never_panic() {
+    let wrap = |body: &str| {
+        format!(
+            "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\n{body}\r\nSUMMARY:t\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+        )
+    };
+    let cases = [
+        "DTSTART:20260310T090000Z\r\nDURATION:P99999999999999W",
+        "DTSTART:20260310T090000Z\r\nDURATION:P9223372036854775807D",
+        "DTSTART:20260310T090000Z\r\nDURATION:PT9223372036854775807S",
+        "DTSTART:20260310T090000Z\r\nDURATION:-P9223372036854775807W",
+        "DTSTART;VALUE=DATE:20260310\r\nDURATION:P99999999999999D",
+        "DTSTART:99991231T235959Z\r\nDTEND:99991231T235959Z",
+        "DTSTART:99991231T235959Z\r\nDURATION:P1000W",
+        "DTSTART;VALUE=DATE:99991231\r\nDTEND;VALUE=DATE:99991231",
+        "DTSTART;VALUE=DATE:99991231\r\nRRULE:FREQ=DAILY;COUNT=5",
+        "DTSTART:00010101T000000Z\r\nDTEND:99991231T235959Z",
+        "DTSTART:00010101T000000Z\r\nRRULE:FREQ=YEARLY",
+        "DTSTART:20260310T090000Z\r\nDTEND:20260310T100000Z\r\nRRULE:FREQ=DAILY;INTERVAL=99999999999",
+        "DTSTART:20260310T090000Z\r\nDTEND:20260310T100000Z\r\nRRULE:FREQ=DAILY;COUNT=99999999999999999999",
+        "DTSTART:20260310T090000Z\r\nDTEND:20260310T100000Z\r\nRRULE:FREQ=YEARLY;UNTIL=99991231T235959Z",
+        "DTSTART:20260310T090000Z\r\nDTEND:20260310T100000Z\r\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=0",
+        "DTSTART:20260310T090000Z\r\nDTEND:20260310T100000Z\r\nRDATE:99991231T235959Z,00010101T000000Z",
+        "DTSTART:20260310T090000Z\r\nDTEND:20260310T100000Z\r\nEXDATE:99991231T235959Z",
+        "DTSTART:20260310T090000Z\r\nDTEND:20260309T090000Z",
+        "DTSTART:20260310T250000Z",
+        "DTSTART:20261310T090000Z",
+        "DTSTART:20260230T090000Z",
+        "DTSTART;TZID=Europe/London:20260329T013000\r\nDTEND;TZID=Europe/London:20260329T020000",
+        "DTSTART;TZID=Pacific/Apia:20111230T120000",
+        "DTSTART:20260310T090000Z\r\nRECURRENCE-ID:99991231T235959Z",
+        "DTSTART:20260310T090000Z\r\nDTEND:\r\nRRULE:",
+        "DTSTART:\r\nDTEND:",
+        "DTSTART:2026\r\nDTEND:1",
+        "DTSTART:20260310T090000Z\r\nDTEND:20260310T100000Z\r\nRRULE:FREQ=DAILY;BYSETPOS=9999999999",
+        "DTSTART:20260310T090000Z\r\nDTEND:20260310T100000Z\r\nRRULE:FREQ=MONTHLY;BYMONTHDAY=99999999999",
+    ];
+    let w = window((2026, 3, 1), (2026, 4, 30));
+    for body in cases {
+        let ics = wrap(body);
+        let result = std::panic::catch_unwind(|| {
+            events_from_ics(
+                &ics,
+                &ParseOptions {
+                    calendar_id: "c",
+                    default_tz: chrono_tz::Europe::London,
+                    window: w,
+                    my_email: None,
+                },
+            )
+        });
+        assert!(result.is_ok(), "PANIC on: {body:?}");
+    }
+}
+
+/// A small deterministic fuzzer: random extreme tokens in every date/recurrence field. It cannot prove the
+/// absence of bugs, but it covers far more combinations than hand-picked cases. Seeded, so failures reproduce.
+#[test]
+#[allow(clippy::manual_is_multiple_of)]
+fn fuzzing_extreme_feed_values_never_panics_or_stalls() {
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0
+        }
+        fn pick<'a>(&mut self, items: &[&'a str]) -> &'a str {
+            items[(self.next() % items.len() as u64) as usize]
+        }
+    }
+    let numbers = [
+        "0",
+        "1",
+        "-1",
+        "7",
+        "99",
+        "86400",
+        "2147483647",
+        "4294967296",
+        "9223372036854775807",
+        "99999999999999999999",
+        "-9223372036854775808",
+        "",
+    ];
+    let dates = [
+        "00010101T000000Z",
+        "19000101T000000Z",
+        "19700101T000000Z",
+        "20260310T090000Z",
+        "20260329T013000",
+        "99991231T235959Z",
+        "20260230T000000Z",
+        "20261331T000000Z",
+        "2026",
+        "garbage",
+        "",
+    ];
+    let day_dates = ["00010101", "20260310", "99991231", "20260230", "x"];
+    let freqs = [
+        "SECONDLY",
+        "MINUTELY",
+        "HOURLY",
+        "DAILY",
+        "WEEKLY",
+        "MONTHLY",
+        "YEARLY",
+        "FORTNIGHTLY",
+        "",
+    ];
+    let units = ["W", "D", "H", "M", "S", "X"];
+    let zones = [
+        "UTC",
+        "Europe/London",
+        "Pacific/Apia",
+        "Mars/Base",
+        "Eastern Standard Time",
+        "",
+    ];
+
+    let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+    let w = window((2026, 3, 1), (2026, 4, 30));
+    let started = std::time::Instant::now();
+    for i in 0..4000 {
+        let mut lines = vec![format!("UID:f{i}")];
+        let all_day = rng.next() % 4 == 0;
+        let zone = rng.pick(&zones);
+        if all_day {
+            lines.push(format!("DTSTART;VALUE=DATE:{}", rng.pick(&day_dates)));
+            if rng.next() % 2 == 0 {
+                lines.push(format!("DTEND;VALUE=DATE:{}", rng.pick(&day_dates)));
+            }
+        } else {
+            lines.push(format!("DTSTART;TZID={zone}:{}", rng.pick(&dates)));
+            match rng.next() % 3 {
+                0 => lines.push(format!("DTEND;TZID={zone}:{}", rng.pick(&dates))),
+                1 => lines.push(format!(
+                    "DURATION:P{}{}T{}{}",
+                    rng.pick(&numbers),
+                    rng.pick(&units),
+                    rng.pick(&numbers),
+                    rng.pick(&units)
+                )),
+                _ => {}
+            }
+        }
+        if rng.next() % 2 == 0 {
+            let mut rule = format!("FREQ={}", rng.pick(&freqs));
+            for key in [
+                "INTERVAL",
+                "COUNT",
+                "BYSETPOS",
+                "BYMONTHDAY",
+                "BYHOUR",
+                "BYWEEKNO",
+            ] {
+                if rng.next() % 3 == 0 {
+                    rule += &format!(";{key}={}", rng.pick(&numbers));
+                }
+            }
+            if rng.next() % 3 == 0 {
+                rule += &format!(";UNTIL={}", rng.pick(&dates));
+            }
+            lines.push(format!("RRULE:{rule}"));
+        }
+        for key in ["EXDATE", "RDATE", "RECURRENCE-ID"] {
+            if rng.next() % 4 == 0 {
+                lines.push(format!("{key}:{},{}", rng.pick(&dates), rng.pick(&dates)));
+            }
+        }
+        let ics = format!(
+            "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\n{}\r\nSUMMARY:fuzz\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+            lines.join("\r\n")
+        );
+        let res = std::panic::catch_unwind(|| {
+            events_from_ics(
+                &ics,
+                &ParseOptions {
+                    calendar_id: "c",
+                    default_tz: chrono_tz::UTC,
+                    window: w,
+                    my_email: None,
+                },
+            )
+        });
+        assert!(res.is_ok(), "PANIC (iteration {i}) on:\n{ics}");
+        if let Ok(Ok(evs)) = res {
+            assert!(evs.len() <= 1100, "iteration {i}: {} events", evs.len());
+        }
+    }
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(60),
+        "fuzzing took {:?}",
+        started.elapsed()
+    );
+}

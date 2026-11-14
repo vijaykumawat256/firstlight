@@ -6,9 +6,12 @@
 
 pub mod ai;
 pub mod briefing;
+pub mod contain;
 pub mod dedupe;
 pub mod erase;
 pub mod error;
+#[cfg(test)]
+mod fuzz;
 pub mod http;
 pub mod ics;
 pub mod join;

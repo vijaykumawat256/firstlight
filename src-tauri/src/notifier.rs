@@ -65,26 +65,32 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted, tz: Tz) {
             // Give the first sync a moment so we don't announce from stale data at launch.
             std::thread::sleep(StdDuration::from_secs(8));
             loop {
-                let now = Utc::now();
-                // Re-read every tick so a change in Settings applies at once, without a restart.
-                let settings = store.load_settings();
-                let ns = settings.notify_for_engine(system_24h);
-                let (bs, rules) = (settings.briefing, settings.unlock);
-                let today = now.with_timezone(&tz).date_naive();
-                let (from, _) = day_bounds(today, tz);
-                let (_, to) = day_bounds(today + Duration::days(1), tz);
+                if daybrief_core::contain::contained(|| {
+                    let now = Utc::now();
+                    // Re-read every tick so a change in Settings applies at once, without a restart.
+                    let settings = store.load_settings();
+                    let ns = settings.notify_for_engine(system_24h);
+                    let (bs, rules) = (settings.briefing, settings.unlock);
+                    let today = now.with_timezone(&tz).date_naive();
+                    let (from, _) = day_bounds(today, tz);
+                    let (_, to) = day_bounds(today + Duration::days(1), tz);
 
-                if let (Ok(events), Ok(sent)) =
-                    (store.events_between(from, to), store.sent_notifications())
-                {
-                    for n in due(&dedupe(events), now, tz, &ns, &bs, &rules, &sent) {
-                        // Record first: whatever happens next, we never try this one again.
-                        let _ = store.mark_notification_sent(&n.id, now);
-                        show(&app, &n.title, &n.body);
-                        log::info!("notification shown: {:?}", n.kind);
+                    if let (Ok(events), Ok(sent)) =
+                        (store.events_between(from, to), store.sent_notifications())
+                    {
+                        for n in due(&dedupe(events), now, tz, &ns, &bs, &rules, &sent) {
+                            // Record first: whatever happens next, we never try this one again.
+                            let _ = store.mark_notification_sent(&n.id, now);
+                            show(&app, &n.title, &n.body);
+                            log::info!("notification shown: {:?}", n.kind);
+                        }
                     }
+                })
+                .is_none()
+                {
+                    log::error!("a notifier tick panicked and was contained");
                 }
-                let _ = store.prune_notifications(now - Duration::days(KEEP_SENT_DAYS));
+                let _ = store.prune_notifications(Utc::now() - Duration::days(KEEP_SENT_DAYS));
                 std::thread::sleep(TICK);
             }
         })

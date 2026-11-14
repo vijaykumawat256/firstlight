@@ -17,6 +17,13 @@ use parse::{Prop, parse_lines};
 
 /// Hard cap on expanded instances per recurring event within one window.
 const MAX_INSTANCES: u16 = 1000;
+/// Expansion walks every occurrence from the start date to the window, so a rule that would take more
+/// steps than this is treated as hostile (or broken) and not expanded. Real rules are far below it:
+/// a daily event since 1990 is about 13,000 steps, an hourly one since 2000 about 230,000.
+const MAX_EXPANSION_STEPS: u64 = 2_000_000;
+/// No real event lasts ten years. Longer (or absurd) lengths are treated as malformed, which also keeps every
+/// later date calculation far from the limits of the date library, whose operators panic on overflow.
+const MAX_EVENT_DAYS: i64 = 3650;
 /// Cap on stored description length.
 const MAX_DESCRIPTION: usize = 8000;
 
@@ -130,7 +137,8 @@ fn parse_moments(p: &Prop, default_tz: Tz) -> Vec<Moment> {
         .collect()
 }
 
-/// `[-]P[nW][nD][T[nH][nM][nS]]`
+/// `[-]P[nW][nD][T[nH][nM][nS]]`. Uses checked arithmetic throughout: the numbers come from the feed, and the
+/// plain constructors panic on overflow (which, with `panic = "abort"`, would be a crash from a calendar link).
 fn parse_duration(s: &str) -> Option<Duration> {
     let (neg, rest) = match s.strip_prefix('-') {
         Some(r) => (true, r),
@@ -147,18 +155,19 @@ fn parse_duration(s: &str) -> Option<Duration> {
             unit => {
                 let n: i64 = num.parse().ok()?;
                 num.clear();
-                total += match (unit, in_time) {
-                    ('W', false) => Duration::weeks(n),
-                    ('D', false) => Duration::days(n),
-                    ('H', true) => Duration::hours(n),
-                    ('M', true) => Duration::minutes(n),
-                    ('S', true) => Duration::seconds(n),
+                let part = match (unit, in_time) {
+                    ('W', false) => Duration::try_weeks(n),
+                    ('D', false) => Duration::try_days(n),
+                    ('H', true) => Duration::try_hours(n),
+                    ('M', true) => Duration::try_minutes(n),
+                    ('S', true) => Duration::try_seconds(n),
                     _ => return None,
-                };
+                }?;
+                total = total.checked_add(&part)?;
             }
         }
     }
-    if !num.is_empty() {
+    if !num.is_empty() || total.num_days().abs() > MAX_EVENT_DAYS {
         return None;
     }
     Some(if neg { -total } else { total })
@@ -213,7 +222,9 @@ fn to_raw(props: &[Prop], opts: &ParseOptions) -> Option<Raw> {
         props.iter().find(|p| p.name == "DURATION"),
     ) {
         (Some(e), _) => match (parse_start(e, opts.default_tz)?.moment, start.moment) {
-            (Moment::Day(e), Moment::Day(s)) => Length::Days((e - s).num_days().max(1)),
+            (Moment::Day(e), Moment::Day(s)) => {
+                Length::Days((e - s).num_days().clamp(1, MAX_EVENT_DAYS + 1))
+            }
             (Moment::Time(e), Moment::Time(s)) => Length::Span((e - s).max(Duration::zero())),
             // Mixed date/time is malformed; treat the end as the start.
             _ => Length::Span(Duration::zero()),
@@ -230,6 +241,15 @@ fn to_raw(props: &[Prop], opts: &ParseOptions) -> Option<Raw> {
             Moment::Time(_) => Length::Span(Duration::zero()),
         },
     };
+
+    // An absurdly long event is malformed; skip it rather than carry extreme values into later arithmetic.
+    let too_long = match length {
+        Length::Days(n) => n > MAX_EVENT_DAYS,
+        Length::Span(d) => d.num_days() > MAX_EVENT_DAYS,
+    };
+    if too_long {
+        return None;
+    }
 
     let status = match text(props, "STATUS")
         .map(|s| s.to_ascii_uppercase())
@@ -334,25 +354,37 @@ fn to_raw(props: &[Prop], opts: &ParseOptions) -> Option<Raw> {
     })
 }
 
+/// Date arithmetic that cannot panic: on overflow the original value is kept (the event then has no length).
+fn plus_days(d: NaiveDate, n: i64) -> NaiveDate {
+    Duration::try_days(n)
+        .and_then(|x| d.checked_add_signed(x))
+        .unwrap_or(d)
+}
+
+fn plus_span(t: DateTime<Utc>, d: Duration) -> DateTime<Utc> {
+    t.checked_add_signed(d).unwrap_or(t)
+}
+
 fn build(raw: &Raw, calendar_id: &str, at: Moment, instance: bool) -> Event {
+    let tzid = || raw.start.tz.map(|t| t.name().to_string());
     let when = match (at, raw.length) {
         (Moment::Day(s), Length::Days(n)) => When::AllDay {
             start: s,
-            end: s + Duration::days(n),
+            end: plus_days(s, n),
         },
         (Moment::Day(s), Length::Span(_)) => When::AllDay {
             start: s,
-            end: s + Duration::days(1),
+            end: plus_days(s, 1),
         },
         (Moment::Time(s), Length::Span(d)) => When::Timed {
             start: s,
-            end: s + d,
-            tzid: raw.start.tz.map(|t| t.name().to_string()),
+            end: plus_span(s, d),
+            tzid: tzid(),
         },
         (Moment::Time(s), Length::Days(n)) => When::Timed {
             start: s,
-            end: s + Duration::days(n),
-            tzid: raw.start.tz.map(|t| t.name().to_string()),
+            end: plus_span(s, Duration::try_days(n).unwrap_or_else(Duration::zero)),
+            tzid: tzid(),
         },
     };
     let suffix = match at.key() {
@@ -388,6 +420,42 @@ fn build(raw: &Raw, calendar_id: &str, at: Moment, instance: bool) -> Event {
     }
 }
 
+/// How many steps expanding `rule` from `start` up to `until` would take, roughly (an overestimate is fine).
+/// `None` if the rule can't be understood, in which case it is not expanded.
+fn estimated_steps(rule: &str, start: DateTime<Utc>, until: DateTime<Utc>) -> Option<u64> {
+    let mut freq_secs: Option<u64> = None;
+    let mut interval = 1u64;
+    let mut multiplier = 1u64;
+    for part in rule.split(';') {
+        let (key, value) = part.split_once('=')?;
+        let n_values = value.split(',').count() as u64;
+        match key.trim().to_ascii_uppercase().as_str() {
+            "FREQ" => {
+                freq_secs = Some(match value.trim().to_ascii_uppercase().as_str() {
+                    "SECONDLY" => 1,
+                    "MINUTELY" => 60,
+                    "HOURLY" => 3_600,
+                    "DAILY" => 86_400,
+                    "WEEKLY" => 604_800,
+                    "MONTHLY" => 2_592_000,
+                    "YEARLY" => 31_536_000,
+                    _ => return None,
+                })
+            }
+            "INTERVAL" => interval = value.trim().parse::<u64>().ok()?.max(1),
+            // Lists inside each period multiply the work done per step.
+            "BYSECOND" | "BYMINUTE" | "BYHOUR" | "BYDAY" | "BYMONTHDAY" | "BYYEARDAY"
+            | "BYWEEKNO" | "BYMONTH" | "BYSETPOS" => {
+                multiplier = multiplier.saturating_mul(n_values.max(1))
+            }
+            _ => {}
+        }
+    }
+    let span = (until - start).num_seconds().max(0) as u64;
+    // Saturating: a huge INTERVAL must not overflow (it just means "practically never repeats").
+    Some((span / freq_secs?.saturating_mul(interval).max(1)).saturating_mul(multiplier))
+}
+
 /// All start moments of a recurring event that could touch the window.
 fn expand(raw: &Raw, window: &Window) -> Vec<Moment> {
     let mut out = vec![raw.start.moment];
@@ -405,13 +473,22 @@ fn expand(raw: &Raw, window: &Window) -> Vec<Moment> {
             }
         };
         let slack = match raw.length {
-            Length::Days(n) => Duration::days(n + 1),
+            Length::Days(n) => {
+                Duration::try_days(n.saturating_add(1)).unwrap_or_else(Duration::zero)
+            }
             Length::Span(d) => d + Duration::days(1),
         };
         let from = (window.from - slack).with_timezone(&rrule::Tz::UTC);
         let to = window.to.with_timezone(&rrule::Tz::UTC);
-        // An unparseable rule must not hide the event: keep just the first occurrence.
-        if let Ok(set) = format!("{dtstart}\nRRULE:{rule}").parse::<rrule::RRuleSet>() {
+        let first = match raw.start.moment {
+            Moment::Day(d) => d.and_hms_opt(0, 0, 0).expect("midnight").and_utc(),
+            Moment::Time(t) => t,
+        };
+        // A hostile or broken rule must neither hide the event nor stall the sync: keep just the first occurrence.
+        let affordable =
+            estimated_steps(rule, first, window.from).is_some_and(|n| n <= MAX_EXPANSION_STEPS);
+        if affordable && let Ok(set) = format!("{dtstart}\nRRULE:{rule}").parse::<rrule::RRuleSet>()
+        {
             let res = set.after(from).before(to).all(MAX_INSTANCES);
             for d in res.dates {
                 out.push(match raw.start.moment {
