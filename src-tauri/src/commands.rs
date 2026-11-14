@@ -662,3 +662,51 @@ pub async fn open_privacy_settings(app: AppHandle, pane: String) -> CmdResult<()
         .open_url(url, None::<&str>)
         .map_err(|_| "Couldn't open System Settings.".to_string())
 }
+
+// ---- the briefing ------------------------------------------------------------------
+
+/// Loads the saved settings for a feature, falling back to defaults on anything unreadable.
+fn saved<T: serde::de::DeserializeOwned + Default>(store: &Store, key: &str) -> T {
+    store
+        .get_setting(key)
+        .ok()
+        .flatten()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default()
+}
+
+/// Today and tomorrow, worked out by the briefing engine (pure; see daybrief-core).
+#[tauri::command]
+pub async fn get_briefing(
+    state: State<'_, AppState>,
+) -> CmdResult<daybrief_core::briefing::Briefing> {
+    use daybrief_core::briefing::{BriefingSettings, build, day_bounds};
+    let now = Utc::now();
+    let tz = state.tz;
+    let store = lock_store(&state)?;
+    let settings: BriefingSettings = saved(&store, "briefing");
+    let today = now.with_timezone(&tz).date_naive();
+    let (from, _) = day_bounds(today, tz);
+    let (_, to) = day_bounds(today + Duration::days(1), tz);
+    let events = dedupe(
+        store
+            .events_between(from, to)
+            .map_err(internal("loading events"))?,
+    );
+    Ok(build(&events, now, tz, &settings))
+}
+
+/// Hides the small "up next" panel.
+#[tauri::command]
+pub async fn dismiss_up_next(app: AppHandle) -> CmdResult<()> {
+    crate::hide_up_next(&app);
+    Ok(())
+}
+
+/// Brings the full briefing to the front (from the small panel or the tray).
+#[tauri::command]
+pub async fn open_briefing(app: AppHandle) -> CmdResult<()> {
+    crate::hide_up_next(&app);
+    crate::show_main(&app);
+    Ok(())
+}

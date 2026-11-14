@@ -1,0 +1,89 @@
+import { Calendar as CalendarIcon, MapPin, User, Users, Video } from "lucide-react";
+import type { CalEvent, CalendarInfo } from "@/api";
+import { Badge, Button, Sheet, calendarColour } from "@/design";
+import { formatDate, formatTime } from "./format";
+
+const RESPONSE: Record<CalEvent["my_response"], string | null> = {
+  accepted: "You accepted",
+  declined: "You declined",
+  tentative: "You said maybe",
+  needs_action: "Needs your response",
+  none: null,
+};
+
+function when(e: CalEvent): { day: string; time: string } {
+  if (e.when.kind === "all_day") {
+    const start = new Date(`${e.when.start}T00:00:00`);
+    const last = new Date(`${e.when.end}T00:00:00`);
+    last.setDate(last.getDate() - 1);
+    const multi = last > start;
+    return { day: multi ? `${formatDate(start)} – ${formatDate(last)}` : formatDate(start), time: "All day" };
+  }
+  const s = new Date(e.when.start);
+  const en = new Date(e.when.end);
+  const sameDay = s.toDateString() === en.toDateString();
+  return { day: formatDate(s), time: sameDay ? `${formatTime(s)} – ${formatTime(en)}` : `${formatTime(s)} – ${formatDate(en)} ${formatTime(en)}` };
+}
+
+export function EventDetail({ event, calendars, onClose, onJoin }: { event: CalEvent | null; calendars: CalendarInfo[]; onClose: () => void; onJoin: (url: string) => void }) {
+  const cal = event && calendars.find((c) => c.id === event.calendar_id);
+  const others = event ? event.also_in.map((id) => calendars.find((c) => c.id === id)?.name).filter(Boolean) : [];
+  const t = event && when(event);
+  const response = event && RESPONSE[event.my_response];
+  return (
+    <Sheet open={event !== null} onOpenChange={(o) => !o && onClose()} title={event?.title ?? ""} description={t ? `${t.day} · ${t.time}` : undefined}>
+      {event && (
+        <div className="flex flex-col gap-4 pb-6">
+          <div className="flex flex-wrap items-center gap-2">
+            {event.status === "tentative" && <Badge>Tentative</Badge>}
+            {event.status === "cancelled" && <Badge tone="danger">Cancelled</Badge>}
+            {response && <Badge tone={event.my_response === "needs_action" ? "accent" : "neutral"}>{response}</Badge>}
+            {event.recurrence_master_id && <Badge>Repeats</Badge>}
+          </div>
+          {event.join_url && (
+            <Button variant="primary" className="self-start" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(event.join_url!)}>
+              Join
+            </Button>
+          )}
+          <dl className="flex flex-col gap-3 text-body">
+            {event.location && (
+              <div className="flex gap-3">
+                <MapPin className="mt-0.5 size-4 shrink-0 text-fg-2" aria-hidden />
+                <dt className="sr-only">Location</dt>
+                <dd className="select-text text-fg">{event.location}</dd>
+              </div>
+            )}
+            {event.organizer && (
+              <div className="flex gap-3">
+                <User className="mt-0.5 size-4 shrink-0 text-fg-2" aria-hidden />
+                <dt className="sr-only">Organiser</dt>
+                <dd className="text-fg">{event.organizer}</dd>
+              </div>
+            )}
+            {cal && (
+              <div className="flex gap-3">
+                <CalendarIcon className="mt-0.5 size-4 shrink-0 text-fg-2" aria-hidden />
+                <dt className="sr-only">Calendar</dt>
+                <dd className="flex items-center gap-2 text-fg">
+                  <span className="size-2.5 rounded-full" style={{ background: calendarColour(cal.colour) }} aria-hidden />
+                  {cal.name}
+                </dd>
+              </div>
+            )}
+            {others.length > 0 && (
+              <div className="flex gap-3">
+                <Users className="mt-0.5 size-4 shrink-0 text-fg-2" aria-hidden />
+                <dt className="sr-only">Also in</dt>
+                <dd className="text-fg-2">Also in {others.join(", ")}</dd>
+              </div>
+            )}
+          </dl>
+          {event.description && (
+            // Event text is untrusted: shown as plain text only, never as HTML.
+            <p className="max-h-48 select-text overflow-y-auto whitespace-pre-wrap break-words rounded-card bg-fill p-3 text-body text-fg-2">{event.description}</p>
+          )}
+        </div>
+      )}
+    </Sheet>
+  );
+}

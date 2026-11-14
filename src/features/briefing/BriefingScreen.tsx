@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { CalendarX, CloudOff, RefreshCw, Settings as SettingsIcon } from "lucide-react";
 import { useMemo, useState } from "react";
-import { api } from "@/api";
+import { api, type CalEvent } from "@/api";
 import { Button, EmptyState, IconButton, Skeleton, Tooltip, useToasts } from "@/design";
 import { SettingsSheet } from "@/features/settings/SettingsSheet";
 import { formatDate, greeting } from "./format";
 import { useNow, useOnline } from "./hooks";
 import { AttentionSection, ClearDay, TodaySection, TomorrowSection, UpNextCard } from "./parts";
-import { buildBriefing, startOfDay } from "./present";
+import { EventDetail } from "./EventDetail";
+import { summarise } from "./summary";
 
 function LoadingState() {
   return (
@@ -28,19 +29,13 @@ export function BriefingScreen() {
   const push = useToasts((s) => s.push);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Load from the start of today to the end of tomorrow.
-  const dayKey = startOfDay(now).toDateString();
-  const range = useMemo(
-    () => [startOfDay(now).toISOString(), startOfDay(now, 2).toISOString()] as const,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recompute only when the day changes
-    [dayKey],
-  );
-  const events = useQuery({ queryKey: ["events", ...range], queryFn: () => api.getEvents(range[0], range[1]) });
+  // The engine works out today and tomorrow; refetch each minute so past/next stay accurate while open.
+  const briefing = useQuery({ queryKey: ["briefing"], queryFn: () => api.getBriefing(), refetchInterval: 60_000, staleTime: 15_000 });
   const calendars = useQuery({ queryKey: ["calendars"], queryFn: () => api.getCalendars() });
+  const [detail, setDetail] = useState<CalEvent | null>(null);
 
   const colours = useMemo(() => new Map((calendars.data ?? []).map((c) => [c.id, c.colour])), [calendars.data]);
   const colourOf = (id: string) => colours.get(id) ?? "blue";
-  const model = useMemo(() => buildBriefing(events.data ?? [], now), [events.data, now]);
 
   const [refreshing, setRefreshing] = useState(false);
   const refresh = () => {
@@ -55,8 +50,8 @@ export function BriefingScreen() {
     api.openUrl(url).catch(() => push({ title: "Couldn't open the link", tone: "danger" }));
   };
 
-  const dayIsEmpty =
-    model.allDayToday.length + model.past.length + model.remaining.length + model.tomorrow.timed.length + model.tomorrow.allDay.length === 0;
+  const b = briefing.data;
+  const dayIsEmpty = !!b && b.all_day_today.length + b.past.length + b.remaining.length + b.tomorrow.timed.length + b.tomorrow.all_day.length === 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -78,8 +73,8 @@ export function BriefingScreen() {
         <header className="mb-6">
           <h1 className="text-display font-bold tracking-tight text-fg">{greeting(now)}</h1>
           <p className="mt-0.5 text-headline font-medium text-fg-2">{formatDate(now)}</p>
-          {!events.isPending && !events.isError && !dayIsEmpty && (
-            <p className="mt-3 text-headline text-fg">{model.summary}</p>
+          {b && !dayIsEmpty && (
+            <p className="mt-3 text-headline text-fg">{summarise(b, now)}</p>
           )}
           {!online && (
             <p className="mt-3 flex items-center gap-1.5 text-footnote text-fg-2">
@@ -88,15 +83,15 @@ export function BriefingScreen() {
           )}
         </header>
 
-        {events.isPending ? (
+        {briefing.isPending ? (
           <LoadingState />
-        ) : events.isError ? (
+        ) : briefing.isError || !b ? (
           <EmptyState
             icon={<CalendarX />}
             title="Couldn't load your calendar"
             description="Something went wrong reading your events."
             action={
-              <Button variant="secondary" leading={<RefreshCw className="size-4" />} onClick={() => void events.refetch()}>
+              <Button variant="secondary" leading={<RefreshCw className="size-4" />} onClick={() => void briefing.refetch()}>
                 Try again
               </Button>
             }
@@ -105,19 +100,16 @@ export function BriefingScreen() {
           <EmptyState icon={<CalendarX />} title="Your day is clear" description="No events today or tomorrow. Enjoy the quiet." />
         ) : (
           <div className="flex flex-col gap-6">
-            {model.next ? (
-              <UpNextCard item={model.next} inProgress={model.nextInProgress} now={now} colourOf={colourOf} onJoin={join} />
-            ) : (
-              <ClearDay />
-            )}
-            <AttentionSection conflicts={model.conflicts} needsResponse={model.needsResponse} />
-            <TodaySection model={model} now={now} colourOf={colourOf} />
-            <TomorrowSection model={model} colourOf={colourOf} />
+            {b.next ? <UpNextCard next={b.next} now={now} colourOf={colourOf} onJoin={join} onOpen={setDetail} /> : <ClearDay />}
+            <AttentionSection b={b} />
+            <TodaySection b={b} now={now} colourOf={colourOf} onOpen={setDetail} />
+            <TomorrowSection b={b} colourOf={colourOf} onOpen={setDetail} />
           </div>
         )}
       </main>
 
       <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <EventDetail event={detail} calendars={calendars.data ?? []} onClose={() => setDetail(null)} onJoin={join} />
     </div>
   );
 }

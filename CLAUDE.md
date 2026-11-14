@@ -3,7 +3,9 @@
 The full brief is `PLAN.md`; read it first. This file records what is true *now* and what you'd otherwise rediscover.
 
 ## Status
-Phases 1 and 2 built, except what is listed under "Not yet verified". Next: Phase 3 (briefing). Do not build ahead.
+Phases 1 and 2 built, except what is listed under "Not yet verified". Phase 3 (briefing) is IN PROGRESS.
+Phase 3 done: briefing engine (`crates/core/src/briefing`), unlock rules (`briefing/rules.rs`), `get_briefing`, event detail sheet, compact up-next window, UI now renders engine output.
+Phase 3 TODO: notifications (10 min before, morning briefing, evening look-ahead; must not duplicate after restart), day and week calendar views, settings UI for rules (Phase 4), full-screen-app detection (rule exists; detection is stubbed to false).
 Phase 2 delivered: ICS links, CalDAV (iCloud/Yahoo/Fastmail/other), Google and Microsoft OAuth, sync engine/scheduler, dedupe, accounts UI.
 Calendar app (macOS EventKit) provider: built; its permission prompt has not been clicked through yet.
 Queued, not built: Apple Mail digest (unread, important senders, invitations) via AppleScript; planned with Phase 5.
@@ -18,7 +20,7 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - `crates/core`: no Tauri imports, ever. Sync `Provider` trait (call from worker threads).
 - `src-tauri`: thin shell. New command = add to `build.rs` list, `capabilities/default.json` (`allow-<name>`), `generate_handler!`, `src/api`.
 - UI talks to the outside only through `src/api` (`Backend`). `fixture.ts` is browser-only fake data mirroring the Rust fixture.
-- `src/features/briefing/present.ts` is **provisional**; Phase 3 replaces it with a Rust engine.
+- The briefing logic lives in Rust (`crates/core/src/briefing`). `src/api/fixtureBriefing.ts` is a small browser-only stand-in for tests; do not grow it.
 - Styling: tokens in `src/design/tokens.css`; no raw hex/px in components. Calendar colours are names (`calendarColour()`).
 
 ## Gotchas

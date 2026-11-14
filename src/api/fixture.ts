@@ -1,4 +1,5 @@
 import { assertHttps, type Backend } from "./backend";
+import { fixtureBriefing } from "./fixtureBriefing";
 import type { AccountView, CalendarInfo, CalEvent, SyncSummary } from "./types";
 
 /**
@@ -53,6 +54,7 @@ export function fixtureEvents(base: Date = new Date()): CalEvent[] {
     organizer: null,
     recurrence_master_id: null,
     updated_at: "2023-11-14T22:13:20Z",
+    also_in: [],
     ...extra,
   });
 
@@ -155,6 +157,15 @@ export const fixtureBackend: Backend = {
   },
   async getCalendars() {
     return accounts.flatMap((a) => a.calendars);
+  },
+  async getBriefing() {
+    const ids = visibleCalendarIds();
+    return fixtureBriefing(fixtureEvents().filter((e) => ids.has(e.calendar_id)), new Date());
+  },
+  async dismissUpNext() {},
+  async openBriefing() {},
+  async onUpNextShown() {
+    return () => {};
   },
   async listAccounts() {
     return structuredClone(accounts);

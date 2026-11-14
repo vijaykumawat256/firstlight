@@ -209,6 +209,11 @@ body {
   background: transparent;
 }
 
+/* The compact up-next panel floats in its own transparent window: only its card is painted. */
+:root[data-view="upnext"] body {
+  background: transparent;
+}
+
 /* Visible keyboard focus everywhere, never on mouse click. */
 :focus-visible {
   outline: 2px solid var(--accent);

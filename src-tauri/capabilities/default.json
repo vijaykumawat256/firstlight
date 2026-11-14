@@ -1,9 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Least-privilege capability for the main window: only our own commands and event listening.",
+  "description": "Least-privilege capability for the app windows: only our own commands and event listening.",
   "windows": [
-    "main"
+    "main",
+    "upnext"
   ],
   "permissions": [
     "core:event:allow-listen",
@@ -36,6 +37,9 @@
     "allow-refresh-now",
     "allow-get-autostart",
     "allow-set-autostart",
-    "allow-get-unlock-count-today"
+    "allow-get-unlock-count-today",
+    "allow-get-briefing",
+    "allow-dismiss-up-next",
+    "allow-open-briefing"
   ]
 }

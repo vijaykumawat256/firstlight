@@ -263,6 +263,26 @@ impl Store {
         Ok(())
     }
 
+    /// When something of this kind last appeared, if ever.
+    pub fn last_log_at(&self, kind: &str) -> Result<Option<DateTime<Utc>>> {
+        let t: Option<i64> = self.conn.query_row(
+            "SELECT max(shown_at) FROM briefing_log WHERE kind = ?1",
+            [kind],
+            |r| r.get(0),
+        )?;
+        Ok(t.and_then(|t| DateTime::from_timestamp(t, 0)))
+    }
+
+    /// The state the unlock rules need: the date of the last full briefing and the last automatic appearance.
+    pub fn rule_state(&self, tz: chrono_tz::Tz) -> Result<crate::briefing::rules::RuleState> {
+        let full = self.last_log_at("full")?;
+        let up_next = self.last_log_at("upnext")?;
+        Ok(crate::briefing::rules::RuleState {
+            last_full_date: full.map(|t| t.with_timezone(&tz).date_naive()),
+            last_shown_at: full.max(up_next),
+        })
+    }
+
     pub fn count_briefing_log(&self, date: NaiveDate, kind: &str) -> Result<i64> {
         Ok(self.conn.query_row(
             "SELECT count(*) FROM briefing_log WHERE date = ?1 AND kind = ?2",
@@ -704,6 +724,43 @@ mod tests {
                 .is_err()
         );
         assert!(s.rename_account("fixture-account", "Mine").is_ok());
+    }
+
+    #[test]
+    fn rule_state_reflects_the_log() {
+        let s = seeded();
+        let tz = chrono_tz::Asia::Tokyo;
+        assert_eq!(
+            s.rule_state(tz).unwrap(),
+            crate::briefing::rules::RuleState::default()
+        );
+        // 23:30 UTC on the 9th is already the 10th in Tokyo.
+        let full = Utc.with_ymd_and_hms(2026, 3, 9, 23, 30, 0).unwrap();
+        s.log_briefing(NaiveDate::from_ymd_opt(2026, 3, 10).unwrap(), "full", full)
+            .unwrap();
+        let later = full + Duration::hours(3);
+        s.log_briefing(
+            NaiveDate::from_ymd_opt(2026, 3, 10).unwrap(),
+            "upnext",
+            later,
+        )
+        .unwrap();
+        s.log_briefing(
+            NaiveDate::from_ymd_opt(2026, 3, 10).unwrap(),
+            "unlock",
+            later + Duration::hours(9),
+        )
+        .unwrap();
+        let st = s.rule_state(tz).unwrap();
+        assert_eq!(
+            st.last_full_date,
+            Some(NaiveDate::from_ymd_opt(2026, 3, 10).unwrap())
+        );
+        assert_eq!(
+            st.last_shown_at,
+            Some(later),
+            "plain unlock log entries do not count as appearances"
+        );
     }
 
     #[test]

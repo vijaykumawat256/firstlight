@@ -7,6 +7,7 @@ import { Gallery } from "@/design/Gallery";
 import { AccountsScreen } from "@/features/accounts/AccountsScreen";
 import { Onboarding } from "@/features/accounts/Onboarding";
 import { BriefingScreen } from "@/features/briefing/BriefingScreen";
+import { UpNextPanel } from "@/features/briefing/UpNextPanel";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: true, retry: 1 } },
@@ -61,7 +62,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <ToastHost>{import.meta.env.DEV && hash === "#/gallery" ? <Gallery /> : <Shell />}</ToastHost>
+        <ToastHost>
+          {hash === "#/upnext" ? <UpNextPanel /> : import.meta.env.DEV && hash === "#/gallery" ? <Gallery /> : <Shell />}
+        </ToastHost>
       </TooltipProvider>
     </QueryClientProvider>
   );

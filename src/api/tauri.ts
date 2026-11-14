@@ -2,10 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
+import type { AccountView, Briefing, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
+  getBriefing: () => invoke<Briefing>("get_briefing"),
+  dismissUpNext: () => invoke<void>("dismiss_up_next"),
+  openBriefing: () => invoke<void>("open_briefing"),
+  onUpNextShown: async (callback) => listen("up-next-shown", () => callback()),
   getCalendars: () => invoke<CalendarInfo[]>("get_calendars"),
   listAccounts: () => invoke<AccountView[]>("list_accounts"),
   addIcsAccount: (name, url) => invoke<AccountView>("add_ics_account", { name, url }),

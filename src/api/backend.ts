@@ -1,4 +1,4 @@
-import type { AccountView, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
+import type { AccountView, Briefing, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -8,6 +8,14 @@ export interface Backend {
   /** Events touching `[startIso, endIso)`. */
   getEvents(startIso: string, endIso: string): Promise<CalEvent[]>;
   getCalendars(): Promise<CalendarInfo[]>;
+  /** Today and tomorrow, worked out by the briefing engine. */
+  getBriefing(): Promise<Briefing>;
+  /** Hides the small "up next" panel. */
+  dismissUpNext(): Promise<void>;
+  /** Brings the full briefing window to the front. */
+  openBriefing(): Promise<void>;
+  /** Fires each time the small panel is shown, so it can reload. */
+  onUpNextShown(callback: () => void): Promise<() => void>;
   listAccounts(): Promise<AccountView[]>;
   /** Connects a calendar by link. Rejects with a plain-language message if it can't be read. */
   addIcsAccount(name: string, url: string): Promise<AccountView>;

@@ -58,6 +58,9 @@ fn main() {
             "get_autostart",
             "set_autostart",
             "get_unlock_count_today",
+            "get_briefing",
+            "dismiss_up_next",
+            "open_briefing",
         ]),
     ))
     .expect("failed to run tauri-build");
