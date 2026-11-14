@@ -323,6 +323,52 @@ pub async fn remove_account(state: State<'_, AppState>, id: String) -> CmdResult
         .map_err(internal("removing the account"))
 }
 
+/// Adds an event of the user's own. It is stored only on this computer.
+#[tauri::command]
+pub async fn create_event(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    event: daybrief_core::local::EventInput,
+) -> CmdResult<Event> {
+    save_own_event(&app, &state, None, event)
+}
+
+#[tauri::command]
+pub async fn update_event(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    event: daybrief_core::local::EventInput,
+) -> CmdResult<Event> {
+    save_own_event(&app, &state, Some(&id), event)
+}
+
+/// Removes one of the user's own events. Events from connected calendars can never be removed here.
+#[tauri::command]
+pub async fn delete_event(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    {
+        let mut store = lock_store(&state)?;
+        daybrief_core::local::delete(&mut store, &id).map_err(user_input_error)?;
+    }
+    let _ = app.emit("events-changed", ());
+    Ok(())
+}
+
+fn save_own_event(
+    app: &AppHandle,
+    state: &AppState,
+    id: Option<&str>,
+    event: daybrief_core::local::EventInput,
+) -> CmdResult<Event> {
+    let saved = {
+        let mut store = lock_store(state)?;
+        daybrief_core::local::save(&mut store, id, &event, crate::local_tz(), Utc::now())
+            .map_err(user_input_error)?
+    };
+    let _ = app.emit("events-changed", ());
+    Ok(saved)
+}
+
 #[tauri::command]
 pub async fn rename_account(state: State<'_, AppState>, id: String, name: String) -> CmdResult<()> {
     lock_store(&state)?

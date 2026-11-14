@@ -52,9 +52,11 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
-test("keyboard: tab reaches calendar, refresh, then settings, and Enter opens the sheet", async ({ page }) => {
+test("keyboard: tab reaches new event, calendar, refresh, then settings, and Enter opens settings", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "New event" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Calendar" })).toBeFocused();
   await page.keyboard.press("Tab");

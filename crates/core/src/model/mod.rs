@@ -51,6 +51,8 @@ pub enum ProviderKind {
     Caldav,
     Ics,
     System,
+    /// Events the user typed in themselves. Stored only on this computer; never synced anywhere.
+    Local,
 }
 
 impl ProviderKind {
@@ -62,6 +64,7 @@ impl ProviderKind {
             Self::Caldav => "caldav",
             Self::Ics => "ics",
             Self::System => "system",
+            Self::Local => "local",
         }
     }
 
@@ -73,6 +76,7 @@ impl ProviderKind {
             "caldav" => Self::Caldav,
             "ics" => Self::Ics,
             "system" => Self::System,
+            "local" => Self::Local,
             _ => return None,
         })
     }

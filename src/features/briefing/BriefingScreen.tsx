@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, CalendarX, CloudOff, RefreshCw, Settings as SettingsIcon } from "lucide-react";
+import { CalendarDays, CalendarX, CloudOff, Plus, RefreshCw, Settings as SettingsIcon } from "lucide-react";
 import { useNav } from "@/app/nav";
 import { useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
@@ -10,6 +10,7 @@ import { AttentionSection, ClearDay, TodaySection, TomorrowSection, UpNextCard }
 import { useSettings } from "@/features/settings/useSettings";
 import { EventDetail } from "./EventDetail";
 import { ClearWeek } from "./ClearWeek";
+import { EventForm } from "@/features/events/EventForm";
 import { InboxSection } from "./InboxSection";
 import { summarise } from "./summary";
 
@@ -59,6 +60,7 @@ export function BriefingScreen() {
     api.openUrl(url).catch(() => push({ title: "Couldn't open the link", tone: "danger" }));
   };
 
+  const [adding, setAdding] = useState(false);
   const b = briefing.data;
   const dayIsEmpty = !!b && b.all_day_today.length + b.past.length + b.remaining.length + b.tomorrow.timed.length + b.tomorrow.all_day.length === 0;
 
@@ -66,6 +68,11 @@ export function BriefingScreen() {
     <div className="flex h-full flex-col">
       {/* Draggable title-bar strip; the traffic lights sit at the left. */}
       <div data-tauri-drag-region className="flex h-11 shrink-0 items-center justify-end px-3">
+        <Tooltip content="New event">
+          <IconButton label="New event" onClick={() => setAdding(true)}>
+            <Plus className="size-[19px]" />
+          </IconButton>
+        </Tooltip>
         <Tooltip content="Calendar">
           <IconButton label="Calendar" onClick={() => go("calendar")}>
             <CalendarDays className="size-[18px]" />
@@ -124,6 +131,7 @@ export function BriefingScreen() {
         )}
       </main>
 
+      <EventForm open={adding} onOpenChange={setAdding} />
       <EventDetail event={detail} calendars={calendars.data ?? []} onClose={() => setDetail(null)} onJoin={join} />
     </div>
   );

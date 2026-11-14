@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, EventInput, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -24,6 +24,9 @@ function isoDate(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+
+/** Events added in the browser fixture with `createEvent`. */
+const ownEvents: CalEvent[] = [];
 
 export function fixtureEvents(base: Date = new Date()): CalEvent[] {
   const ev = (
@@ -94,6 +97,7 @@ export function fixtureEvents(base: Date = new Date()): CalEvent[] {
     ev("gym", "fixture-personal", "Gym", 3, [7, 0], [8, 0]),
     ev("board", "fixture-work", "Board prep", 4, [14, 0], [16, 30], { join_url: "https://meet.google.com/abc-defg-hij" }),
   ];
+  all.push(...ownEvents);
   // `?quietdays`: nothing today or tomorrow, to test the empty-day screen.
   if (typeof location !== "undefined" && new URLSearchParams(location.search).has("quietdays")) {
     const start = new Date(base.getFullYear(), base.getMonth(), base.getDate());
@@ -175,6 +179,63 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
 
 const listeners = new Set<(s: SyncSummary) => void>();
 const notify = () => listeners.forEach((l) => l({ ok: true, offline: false, needs_attention: false }));
+
+const LOCAL_CAL = "local-events";
+
+/** Mirrors the Rust checks (`daybrief_core::local`) closely enough for the browser tests. */
+function saveFixtureEvent(id: string | null, input: EventInput): CalEvent {
+  const title = input.title.trim();
+  if (!title) throw new Error("Give the event a title.");
+  if (title.length > 200) throw new Error("That title is too long.");
+  const link = (input.join_url ?? "").trim();
+  if (link && !/^https:\/\/[^\s]+$/.test(link)) throw new Error("The meeting link must start with https:// and be a single link.");
+  let when: CalEvent["when"];
+  if (input.all_day) {
+    if (input.end < input.start) throw new Error("The event can't end before it starts.");
+    const end = new Date(`${input.end}T00:00:00`);
+    end.setDate(end.getDate() + 1);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    when = { kind: "all_day", start: input.start, end: `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}` };
+  } else {
+    if (!(new Date(input.end) > new Date(input.start))) throw new Error("The event must end after it starts.");
+    when = { kind: "timed", start: new Date(input.start).toISOString(), end: new Date(input.end).toISOString(), tzid: null };
+  }
+  if (id !== null && !ownEvents.some((e) => e.id === id)) throw new Error("That event can't be changed here.");
+  const key = id ? id.slice(LOCAL_CAL.length + 1) : `own${ownEvents.length + 1}-${Date.now()}`;
+  const event: CalEvent = {
+    id: `${LOCAL_CAL}:${key}`,
+    calendar_id: LOCAL_CAL,
+    remote_id: key,
+    ical_uid: `${key}@firstlight.local`,
+    title,
+    when,
+    location: input.location?.trim() || null,
+    description: input.notes?.trim() || null,
+    join_url: link || null,
+    status: "confirmed",
+    my_response: "none",
+    organizer: null,
+    recurrence_master_id: null,
+    updated_at: new Date().toISOString(),
+    also_in: [],
+  };
+  const at = ownEvents.findIndex((e) => e.id === event.id);
+  if (at >= 0) ownEvents[at] = event;
+  else ownEvents.push(event);
+  if (!accounts.some((a) => a.id === "local-account")) {
+    accounts.push({
+      id: "local-account",
+      provider: "local",
+      display_name: "On this computer",
+      email: null,
+      status: "ok",
+      calendars: [{ id: LOCAL_CAL, account_id: "local-account", remote_id: "events", name: "My events", colour: "purple", visible: true, read_only: false }],
+      last_synced_at: null,
+      last_error: null,
+    });
+  }
+  return event;
+}
 
 const visibleCalendarIds = () =>
   new Set(accounts.flatMap((a) => a.calendars.filter((c) => c.visible).map((c) => c.id)));
@@ -299,6 +360,17 @@ export const fixtureBackend: Backend = {
     settings = { ...settings, email: { ...settings.email, imap: settings.email.imap.filter((m) => m.id !== mailboxId) } };
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
+  },
+  async createEvent(input) {
+    return saveFixtureEvent(null, input);
+  },
+  async updateEvent(id, input) {
+    return saveFixtureEvent(id, input);
+  },
+  async deleteEvent(id) {
+    const i = ownEvents.findIndex((e) => e.id === id);
+    if (i < 0) throw new Error("That event can't be changed here.");
+    ownEvents.splice(i, 1);
   },
   async openMailMessage(target) {
     if (target.kind === "url" && !target.url.startsWith("https://")) throw new Error("Refusing to open that link.");

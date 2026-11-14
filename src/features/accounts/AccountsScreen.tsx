@@ -16,6 +16,7 @@ const PROVIDER_LABEL: Record<AccountView["provider"], string> = {
   caldav: "CalDAV",
   ics: "Calendar link",
   system: "This computer",
+  local: "Your own events",
 };
 
 function CalendarRow({ cal, onChanged }: { cal: CalendarInfo; onChanged: () => void }) {

@@ -16,6 +16,7 @@ mod fuzz;
 pub mod http;
 pub mod ics;
 pub mod join;
+pub mod local;
 pub mod mail;
 pub mod model;
 pub mod oauth;

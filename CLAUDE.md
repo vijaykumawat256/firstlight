@@ -108,3 +108,8 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 ## Sizes
 - The real app window is narrow by design (about 420 wide) and resizable; the e2e viewport is 420x680 for that reason. Below 640px the month shows coloured dots instead of titles; the screens' content is capped at `max-w-2xl` and centred so a big laptop screen does not stretch rows. Tested for no sideways scroll at 390 and 1440.
 - This is still a desktop app. A phone version means the Phase 7 web build; nothing native for phones is planned.
+
+## Your own events
+- Decision (user, 2026-11-14): the app lets the user add events of their own, stored **only on this computer** (`crates/core/src/local.rs`, provider kind `local`, account "On this computer", calendar `local-events`). It writes nothing to Google, Microsoft or any provider: the "read-only by default" rule in PLAN.md still holds for connected calendars. Writing to a provider would need new scopes and a fresh decision.
+- Events go straight into the `events` table (`provider_for(Local)` is `None`, so sync skips the account). Only ids prefixed `local-events:` can be edited or deleted; everything is validated in Rust (`build_event`). Removing the account deletes them; Erase all data removes them.
+- UI: `features/events/EventForm.tsx` (mounted only while open), "New event" in the briefing and calendar headers, Edit/Delete in `EventDetail` for own events. No repeating events, attendees or reminders yet. The user said "no files": attaching files was declined.

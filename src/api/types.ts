@@ -36,7 +36,18 @@ export interface CalendarInfo {
   read_only: boolean;
 }
 
-export type ProviderKind = "fixture" | "google" | "microsoft" | "caldav" | "ics" | "system";
+export type ProviderKind = "fixture" | "google" | "microsoft" | "caldav" | "ics" | "system" | "local";
+
+/** An event the user adds themselves. All-day dates are YYYY-MM-DD with `end` the last day (inclusive); timed events use ISO instants. */
+export interface EventInput {
+  title: string;
+  all_day: boolean;
+  start: string;
+  end: string;
+  location: string | null;
+  join_url: string | null;
+  notes: string | null;
+}
 export type AccountStatus = "ok" | "needs_attention";
 
 export interface AccountView {

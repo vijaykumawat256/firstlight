@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, ImapPreset, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, EventInput, ImapPreset, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -14,6 +14,10 @@ export interface Backend {
   enableAppleMail(): Promise<AppSettings>;
   /** Asks Google/Microsoft for permission to read this account's mail, then turns it on. */
   enableAccountMail(accountId: string): Promise<AppSettings>;
+  /** Add, change or remove an event of your own (stored only on this computer). */
+  createEvent(input: EventInput): Promise<CalEvent>;
+  updateEvent(id: string, input: EventInput): Promise<CalEvent>;
+  deleteEvent(id: string): Promise<void>;
   addImapMailbox(preset: ImapPreset, address: string, password: string): Promise<AppSettings>;
   removeImapMailbox(mailboxId: string): Promise<AppSettings>;
   openMailMessage(target: OpenTarget): Promise<void>;

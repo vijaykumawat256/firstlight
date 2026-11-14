@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
 import { useNav } from "@/app/nav";
 import { Button, IconButton, Segmented, Skeleton, useToasts } from "@/design";
 import { EventDetail } from "@/features/briefing/EventDetail";
+import { EventForm } from "@/features/events/EventForm";
 import { useNow } from "@/features/briefing/hooks";
 import { MonthGrid, monthWeeks } from "./MonthGrid";
 import { TimeGrid } from "./TimeGrid";
@@ -24,6 +25,7 @@ export function CalendarScreen() {
   const [mode, setMode] = useState<Mode>(() => useNav.getState().calendarMode);
   const [anchor, setAnchor] = useState(() => startOfLocalDay(new Date()));
   const [detail, setDetail] = useState<CalEvent | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const days = useMemo(() => {
     if (mode === "month") {
@@ -61,6 +63,9 @@ export function CalendarScreen() {
           {title}
         </h1>
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="secondary" leading={<Plus className="size-4" aria-hidden />} onClick={() => setAdding(true)}>
+            New event
+          </Button>
           <Segmented
             label="View"
             value={mode}
@@ -107,6 +112,7 @@ export function CalendarScreen() {
       ) : (
         <TimeGrid days={days} events={events.data} now={now} colourOf={(id) => colours.get(id) ?? "blue"} onOpen={setDetail} />
       )}
+      <EventForm open={adding} onOpenChange={setAdding} day={mode === "month" ? undefined : from} />
       <EventDetail event={detail} calendars={calendars.data ?? []} onClose={() => setDetail(null)} onJoin={join} />
     </div>
   );

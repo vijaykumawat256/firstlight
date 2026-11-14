@@ -90,6 +90,8 @@ pub fn provider_for(kind: ProviderKind, deps: &Deps) -> Option<Box<dyn Provider>
                 cfg,
             )) as Box<dyn Provider>
         }),
+        // Events the user typed in live in the database already; there is nothing to fetch.
+        ProviderKind::Local => None,
         ProviderKind::System => Some(Box::new(SystemProvider::new(
             deps.system.clone(),
             deps.tz(),
