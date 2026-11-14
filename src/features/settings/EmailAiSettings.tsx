@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useState } from "react";
-import { api, errorMessage, type AiProvider, type AppSettings } from "@/api";
+import { api, errorMessage, type AiProvider, type AppSettings, type ImapPreset } from "@/api";
 import { Button, Dialog, Segmented, Switch, TextField, useToasts } from "@/design";
 import { Group, NumberSelect, SettingRow } from "./controls";
 import { useSettings } from "./useSettings";
@@ -23,6 +23,7 @@ export function EmailGroup() {
   const push = useToasts((t) => t.push);
   const put = useSettingsCache();
   const [sender, setSender] = useState("");
+  const [addMailbox, setAddMailbox] = useState(false);
 
   const accounts = useQuery({ queryKey: ["accounts"], queryFn: () => api.listAccounts() });
   const system = useQuery({ queryKey: ["system-status"], queryFn: () => api.systemCalendarStatus() });
@@ -35,9 +36,15 @@ export function EmailGroup() {
     onError: (e) => push({ title: "Couldn't allow mail access", description: errorMessage(e), tone: "danger" }),
   });
 
+  const removeMailbox = useMutation({
+    mutationFn: (id: string) => api.removeImapMailbox(id),
+    onSuccess: put,
+    onError: (err) => push({ title: "Couldn't remove the mailbox", description: errorMessage(err), tone: "danger" }),
+  });
+
   if (!s) return null;
   const e = s.email;
-  const nothingChosen = e.enabled && !e.apple_mail && e.account_ids.length === 0;
+  const nothingChosen = e.enabled && !e.apple_mail && e.account_ids.length === 0 && e.imap.length === 0;
   const addSender = () => {
     const v = sender.trim();
     if (!v) return;
@@ -82,6 +89,19 @@ export function EmailGroup() {
             );
           })}
 
+          {e.imap.map((m) => (
+            <SettingRow key={m.id} title={m.preset === "yahoo" ? "Yahoo Mail" : "iCloud Mail"} description={`${m.address} · reading unread mail.`}>
+              <Button size="sm" variant="danger" disabled={removeMailbox.isPending} aria-label={`Remove ${m.address}`} onClick={() => removeMailbox.mutate(m.id)}>
+                Remove
+              </Button>
+            </SettingRow>
+          ))}
+          <SettingRow title="Yahoo or iCloud mail" description="Sign in with an app-specific password. Daybrief only looks; it never changes your mail.">
+            <Button size="sm" variant="secondary" disabled={e.imap.length >= 4} onClick={() => setAddMailbox(true)}>
+              Add mailbox…
+            </Button>
+          </SettingRow>
+
           <SettingRow title="Important senders" description="Their mail is always shown. Use an address, @company.com, or a name. People who organise today's meetings count too." stack>
             <div className="flex w-full flex-col gap-2">
               {e.important_senders.length > 0 && (
@@ -118,7 +138,77 @@ export function EmailGroup() {
           </SettingRow>
         </>
       )}
+      <ImapDialog open={addMailbox} onOpenChange={setAddMailbox} onDone={put} />
     </Group>
+  );
+}
+
+const IMAP_HELP: Record<ImapPreset, string> = {
+  yahoo: "In Yahoo: Account info, then Account security, then Generate app password.",
+  icloud: "At account.apple.com: Sign-In and Security, then App-Specific Passwords.",
+};
+
+function ImapDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: (s: AppSettings) => void }) {
+  const [preset, setPreset] = useState<ImapPreset>("yahoo");
+  const [address, setAddress] = useState("");
+  const [password, setPassword] = useState("");
+  const add = useMutation({
+    mutationFn: () => api.addImapMailbox(preset, address.trim(), password),
+    onSuccess: (saved) => {
+      onDone(saved);
+      setPassword("");
+      setAddress("");
+      onOpenChange(false);
+    },
+  });
+  const ready = address.includes("@") && password.trim().length > 0;
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) {
+          add.reset();
+          setPassword("");
+        }
+      }}
+      title="Add a mailbox"
+      description="Yahoo and iCloud need an app-specific password, not your normal one."
+      footer={
+        <>
+          <Button onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="primary" disabled={add.isPending || !ready} onClick={() => add.mutate()}>
+            {add.isPending ? "Checking…" : "Connect"}
+          </Button>
+        </>
+      }
+    >
+      <form
+        className="flex flex-col gap-4 pb-2"
+        onSubmit={(ev) => {
+          ev.preventDefault();
+          if (ready && !add.isPending) add.mutate();
+        }}
+      >
+        <Segmented
+          label="Mail provider"
+          value={preset}
+          onValueChange={(v) => setPreset(v as ImapPreset)}
+          options={[
+            { value: "yahoo", label: "Yahoo Mail" },
+            { value: "icloud", label: "iCloud Mail" },
+          ]}
+        />
+        {add.isError && (
+          <p role="alert" className="rounded-card bg-danger-soft px-3 py-2 text-body text-danger">
+            {errorMessage(add.error)}
+          </p>
+        )}
+        <TextField label="Email address" type="email" value={address} onChange={(ev) => setAddress(ev.target.value)} placeholder={preset === "yahoo" ? "you@yahoo.com" : "you@icloud.com"} autoComplete="off" spellCheck={false} maxLength={254} />
+        <TextField label="App-specific password" type="password" value={password} onChange={(ev) => setPassword(ev.target.value)} hint={`${IMAP_HELP[preset]} Stored in the system keychain and sent only to ${preset === "yahoo" ? "Yahoo" : "Apple"}.`} autoComplete="off" spellCheck={false} />
+        <button type="submit" hidden />
+      </form>
+    </Dialog>
   );
 }
 

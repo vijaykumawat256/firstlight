@@ -723,7 +723,10 @@ pub async fn get_settings(state: State<'_, AppState>) -> CmdResult<AppSettings> 
 fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdResult<AppSettings> {
     s.validate()?;
     // Consent to send data to an AI service is recorded only by the explicit enable action, never by a save.
-    s.ai.consented = lock_store(state)?.load_settings().ai.consented;
+    let stored = lock_store(state)?.load_settings();
+    s.ai.consented = stored.ai.consented;
+    // Mailboxes change only through add/remove, which keep their keychain passwords in step.
+    s.email.imap = stored.email.imap;
     s.sanitize();
     // Try the shortcut first: if the system refuses it, nothing is saved and the user is told why.
     crate::apply_shortcut(app, s.general.global_shortcut.as_deref())?;

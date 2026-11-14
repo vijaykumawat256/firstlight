@@ -16,12 +16,17 @@ pub struct EraseReport {
 /// leaving secrets behind with nothing pointing at them.
 pub fn erase_everything(store: &Store, secrets: &dyn SecretStore) -> Result<EraseReport> {
     let accounts = store.list_accounts()?;
-    let mut credentials = 0;
+    let mut credentials = 0usize;
     for a in &accounts {
         if let Some(r) = &a.secret_ref {
             secrets.delete(r)?;
             credentials += 1;
         }
+    }
+    // Email-only mailboxes (Yahoo, iCloud) have no account row; their passwords are named in the settings.
+    for m in &store.load_settings().email.imap {
+        secrets.delete(&crate::mail::imap::secret_key(&m.id))?;
+        credentials += 1;
     }
     store.erase_all()?;
     Ok(EraseReport {
@@ -111,5 +116,25 @@ mod tests {
             1,
             "the account must survive so credentials aren't orphaned"
         );
+    }
+
+    #[test]
+    fn removes_email_only_mailbox_passwords() {
+        let secrets = MemorySecretStore::default();
+        let key = load_or_create_db_key(&secrets).unwrap();
+        let store = Store::open_in_memory(&key).unwrap();
+        let mut settings = crate::settings::AppSettings::default();
+        settings.email.imap.push(crate::mail::imap::ImapMailbox {
+            id: "m1".into(),
+            preset: crate::mail::imap::ImapPreset::Icloud,
+            address: "me@icloud.com".into(),
+        });
+        store.save_settings(&settings).unwrap();
+        secrets.set("imap-mail:m1", "APP-PASSWORD").unwrap();
+
+        let report = erase_everything(&store, &secrets).unwrap();
+        assert_eq!(report.credentials, 1);
+        assert_eq!(secrets.get("imap-mail:m1").unwrap(), None);
+        assert!(store.load_settings().email.imap.is_empty());
     }
 }

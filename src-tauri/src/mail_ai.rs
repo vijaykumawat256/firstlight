@@ -13,6 +13,7 @@ use daybrief_core::briefing::{Briefing, build, day_bounds};
 use daybrief_core::dedupe::dedupe;
 use daybrief_core::mail::applemail::{self, Outcome};
 use daybrief_core::mail::gmail::GmailSource;
+use daybrief_core::mail::imap::{self, ImapMailbox, ImapPreset, ImapSource, TlsConnect};
 use daybrief_core::mail::microsoft::MicrosoftMailSource;
 use daybrief_core::mail::{MailDigest, OpenTarget, SourceBatch, build_digest, gmail, microsoft};
 use daybrief_core::model::{Account, ProviderKind};
@@ -23,7 +24,7 @@ use daybrief_core::{Error, oauth};
 use serde::Serialize;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::time::{Duration as StdDuration, Instant};
 use tauri::{AppHandle, Emitter, State};
 
@@ -232,6 +233,19 @@ fn collect(
         }
     }
 
+    if !settings.email.imap.is_empty() {
+        let source = ImapSource::new(Arc::new(TlsConnect), state_deps.secrets.clone());
+        for mailbox in &settings.email.imap {
+            match source.fetch(mailbox, days, 15, now) {
+                Ok(b) => batches.push(b),
+                Err(e) => problems.push(MailProblem {
+                    source: mailbox.preset.label().into(),
+                    kind: problem_kind(&e),
+                }),
+            }
+        }
+    }
+
     let digest = (!batches.is_empty()).then(|| {
         build_digest(
             &batches,
@@ -398,8 +412,104 @@ pub async fn enable_account_mail(
     })
 }
 
+/// Connects a Yahoo or iCloud mailbox with an app-specific password. The login is tested first; the
+/// password goes to the keychain and is never returned to the page or written to settings.
+#[tauri::command]
+pub async fn add_imap_mailbox(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    preset: String,
+    address: String,
+    password: String,
+) -> CmdResult<AppSettings> {
+    let preset = ImapPreset::parse(&preset).ok_or("Choose Yahoo Mail or iCloud Mail.")?;
+    let address = address.trim().to_string();
+    let password: String = password.split_whitespace().collect(); // app passwords are shown in groups
+    if !imap::valid_address(&address) || !address.contains('@') {
+        return Err("Enter your full email address.".into());
+    }
+    if password.is_empty()
+        || password.len() > 256
+        || !password.bytes().all(|b| (0x21..0x7f).contains(&b))
+    {
+        return Err("Enter the app-specific password (not your normal password).".into());
+    }
+
+    let secrets = state.deps.secrets.clone();
+    let (check_addr, check_pw) = (address.clone(), password.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        ImapSource::new(Arc::new(TlsConnect), secrets).check_login(preset, &check_addr, &check_pw)
+    })
+    .await
+    .map_err(|_| "mail failed".to_string())?
+    .map_err(|e| match e {
+        Error::AuthRevoked => format!(
+            "{} didn't accept that. Use an app-specific password, and make sure IMAP access is allowed for the account.",
+            preset.label()
+        ),
+        Error::Offline => "Couldn't reach the mail server. Check your connection and try again.".into(),
+        _ => format!("Couldn't sign in to {}.", preset.label()),
+    })?;
+
+    // Same address again just replaces the password.
+    let existing = lock_store(&state)?
+        .load_settings()
+        .email
+        .imap
+        .into_iter()
+        .find(|m| m.preset == preset && m.address.eq_ignore_ascii_case(&address));
+    if existing.is_none()
+        && lock_store(&state)?.load_settings().email.imap.len() >= imap::MAX_MAILBOXES
+    {
+        return Err("That's the most mailboxes Daybrief can read. Remove one first.".into());
+    }
+    let id = existing
+        .as_ref()
+        .map_or_else(daybrief_core::model::new_id, |m| m.id.clone());
+    let key = imap::secret_key(&id);
+    state
+        .deps
+        .secrets
+        .set(&key, &password)
+        .map_err(internal("saving the password"))?;
+    let saved = save_settings(&app, &state, |s| {
+        if existing.is_none() {
+            s.email.imap.push(ImapMailbox {
+                id: id.clone(),
+                preset,
+                address: address.clone(),
+            });
+        }
+        s.email.enabled = true;
+    });
+    if saved.is_err() && existing.is_none() {
+        let _ = state.deps.secrets.delete(&key); // nothing points at it
+    }
+    saved
+}
+
+/// Disconnects a Yahoo or iCloud mailbox. The password is removed first; if the keychain refuses,
+/// the mailbox stays so the user can try again.
+#[tauri::command]
+pub async fn remove_imap_mailbox(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    mailbox_id: String,
+) -> CmdResult<AppSettings> {
+    state
+        .deps
+        .secrets
+        .delete(&imap::secret_key(&mailbox_id))
+        .map_err(internal("removing the password"))?;
+    save_settings(&app, &state, |s| {
+        s.email.imap.retain(|m| m.id != mailbox_id)
+    })
+}
+
 /// Hosts that may be opened for a message link.
-const MAIL_HOSTS: [&str; 5] = [
+const MAIL_HOSTS: [&str; 7] = [
+    "mail.yahoo.com",
+    "www.icloud.com",
     "mail.google.com",
     "outlook.office.com",
     "outlook.office365.com",

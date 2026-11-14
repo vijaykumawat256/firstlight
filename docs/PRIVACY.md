@@ -22,7 +22,7 @@ Your connection to each calendar: calendar links, app passwords, and sign-in per
 Daybrief connects only to services you set up:
 
 - **Your calendar providers** (Google, Microsoft, iCloud, Yahoo, or any calendar server or link you add) to read your events. Daybrief only reads; it never changes, creates or deletes events.
-- **Your mail provider**, only if you turn email on. Daybrief reads the sender, subject and a short preview of recent unread messages. It never stores whole messages, never loads images or links in them, and never changes, moves or sends mail. The Mail app on a Mac is read through macOS itself.
+- **Your mail provider**, only if you turn email on. Daybrief reads the sender, subject and a short preview of recent unread messages. It never stores whole messages, never loads images or links in them, and never changes, moves or sends mail. The Mail app on a Mac is read through macOS itself. For Yahoo and iCloud, Daybrief connects directly to Yahoo's or Apple's mail server over an encrypted connection using an app-specific password that you create; the password is kept in your system keychain. For those it reads only the sender, subject and date (no preview) and never marks anything as read.
 - **Anthropic**, only if you turn on AI summaries with your own key. See below.
 - **The update server**, to learn whether a newer Daybrief exists. This sends only the app's version and your operating system, about once a day, and you can turn it off in Settings.
 

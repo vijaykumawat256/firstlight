@@ -41,6 +41,7 @@ Status: Phase 1. Update this file whenever a phase changes what we store, send o
 | AI is off by default; with it off nothing is built or sent (tested). Consent is per provider, recorded only by the explicit enable action, and cannot come from an imported file or a settings save | `crates/core/src/ai`, `settings` |
 | The AI prompt contains only titles, times, places, counts and (optionally) sender names and subjects; never join links, descriptions, attendees, organisers, snippets or addresses. The user sees this exact text before agreeing | `ai::build_prompt` (tested) |
 | AI keys live in the keychain, are never returned to the page, and never appear in errors or request bodies; local models are reachable only on loopback (including redirects) | `mail_ai.rs`, `http.rs` (tested) |
+| Yahoo/iCloud IMAP is read-only by construction: fixed server presets (an enum, so no file or page can name another host), TLS from the first byte with the OS certificate verifier, `EXAMINE` and `BODY.PEEK` only, headers only (no bodies), credentials limited to printable ASCII so no command can be injected, every server length capped, app password only in the keychain and removed with the mailbox or on erase | `mail/imap` (tested against a scripted server, hostile replies, fuzz) |
 | A failed first sync rolls back: no half-connected account or stray credential is left | `commands.rs` `connect` |
 
 ## Known gaps and decisions

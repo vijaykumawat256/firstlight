@@ -52,6 +52,8 @@ test("adding a calendar link validates, explains failures, and connects", async 
 });
 
 test("accounts screen: hide a calendar, rename, remove", async ({ page }) => {
+  // The sample day is fixed-hour; pin the clock so "Team standup" is always on now, whatever time this runs.
+  await page.clock.install({ time: new Date(new Date().setHours(9, 5, 0, 0)) });
   await page.goto("/");
   await expect(page.getByLabel("Up next")).toBeVisible();
 

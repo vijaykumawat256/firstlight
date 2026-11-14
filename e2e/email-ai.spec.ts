@@ -217,3 +217,40 @@ test("removing the key withdraws consent and turns AI off", async ({ page }) => 
   await expect(page.getByRole("switch", { name: "AI summaries" })).toHaveAttribute("aria-checked", "false");
   await expect(page.getByText("Key removed")).toBeVisible();
 });
+
+// ---------------------------------------------------------------------------------- Yahoo / iCloud (IMAP)
+
+test("add and remove a Yahoo mailbox; the password never reaches the settings", async ({ page }) => {
+  await openSettings(page, "?mailon");
+  const email = page.getByRole("region", { name: "Email", exact: true });
+  await email.getByRole("button", { name: "Add mailbox…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a mailbox" });
+  await expect(dialog.getByRole("button", { name: "Connect" })).toBeDisabled();
+
+  await dialog.getByLabel("Email address").fill("sam@yahoo.com");
+  await dialog.getByLabel("App-specific password").fill("abcd efgh ijkl mnop");
+  await expect(dialog.getByLabel("App-specific password")).toHaveAttribute("type", "password");
+  await dialog.getByRole("button", { name: "Connect" }).click();
+
+  await expect(dialog).toHaveCount(0);
+  await expect(email.getByText("sam@yahoo.com · reading unread mail.")).toBeVisible();
+  const stored = await page.evaluate(() => JSON.stringify(window.localStorage) + JSON.stringify(window.sessionStorage));
+  expect(stored).not.toContain("abcd");
+
+  await email.getByRole("button", { name: "Remove sam@yahoo.com" }).click();
+  await expect(email.getByText("sam@yahoo.com · reading unread mail.")).toHaveCount(0);
+});
+
+test("iCloud shows its own password instructions, and a refused login explains itself", async ({ page }) => {
+  await openSettings(page, "?mailon&imapbad");
+  const email = page.getByRole("region", { name: "Email", exact: true });
+  await email.getByRole("button", { name: "Add mailbox…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a mailbox" });
+  await dialog.getByRole("radio", { name: "iCloud Mail" }).click();
+  await expect(dialog.getByText(/account\.apple\.com/)).toBeVisible();
+  await dialog.getByLabel("Email address").fill("sam@icloud.com");
+  await dialog.getByLabel("App-specific password").fill("wxyz-wxyz-wxyz-wxyz");
+  await dialog.getByRole("button", { name: "Connect" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("iCloud Mail didn't accept that");
+  await expect(email.getByText("sam@icloud.com")).toHaveCount(0);
+});

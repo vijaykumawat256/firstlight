@@ -10,6 +10,7 @@
 use crate::briefing::BriefingSettings;
 use crate::briefing::notify::NotifySettings;
 use crate::briefing::rules::UnlockRules;
+use crate::mail::imap::{ImapMailbox, MAX_MAILBOXES};
 use crate::model::CALENDAR_COLOURS;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
@@ -149,6 +150,9 @@ pub struct EmailSettings {
     pub apple_mail: bool,
     /// Connected Google/Microsoft accounts the user has allowed mail access for.
     pub account_ids: Vec<String>,
+    /// Yahoo and iCloud mailboxes (IMAP). Only added or removed by their own commands, which keep the
+    /// app password in the keychain in step; never exported, imported or changed by a plain save.
+    pub imap: Vec<ImapMailbox>,
     /// Addresses, `@domain`s, domains or names whose mail always shows.
     pub important_senders: Vec<String>,
     pub days_back: i64,
@@ -160,6 +164,7 @@ impl Default for EmailSettings {
             enabled: false,
             apple_mail: false,
             account_ids: vec![],
+            imap: vec![],
             important_senders: vec![],
             days_back: 3,
         }
@@ -420,6 +425,13 @@ impl AppSettings {
             .take(20)
             .collect();
 
+        let mut mailbox_ids = std::collections::HashSet::new();
+        e.imap = std::mem::take(&mut e.imap)
+            .into_iter()
+            .filter(|m| m.is_valid() && mailbox_ids.insert(m.id.clone()))
+            .take(MAX_MAILBOXES)
+            .collect();
+
         let ai = &mut self.ai;
         ai.model = ai.model.trim().to_string();
         let model_ok = !ai.model.is_empty()
@@ -478,8 +490,11 @@ impl AppSettings {
 
     /// A portable copy: no secrets, no accounts, safe to share or keep.
     pub fn export(&self) -> String {
+        // Mailbox addresses are personal and their passwords stay behind in the keychain.
+        let mut portable = self.clone();
+        portable.email.imap.clear();
         serde_json::to_string_pretty(
-            &json!({ "format": EXPORT_FORMAT, "version": CURRENT_VERSION, "settings": self }),
+            &json!({ "format": EXPORT_FORMAT, "version": CURRENT_VERSION, "settings": portable }),
         )
         .expect("settings serialise")
     }
@@ -500,6 +515,8 @@ impl AppSettings {
         // Agreement to send data to an AI service must be given on this computer, never inherited from a file.
         imported.ai.consented = None;
         imported.ai.enabled = false;
+        // Passwords are not in the file, so a mailbox from it could never sign in.
+        imported.email.imap.clear();
         imported.sanitize();
         Ok(imported)
     }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-add-imap-mailbox"
+description = "Enables the add_imap_mailbox command without any pre-configured scope."
+commands.allow = ["add_imap_mailbox"]
+
+[[permission]]
+identifier = "deny-add-imap-mailbox"
+description = "Denies the add_imap_mailbox command without any pre-configured scope."
+commands.deny = ["add_imap_mailbox"]

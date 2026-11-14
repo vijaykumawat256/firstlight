@@ -369,6 +369,8 @@ pub fn run() {
             mail_ai::get_mail_digest,
             mail_ai::enable_apple_mail,
             mail_ai::enable_account_mail,
+            mail_ai::add_imap_mailbox,
+            mail_ai::remove_imap_mailbox,
             mail_ai::open_mail_message,
             mail_ai::ai_status,
             mail_ai::ai_preview,

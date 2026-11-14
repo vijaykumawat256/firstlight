@@ -155,7 +155,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, time_24h: false, hide_titles: false },
   appearance: { theme: "system", accent: "system" },
-  email: { enabled: false, apple_mail: false, account_ids: [], important_senders: [], days_back: 3 },
+  email: { enabled: false, apple_mail: false, account_ids: [], imap: [], important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", include_email: false, consented: null },
   privacy: { crash_reports: false },
 };
@@ -273,6 +273,24 @@ export const fixtureBackend: Backend = {
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
   },
+  async addImapMailbox(preset, address, password) {
+    await sleep(400);
+    if (!address.includes("@")) throw new Error("Enter your full email address.");
+    if (!password.trim()) throw new Error("Enter the app-specific password (not your normal password).");
+    const label = preset === "yahoo" ? "Yahoo Mail" : "iCloud Mail";
+    if (params.has("imapbad")) throw new Error(`${label} didn't accept that. Use an app-specific password, and make sure IMAP access is allowed for the account.`);
+    (window as unknown as Record<string, unknown>).__imapPasswordsSent = ((window as unknown as Record<string, number>).__imapPasswordsSent ?? 0) + 1;
+    const existing = settings.email.imap.find((m) => m.preset === preset && m.address.toLowerCase() === address.trim().toLowerCase());
+    const imap = existing ? settings.email.imap : [...settings.email.imap, { id: `imap-${settings.email.imap.length + 1}`, preset, address: address.trim() }];
+    settings = { ...settings, email: { ...settings.email, enabled: true, imap } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async removeImapMailbox(mailboxId) {
+    settings = { ...settings, email: { ...settings.email, imap: settings.email.imap.filter((m) => m.id !== mailboxId) } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
   async openMailMessage(target) {
     if (target.kind === "url" && !target.url.startsWith("https://")) throw new Error("Refusing to open that link.");
   },
@@ -356,6 +374,7 @@ export const fixtureBackend: Backend = {
     if (sc && !/^((cmd|ctrl|alt|shift|cmdorctrl)\+)+[a-z0-9]$/i.test(sc)) throw new Error("That shortcut isn't valid. Use at least one modifier key (such as Cmd or Ctrl) plus a letter, number or function key.");
     if (sc === "Cmd+Q") throw new Error("That shortcut couldn't be used. Another app may already own it.");
     const fixed = structuredClone(next);
+    fixed.email.imap = settings.email.imap; // mailboxes change only through add/remove
     fixed.ai.consented = settings.ai.consented; // consent is only ever given by the enable action
     if (fixed.ai.consented !== fixed.ai.provider) fixed.ai.enabled = false;
     fixed.general.sync_interval_minutes = clamp(fixed.general.sync_interval_minutes, 1, 1440);

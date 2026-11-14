@@ -77,6 +77,19 @@ for (const scheme of ["light", "dark"] as const) {
       await scan(page, "erase confirmation");
     });
 
+    test("the add-mailbox dialog, with an error showing", async ({ page }) => {
+      await page.goto("/?mailon&imapbad");
+      await page.getByRole("button", { name: "Settings" }).click();
+      await page.getByRole("button", { name: "Add mailbox…" }).click();
+      const dialog = page.getByRole("dialog", { name: "Add a mailbox" });
+      await scan(page, "add mailbox");
+      await dialog.getByLabel("Email address").fill("sam@yahoo.com");
+      await dialog.getByLabel("App-specific password").fill("abcd");
+      await dialog.getByRole("button", { name: "Connect" }).click();
+      await expect(dialog.getByRole("alert")).toBeVisible();
+      await scan(page, "add mailbox with error");
+    });
+
     test("the up-next panel", async ({ page }) => {
       await page.setViewportSize({ width: 360, height: 148 });
       await page.clock.install({ time: at(9, 30) });

@@ -5,7 +5,7 @@ The full brief is `PLAN.md`; read it first. This file records what is true *now*
 ## Status
 Phases 1-5 built; Phase 6 built as far as it can be without the user's accounts (see `docs/RELEASE.md`: signing, notarisation, Windows run, live update test, external review remain). Phase 7 needs an approved design doc first. Do not build ahead.
 Phase 5 delivered: email digest (`crates/core/src/mail`: Apple Mail via AppleScript, Gmail, Microsoft Graph), optional AI summaries (`crates/core/src/ai`: Anthropic with the user's key, or a local model), shell glue in `src-tauri/src/mail_ai.rs`, Inbox section in the briefing, Email and AI settings with a consent dialog that shows the exact text sent.
-Phase 5 gaps: IMAP (Yahoo/iCloud/other mail) is NOT built; "people in today's meetings" is approximated by meeting organiser names only (attendees are not stored); Gmail and Graph mail never ran against the live services; the Apple Mail AppleScript compiles against Mail's dictionary but has not been run (it needs the user's Automation permission).
+Phase 5 gaps: IMAP is built for Yahoo and iCloud only (`mail/imap`; other providers are deliberately not offered), but never run with a real login; "people in today's meetings" is approximated by meeting organiser names only (attendees are not stored); Gmail and Graph mail never ran against the live services; the Apple Mail AppleScript compiles against Mail's dictionary but has not been run (it needs the user's Automation permission).
 Phase 4 delivered: one typed, versioned settings document (`crates/core/src/settings`), tolerant per-field loading + migration from the old scattered keys, Settings screen with all seven sections, live apply (theme, accent, clock, week start, default view, shortcut, sync interval, notifications, unlock rules), export/import, "Erase all data".
 Phase 3 delivered: briefing engine, unlock rules, notifications, `get_briefing`, event detail, compact up-next window, day/week views.
 Known gaps: full-screen-app detection (rule exists, detection stubbed, so no setting is shown for it); notification click does not open the app; the macOS system accent colour is not read (accent is Default or a palette colour).
@@ -80,3 +80,11 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Screens are lazy-loaded; e2e must wait for the region/heading before asserting.
 - Crash reports are local, opt-in, content-free (`crash.rs`, `crash_reports.rs`). Licences page data: `npm run licences`.
 - Measured (release, hidden): idle RSS about 100 MB, CPU 0%.
+
+## IMAP notes (Yahoo, iCloud)
+- `crates/core/src/mail/imap`: own small client (no IMAP crate): `wire.rs` (bounded reader/tokenizer), `mime.rs` (header decoding), `mod.rs` (presets, session, `TlsConnect`). Tests use a scripted loopback server; `cargo test -p daybrief-core live_imap -- --ignored --nocapture` checks TLS + greeting against the real servers (no login; verified working).
+- Servers are the `ImapPreset` enum, port 993 only. Never accept a host from settings or the page. New provider = new enum variant + review.
+- Read-only rules: `EXAMINE`, `BODY.PEEK`, headers only. A test forbids write verbs and body fetches in the commands sent; keep it passing.
+- Mailboxes live in `settings.email.imap` (no secret); the app password is keychain key `imap-mail:{id}`. They change only via `add_imap_mailbox`/`remove_imap_mailbox`; `apply_and_save` preserves the stored list, export omits it, import clears it, erase deletes the passwords.
+- No snippet and no calendar attachment for IMAP: invitations are detected from the subject and top-level Content-Type only, so they show without details.
+- Not verified: an actual LOGIN/FETCH against Yahoo or iCloud (needs the user's app password). Yahoo wants an `ID` command before login; we send it when advertised (it is). Apple's IMAP username may need the Apple ID rather than an @icloud.com alias.

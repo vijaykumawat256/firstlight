@@ -429,3 +429,51 @@ fn updates_are_checked_by_default_on_the_stable_channel_and_crash_reports_are_of
         "unknown channel falls back"
     );
 }
+
+fn mailbox(id: &str, address: &str) -> crate::mail::imap::ImapMailbox {
+    crate::mail::imap::ImapMailbox {
+        id: id.into(),
+        preset: crate::mail::imap::ImapPreset::Yahoo,
+        address: address.into(),
+    }
+}
+
+#[test]
+fn imap_mailboxes_are_cleaned_and_never_travel_in_files() {
+    let mut s = AppSettings::default();
+    s.email.imap = vec![
+        mailbox("a1", "me@yahoo.com"),
+        mailbox("a1", "dup@yahoo.com"),
+        mailbox("bad id", "x@y.com"),
+        mailbox("b2", "has space@y.com"),
+        mailbox("c3", "ok@icloud.com"),
+        mailbox("d4", "d@y.com"),
+        mailbox("e5", "e@y.com"),
+        mailbox("f6", "f@y.com"),
+    ];
+    s.sanitize();
+    let ids: Vec<_> = s.email.imap.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["a1", "c3", "d4", "e5"],
+        "invalid and duplicate dropped, capped at four"
+    );
+
+    assert!(
+        !s.export().contains("yahoo.com"),
+        "addresses stay out of exports"
+    );
+    let back = AppSettings::import(&s.export()).unwrap();
+    assert!(back.email.imap.is_empty());
+    let hostile = r#"{"format":"daybrief-settings","settings":{"email":{"imap":[{"id":"z9","preset":"yahoo","address":"a@b.c"}]}}}"#;
+    assert!(AppSettings::import(hostile).unwrap().email.imap.is_empty());
+}
+
+#[test]
+fn a_bad_preset_cannot_name_another_server_and_costs_nothing_else() {
+    let s = parse(
+        r#"{"email":{"days_back":5,"imap":[{"id":"a1","preset":"imap.evil.example","address":"a@b.c"}]}}"#,
+    );
+    assert!(s.email.imap.is_empty());
+    assert_eq!(s.email.days_back, 5);
+}

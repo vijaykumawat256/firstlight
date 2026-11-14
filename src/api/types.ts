@@ -98,6 +98,14 @@ export interface Briefing {
   tomorrow: { timed: BriefingItem[]; all_day: CalEvent[]; early_start: boolean };
 }
 
+/** A Yahoo or iCloud mailbox (IMAP). Its app password stays in the keychain, so it is not here. */
+export type ImapPreset = "yahoo" | "icloud";
+export interface ImapMailbox {
+  id: string;
+  preset: ImapPreset;
+  address: string;
+}
+
 /** Mirrors `daybrief_core::settings::AppSettings`. */
 export type DefaultView = "briefing" | "day" | "week";
 export type WeekStart = "auto" | "monday" | "sunday" | "saturday";
@@ -129,7 +137,7 @@ export interface AppSettings {
   };
   notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; time_24h: boolean; hide_titles: boolean };
   appearance: { theme: ThemeChoice; accent: string };
-  email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; important_senders: string[]; days_back: number };
+  email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; include_email: boolean; consented: AiProvider | null };
   privacy: { crash_reports: boolean };
 }

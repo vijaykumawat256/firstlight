@@ -16,6 +16,7 @@ use std::collections::HashSet;
 
 pub mod applemail;
 pub mod gmail;
+pub mod imap;
 pub mod microsoft;
 
 /// The longest snippet kept. Enough to recognise a message, far too little to be a copy of it.

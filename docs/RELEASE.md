@@ -85,6 +85,7 @@ Use `DAYBRIEF_PROFILE=<name>` when running a release build next to your dev data
 - [ ] Calendar app permission prompt: Allow and Deny both behave
 - [ ] Apple Mail permission (Automation) prompt and digest
 - [ ] Google and Microsoft sign-in against the live services, including a revoked grant and an offline start
+- [ ] Yahoo and iCloud mailbox with real app passwords: add, digest shows unread, nothing becomes read, wrong password message, remove, revoke the app password and see "reconnect"
 - [ ] Gmail / Graph mail upgrade flow; AI consent dialog; key removal
 - [ ] Notifications appear under "Daybrief" (not the terminal) and click behaviour is acceptable (known gap: click does not open the app)
 - [ ] VoiceOver pass through Briefing, Day, Week, Settings, About (axe passes, a screen reader has not been used)
@@ -105,4 +106,4 @@ npm run licences   # regenerates src/assets/licences.json (see scripts/gen-licen
 ```
 
 ## 7. Known gaps shipped knowingly
-IMAP mail (Yahoo/iCloud/other) not built; full-screen-app detection stubbed; wake-from-sleep fallback absent; macOS system accent colour not read; Google/Microsoft sync re-fetches the whole window each time; people-in-meetings uses organiser names only.
+IMAP covers Yahoo and iCloud only, with no previews or invitation details; full-screen-app detection stubbed; wake-from-sleep fallback absent; macOS system accent colour not read; Google/Microsoft sync re-fetches the whole window each time; people-in-meetings uses organiser names only.

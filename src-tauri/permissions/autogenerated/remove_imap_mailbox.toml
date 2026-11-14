@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remove-imap-mailbox"
+description = "Enables the remove_imap_mailbox command without any pre-configured scope."
+commands.allow = ["remove_imap_mailbox"]
+
+[[permission]]
+identifier = "deny-remove-imap-mailbox"
+description = "Denies the remove_imap_mailbox command without any pre-configured scope."
+commands.deny = ["remove_imap_mailbox"]

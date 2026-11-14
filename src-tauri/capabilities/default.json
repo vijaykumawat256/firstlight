@@ -49,6 +49,8 @@
     "allow-get-mail-digest",
     "allow-enable-apple-mail",
     "allow-enable-account-mail",
+    "allow-add-imap-mailbox",
+    "allow-remove-imap-mailbox",
     "allow-open-mail-message",
     "allow-ai-status",
     "allow-ai-preview",

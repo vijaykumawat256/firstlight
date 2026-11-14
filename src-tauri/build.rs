@@ -67,6 +67,8 @@ fn main() {
             "get_mail_digest",
             "enable_apple_mail",
             "enable_account_mail",
+            "add_imap_mailbox",
+            "remove_imap_mailbox",
             "open_mail_message",
             "ai_status",
             "ai_preview",
