@@ -232,6 +232,10 @@ pub mod testserver {
             self.headers.push((k.into(), v.into()));
             self
         }
+        pub fn with_body(mut self, body: &str) -> Self {
+            self.body = body.to_string();
+            self
+        }
         pub fn json(body: &str) -> Self {
             Self::ok(body).with_header("Content-Type", "application/json")
         }

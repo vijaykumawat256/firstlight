@@ -9,6 +9,7 @@ export const tauriBackend: Backend = {
   getCalendars: () => invoke<CalendarInfo[]>("get_calendars"),
   listAccounts: () => invoke<AccountView[]>("list_accounts"),
   addIcsAccount: (name, url) => invoke<AccountView>("add_ics_account", { name, url }),
+  addCaldavAccount: (name, server, username, password) => invoke<AccountView>("add_caldav_account", { name, server, username, password }),
   addDemoAccount: () => invoke<AccountView>("add_demo_account"),
   removeAccount: (id) => invoke<void>("remove_account", { id }),
   renameAccount: (id, name) => invoke<void>("rename_account", { id, name }),

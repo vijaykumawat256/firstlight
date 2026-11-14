@@ -6,6 +6,7 @@ fn main() {
             "get_calendars",
             "list_accounts",
             "add_ics_account",
+            "add_caldav_account",
             "add_demo_account",
             "remove_account",
             "rename_account",

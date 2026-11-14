@@ -818,9 +818,11 @@ dependencies = [
 name = "daybrief-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "chrono",
  "chrono-tz",
  "getrandom 0.4.3",
+ "quick-xml",
  "regex",
  "reqwest",
  "rrule",

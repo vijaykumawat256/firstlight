@@ -130,6 +130,7 @@ pub fn run() {
             commands::get_calendars,
             commands::list_accounts,
             commands::add_ics_account,
+            commands::add_caldav_account,
             commands::add_demo_account,
             commands::remove_account,
             commands::rename_account,

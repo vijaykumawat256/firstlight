@@ -11,6 +11,8 @@ export interface Backend {
   listAccounts(): Promise<AccountView[]>;
   /** Connects a calendar by link. Rejects with a plain-language message if it can't be read. */
   addIcsAccount(name: string, url: string): Promise<AccountView>;
+  /** Connects a CalDAV server (iCloud, Yahoo, Fastmail, ...) with a username and app password. */
+  addCaldavAccount(name: string, server: string, username: string, password: string): Promise<AccountView>;
   addDemoAccount(): Promise<AccountView>;
   /** Deletes the account, its cached events and its saved credentials. */
   removeAccount(id: string): Promise<void>;

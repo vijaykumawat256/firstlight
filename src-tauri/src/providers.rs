@@ -4,7 +4,9 @@ use chrono::Utc;
 use chrono_tz::Tz;
 use daybrief_core::http::HttpClient;
 use daybrief_core::model::ProviderKind;
-use daybrief_core::providers::{Provider, fixture::FixtureProvider, ics::IcsProvider};
+use daybrief_core::providers::{
+    Provider, caldav::CaldavProvider, fixture::FixtureProvider, ics::IcsProvider,
+};
 use daybrief_core::secrets::SecretStore;
 use std::sync::Arc;
 
@@ -28,9 +30,11 @@ pub fn provider_for(kind: ProviderKind, deps: &Deps) -> Option<Box<dyn Provider>
             deps.secrets.clone(),
             deps.tz,
         ))),
-        ProviderKind::Google
-        | ProviderKind::Microsoft
-        | ProviderKind::Caldav
-        | ProviderKind::System => None,
+        ProviderKind::Caldav => Some(Box::new(CaldavProvider::new(
+            deps.http.clone(),
+            deps.secrets.clone(),
+            deps.tz,
+        ))),
+        ProviderKind::Google | ProviderKind::Microsoft | ProviderKind::System => None,
     }
 }

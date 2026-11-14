@@ -2,12 +2,13 @@
 //! short and content-free, and anything that can touch the network or disk runs off the main thread.
 
 use crate::AppState;
-use crate::providers::{Deps, provider_for};
+use crate::providers::provider_for;
 use crate::scheduler::Trigger;
 use chrono::{Duration, Utc};
 use daybrief_core::dedupe::dedupe;
 use daybrief_core::http::normalise_calendar_url;
 use daybrief_core::model::*;
+use daybrief_core::providers::caldav::{CaldavProvider, CaldavSecret, validate_server};
 use daybrief_core::providers::ics::IcsProvider;
 use daybrief_core::store::Store;
 use daybrief_core::sync::{default_window, sync_account};
@@ -78,65 +79,69 @@ pub async fn list_accounts(state: State<'_, AppState>) -> CmdResult<Vec<AccountV
 // ---- adding and removing accounts ----------------------------------------------
 
 /// Plain-language reason a first sync failed, without any content from the remote.
-fn explain(report: &SyncReport) -> &'static str {
-    if report.needs_attention {
-        "That link needs a sign-in or has been reset. Copy a fresh link from your calendar's settings."
-    } else if report.offline {
-        "Couldn't reach the server. Check your connection and try again."
-    } else {
-        "Couldn't read a calendar from that link. Check the address and try again."
+fn explain(kind: ProviderKind, report: &SyncReport) -> &'static str {
+    match (kind, report.needs_attention, report.offline) {
+        (ProviderKind::Ics, true, _) => {
+            "That link needs a sign-in or has been reset. Copy a fresh link from your calendar's settings."
+        }
+        (ProviderKind::Caldav, true, _) => {
+            "The server rejected that username or password. Use an app-specific password, not your normal one."
+        }
+        (_, _, true) => "Couldn't reach the server. Check your connection and try again.",
+        (ProviderKind::Ics, ..) => {
+            "Couldn't read a calendar from that link. Check the address and try again."
+        }
+        (ProviderKind::Caldav, ..) => {
+            "Couldn't find calendars on that server. Check the server address and try again."
+        }
+        _ => "Couldn't connect that account.",
     }
 }
 
-/// Everything needed to run a first sync on a worker thread.
-fn deps_of(state: &AppState) -> Deps {
-    state.deps.clone()
-}
-
-#[tauri::command]
-pub async fn add_ics_account(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    name: String,
-    url: String,
-) -> CmdResult<AccountView> {
-    let url = normalise_calendar_url(&url).map_err(|e| match e {
+fn user_input_error(e: Error) -> String {
+    match e {
         Error::Invalid(m) => m.to_string(),
-        _ => "invalid address".to_string(),
-    })?;
-    let name = name.trim();
-    if name.chars().count() > 80 {
-        return Err("name must be 80 characters or fewer".into());
+        _ => "invalid input".to_string(),
     }
-    let name = if name.is_empty() {
-        "Subscribed calendar"
-    } else {
-        name
-    }
-    .to_string();
+}
 
-    let (deps, db, key) = (deps_of(&state), state.db_path.clone(), state.key.clone());
+/// Everything needed to connect one account.
+struct NewAccount {
+    kind: ProviderKind,
+    name: String,
+    email: Option<String>,
+    secret_ref: String,
+    secret_value: String,
+}
+
+/// Saves the credential in the keychain, runs a first sync, and rolls everything back if it fails,
+/// so a mistyped password never leaves a half-connected account behind.
+async fn connect(
+    app: &AppHandle,
+    state: &AppState,
+    id: String,
+    new: NewAccount,
+) -> CmdResult<AccountView> {
+    let (deps, db, key) = (state.deps.clone(), state.db_path.clone(), state.key.clone());
     let view = tauri::async_runtime::spawn_blocking(move || -> CmdResult<AccountView> {
-        let id = new_id();
-        let secret_ref = IcsProvider::secret_key(&id);
-        // The link is a credential: keychain only, never the database.
+        // The credential is a secret: keychain only, never the database.
         deps.secrets
-            .set(&secret_ref, &url)
-            .map_err(internal("saving the link"))?;
+            .set(&new.secret_ref, &new.secret_value)
+            .map_err(internal("saving the credentials"))?;
         let account = Account {
             id: id.clone(),
-            provider: ProviderKind::Ics,
-            display_name: name,
-            email: None,
+            provider: new.kind,
+            display_name: new.name,
+            email: new.email,
             status: AccountStatus::Ok,
-            secret_ref: Some(secret_ref.clone()),
+            secret_ref: Some(new.secret_ref.clone()),
             created_at: Utc::now(),
         };
         let rollback = |store: Option<&Store>| {
             if let Some(s) = store {
                 let _ = s.remove_account(&id);
             }
-            let _ = deps.secrets.delete(&secret_ref);
+            let _ = deps.secrets.delete(&new.secret_ref);
         };
         let mut store = Store::open(&db, &key)
             .inspect_err(|_| rollback(None))
@@ -145,7 +150,7 @@ pub async fn add_ics_account(
             .upsert_account(&account)
             .inspect_err(|_| rollback(Some(&store)))
             .map_err(internal("saving the account"))?;
-        let provider = provider_for(ProviderKind::Ics, &deps).ok_or("unsupported")?;
+        let provider = provider_for(new.kind, &deps).ok_or("unsupported")?;
         let report = sync_account(
             &mut store,
             provider.as_ref(),
@@ -154,7 +159,7 @@ pub async fn add_ics_account(
         );
         if !report.is_clean() {
             rollback(Some(&store));
-            return Err(explain(&report).into());
+            return Err(explain(new.kind, &report).into());
         }
         store
             .account_views()
@@ -176,12 +181,73 @@ pub async fn add_ics_account(
     Ok(view)
 }
 
+fn clean_name(name: &str, fallback: &str) -> CmdResult<String> {
+    let name = name.trim();
+    if name.chars().count() > 80 {
+        return Err("name must be 80 characters or fewer".into());
+    }
+    Ok(if name.is_empty() { fallback } else { name }.to_string())
+}
+
+#[tauri::command]
+pub async fn add_ics_account(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    url: String,
+) -> CmdResult<AccountView> {
+    let url = normalise_calendar_url(&url).map_err(user_input_error)?;
+    let id = new_id();
+    let new = NewAccount {
+        kind: ProviderKind::Ics,
+        name: clean_name(&name, "Subscribed calendar")?,
+        email: None,
+        secret_ref: IcsProvider::secret_key(&id),
+        secret_value: url,
+    };
+    connect(&app, &state, id, new).await
+}
+
+#[tauri::command]
+pub async fn add_caldav_account(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    server: String,
+    username: String,
+    password: String,
+) -> CmdResult<AccountView> {
+    let server = validate_server(&server).map_err(user_input_error)?;
+    let username = username.trim().to_string();
+    if username.is_empty() || username.chars().count() > 254 {
+        return Err("enter your username or email address".into());
+    }
+    if password.is_empty() || password.chars().count() > 256 {
+        return Err("enter the app password".into());
+    }
+    let id = new_id();
+    let secret = serde_json::to_string(&CaldavSecret {
+        server,
+        username: username.clone(),
+        password,
+    })
+    .map_err(internal("saving the credentials"))?;
+    let new = NewAccount {
+        kind: ProviderKind::Caldav,
+        name: clean_name(&name, "Calendar")?,
+        email: username.contains('@').then_some(username),
+        secret_ref: CaldavProvider::secret_key(&id),
+        secret_value: secret,
+    };
+    connect(&app, &state, id, new).await
+}
+
 #[tauri::command]
 pub async fn add_demo_account(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> CmdResult<AccountView> {
-    let (deps, db, key) = (deps_of(&state), state.db_path.clone(), state.key.clone());
+    let (deps, db, key) = (state.deps.clone(), state.db_path.clone(), state.key.clone());
     let view = tauri::async_runtime::spawn_blocking(move || -> CmdResult<AccountView> {
         let mut store = Store::open(&db, &key).map_err(internal("opening the database"))?;
         let account = daybrief_core::providers::fixture::FixtureProvider::account(Utc::now());

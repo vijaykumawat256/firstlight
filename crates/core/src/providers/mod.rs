@@ -7,6 +7,7 @@ use crate::Result;
 use crate::model::{Account, Calendar, Event, ProviderKind};
 use chrono::{DateTime, Utc};
 
+pub mod caldav;
 pub mod fixture;
 pub mod ics;
 

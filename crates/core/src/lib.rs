@@ -15,6 +15,7 @@ pub mod secrets;
 pub mod store;
 pub mod sync;
 pub mod tz;
+pub mod xml;
 
 pub use error::{Error, Result};
 pub use sync::SyncReport;

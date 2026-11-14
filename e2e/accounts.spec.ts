@@ -15,7 +15,7 @@ test("first run shows onboarding and sample data fills the briefing", async ({ p
   await page.screenshot({ path: `${SHOTS}/onboarding.png` });
 
   await openAdd(page);
-  await expect(page.getByText("Soon")).toHaveCount(3);
+  await expect(page.getByText("Soon")).toHaveCount(2);
   await page.screenshot({ path: `${SHOTS}/add-account.png` });
   await page.getByRole("button", { name: /Try with sample data/ }).click();
 
@@ -104,4 +104,49 @@ test("accounts screen is keyboard reachable", async ({ page }) => {
   await page.getByRole("switch", { name: "Show Work" }).focus();
   await page.keyboard.press("Space");
   await expect(page.getByRole("switch", { name: "Show Work" })).toHaveAttribute("aria-checked", "false");
+});
+
+test("CalDAV: preset, validation, wrong password explained, then connected", async ({ page }) => {
+  await page.goto("/?fresh");
+  await openAdd(page);
+  await page.getByRole("button", { name: /iCloud, Yahoo and others/ }).click();
+  await expect(page.getByRole("link", { name: /app-specific password/ }).or(page.getByRole("button", { name: /app-specific password/ }))).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/add-caldav.png` });
+
+  // Empty form: field-level messages, nothing sent
+  await page.getByRole("button", { name: "Add calendar" }).click();
+  await expect(page.getByText("Enter your username.")).toBeVisible();
+  await expect(page.getByText("Enter the app password.")).toBeVisible();
+
+  // Wrong password: plain-language error and the sheet stays open for a retry
+  await page.getByLabel("Username").fill("me@icloud.com");
+  await page.getByLabel("App password").fill("wrong");
+  await page.getByRole("button", { name: "Add calendar" }).click();
+  await expect(page.getByRole("alert")).toContainText("rejected that username or password");
+  await page.screenshot({ path: `${SHOTS}/add-caldav-error.png` });
+
+  // The password field is masked
+  await expect(page.getByLabel("App password")).toHaveAttribute("type", "password");
+
+  // Correct password connects and shows both calendars on the Accounts screen
+  await page.getByLabel("App password").fill("abcd-efgh-ijkl-mnop");
+  await page.getByRole("button", { name: "Add calendar" }).click();
+  await expect(page.getByRole("heading", { name: "Your day is clear" })).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: /Accounts & calendars/ }).click();
+  await expect(page.getByRole("switch", { name: "Show Home" })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Show Family" })).toBeVisible();
+});
+
+test("CalDAV: a custom server needs a full https address", async ({ page }) => {
+  await page.goto("/?fresh");
+  await openAdd(page);
+  await page.getByRole("button", { name: /iCloud, Yahoo and others/ }).click();
+  await page.getByRole("combobox", { name: "Provider" }).click();
+  await page.getByRole("option", { name: "Other server…" }).click();
+  await page.getByLabel("Server address").fill("http://insecure.example.com");
+  await page.getByLabel("Username").fill("me");
+  await page.getByLabel("App password").fill("pw");
+  await page.getByRole("button", { name: "Add calendar" }).click();
+  await expect(page.getByText("Enter the full https:// address.")).toBeVisible();
 });

@@ -21,6 +21,7 @@
     "allow-get-calendars",
     "allow-list-accounts",
     "allow-add-ics-account",
+    "allow-add-caldav-account",
     "allow-add-demo-account",
     "allow-remove-account",
     "allow-rename-account",

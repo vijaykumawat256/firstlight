@@ -166,6 +166,29 @@ export const fixtureBackend: Backend = {
     notify();
     return structuredClone(view);
   },
+  async addCaldavAccount(name, server, username, password) {
+    if (!/^https:\/\/\S{4,}$/i.test(server.trim())) throw new Error("server address must start with https://");
+    if (!username.trim()) throw new Error("enter your username or email address");
+    if (!password) throw new Error("enter the app password");
+    if (password === "wrong") throw new Error("The server rejected that username or password. Use an app-specific password, not your normal one.");
+    const id = `dav-${accounts.length + 1}-${Math.floor(Math.random() * 1e6)}`;
+    const view: AccountView = {
+      id,
+      provider: "caldav",
+      display_name: name.trim() || "Calendar",
+      email: username.includes("@") ? username.trim() : null,
+      status: "ok",
+      calendars: [
+        { id: `${id}:a`, account_id: id, remote_id: "a", name: "Home", colour: "pink", visible: true, read_only: true },
+        { id: `${id}:b`, account_id: id, remote_id: "b", name: "Family", colour: "teal", visible: true, read_only: true },
+      ],
+      last_synced_at: new Date().toISOString(),
+      last_error: null,
+    };
+    accounts = [...accounts, view];
+    notify();
+    return structuredClone(view);
+  },
   async addDemoAccount() {
     accounts = [...accounts.filter((a) => a.id !== DEMO_ID), demoAccount()];
     notify();

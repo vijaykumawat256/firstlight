@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, ChevronLeft, ChevronRight, Link2, Mail, Sparkles } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, KeyRound, Link2, Mail, Sparkles } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { api, errorMessage } from "@/api";
-import { Badge, Button, ListGroup, Sheet, TextField } from "@/design";
+import { Badge, Button, ListGroup, Select, Sheet, TextField } from "@/design";
+import { CALDAV_PRESETS, OTHER_SERVER } from "./presets";
 
-type Step = "choose" | "ics";
+type Step = "choose" | "ics" | "caldav";
 
 const LINK_RE = /^(https|webcal):\/\/\S{4,}$/i;
 
@@ -34,6 +35,10 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [touched, setTouched] = useState(false);
+  const [preset, setPreset] = useState<string>(CALDAV_PRESETS[0]!.id);
+  const [server, setServer] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
   const close = (o: boolean) => {
     onOpenChange(o);
@@ -44,7 +49,12 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
         setName("");
         setUrl("");
         setTouched(false);
+        setPreset(CALDAV_PRESETS[0]!.id);
+        setServer("");
+        setUsername("");
+        setPassword("");
         ics.reset();
+        dav.reset();
         demo.reset();
       }, 250);
     }
@@ -56,29 +66,37 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
   };
 
   const ics = useMutation({ mutationFn: () => api.addIcsAccount(name, url.trim()), onSuccess: done });
+  const presetInfo = CALDAV_PRESETS.find((p) => p.id === preset);
+  const serverUrl = presetInfo ? presetInfo.server : server.trim();
+  const dav = useMutation({ mutationFn: () => api.addCaldavAccount(name, serverUrl, username.trim(), password), onSuccess: done });
   const demo = useMutation({ mutationFn: () => api.addDemoAccount(), onSuccess: done });
 
   const linkError = touched && !LINK_RE.test(url.trim()) ? "Enter an https:// or webcal:// link." : undefined;
 
   const submit = () => {
     setTouched(true);
-    if (LINK_RE.test(url.trim())) ics.mutate();
+    if (step === "caldav") {
+      if (serverOk && username.trim() && password) dav.mutate();
+    } else if (LINK_RE.test(url.trim())) ics.mutate();
   };
+
+  const serverOk = /^https:\/\/\S{4,}$/i.test(serverUrl);
+  const busy = ics.isPending || dav.isPending;
 
   return (
     <Sheet
       open={open}
       onOpenChange={close}
-      title={step === "choose" ? "Add a calendar" : "Calendar link"}
-      description={step === "choose" ? "Choose how to connect." : "Paste the address of a published calendar."}
+      title={step === "choose" ? "Add a calendar" : step === "ics" ? "Calendar link" : "iCloud, Yahoo and others"}
+      description={step === "choose" ? "Choose how to connect." : step === "ics" ? "Paste the address of a published calendar." : "Sign in with an app password."}
       footer={
-        step === "ics" ? (
+        step !== "choose" ? (
           <>
-            <Button variant="secondary" leading={<ChevronLeft className="size-4" />} onClick={() => setStep("choose")} disabled={ics.isPending}>
+            <Button variant="secondary" leading={<ChevronLeft className="size-4" />} onClick={() => setStep("choose")} disabled={busy}>
               Back
             </Button>
-            <Button variant="primary" onClick={submit} disabled={ics.isPending}>
-              {ics.isPending ? "Connecting…" : "Add calendar"}
+            <Button variant="primary" onClick={submit} disabled={busy}>
+              {busy ? "Connecting…" : "Add calendar"}
             </Button>
           </>
         ) : undefined
@@ -90,7 +108,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
             <Choice icon={<Link2 />} title="Calendar link" subtitle="Any published calendar (ICS or webcal)" onClick={() => setStep("ics")} />
             <Choice icon={<Mail />} title="Google" subtitle="Gmail and Google Workspace" soon />
             <Choice icon={<CalendarDays />} title="Microsoft" subtitle="Outlook.com and Microsoft 365" soon />
-            <Choice icon={<CalendarDays />} title="iCloud, Yahoo and others" subtitle="CalDAV with an app password" soon />
+            <Choice icon={<KeyRound />} title="iCloud, Yahoo and others" subtitle="CalDAV with an app password" onClick={() => setStep("caldav")} />
           </ListGroup>
           {!hasDemo && (
             <ListGroup>
@@ -99,6 +117,70 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
           )}
           {demo.isError && <p role="alert" className="px-1 text-footnote text-danger">{errorMessage(demo.error)}</p>}
         </div>
+      ) : step === "caldav" ? (
+        <form
+          className="flex flex-col gap-4 pb-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          {dav.isError && (
+            <p role="alert" className="rounded-card bg-danger-soft px-3 py-2 text-body text-danger">
+              {errorMessage(dav.error)}
+            </p>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-footnote font-medium text-fg-2">Provider</span>
+            <Select
+              label="Provider"
+              value={preset}
+              onValueChange={setPreset}
+              options={[...CALDAV_PRESETS.map((p) => ({ value: p.id, label: p.label })), { value: OTHER_SERVER, label: "Other server…" }]}
+            />
+          </div>
+          {!presetInfo && (
+            <TextField
+              label="Server address"
+              placeholder="https://caldav.example.com"
+              value={server}
+              onChange={(e) => setServer(e.target.value)}
+              error={touched && !serverOk ? "Enter the full https:// address." : undefined}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          )}
+          <TextField label="Name" placeholder={presetInfo?.label ?? "My calendar"} value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="off" />
+          <TextField
+            label="Username"
+            placeholder={presetInfo?.usernameHint ?? "Username or email"}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            error={touched && !username.trim() ? "Enter your username." : undefined}
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+          />
+          <TextField
+            label="App password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            error={touched && !password ? "Enter the app password." : undefined}
+            hint="Not your normal password. It only works for calendars and can be revoked any time."
+            autoComplete="off"
+          />
+          {presetInfo && (
+            <button
+              type="button"
+              onClick={() => void api.openUrl(presetInfo.helpUrl)}
+              className="flex items-center gap-1.5 self-start text-body text-accent hover:underline"
+            >
+              {presetInfo.helpLabel} <ExternalLink className="size-3.5" aria-hidden />
+            </button>
+          )}
+          <p className="text-footnote text-fg-2">Daybrief keeps your password in the system keychain, never in a file.</p>
+        </form>
       ) : (
         <form
           className="flex flex-col gap-4 pb-4"
@@ -107,6 +189,11 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
             submit();
           }}
         >
+          {ics.isError && (
+            <p role="alert" className="rounded-card bg-danger-soft px-3 py-2 text-body text-danger">
+              {errorMessage(ics.error)}
+            </p>
+          )}
           <TextField label="Name" placeholder="Team holidays" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="off" />
           <TextField
             label="Calendar address"
@@ -122,11 +209,6 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
             inputMode="url"
           />
           <p className="text-footnote text-fg-2">Private links work like a password. Daybrief keeps yours in the system keychain, never in a file.</p>
-          {ics.isError && (
-            <p role="alert" className="rounded-card bg-danger-soft px-3 py-2 text-body text-danger">
-              {errorMessage(ics.error)}
-            </p>
-          )}
         </form>
       )}
     </Sheet>
