@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { CalendarX, CloudOff, RefreshCw, Settings as SettingsIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "@/api";
 import { Button, EmptyState, IconButton, Skeleton, Tooltip, useToasts } from "@/design";
 import { SettingsSheet } from "@/features/settings/SettingsSheet";
@@ -25,7 +25,6 @@ function LoadingState() {
 export function BriefingScreen() {
   const now = useNow();
   const online = useOnline();
-  const qc = useQueryClient();
   const push = useToasts((s) => s.push);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -39,23 +38,18 @@ export function BriefingScreen() {
   const events = useQuery({ queryKey: ["events", ...range], queryFn: () => api.getEvents(range[0], range[1]) });
   const calendars = useQuery({ queryKey: ["calendars"], queryFn: () => api.getCalendars() });
 
-  // Refresh whenever the computer is unlocked.
-  useEffect(() => {
-    let off: (() => void) | undefined;
-    let cancelled = false;
-    void api.onUnlock(() => void qc.invalidateQueries()).then((unlisten) => {
-      if (cancelled) unlisten();
-      else off = unlisten;
-    });
-    return () => {
-      cancelled = true;
-      off?.();
-    };
-  }, [qc]);
-
   const colours = useMemo(() => new Map((calendars.data ?? []).map((c) => [c.id, c.colour])), [calendars.data]);
   const colourOf = (id: string) => colours.get(id) ?? "blue";
   const model = useMemo(() => buildBriefing(events.data ?? [], now), [events.data, now]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = () => {
+    setRefreshing(true);
+    api.refreshNow().catch(() => push({ title: "Couldn't refresh", tone: "danger" }));
+    // The backend answers with a "sync finished" event that refetches everything; clear the spinner then.
+    void api.onSyncFinished(() => setRefreshing(false)).then((off) => setTimeout(off, 15_000));
+    setTimeout(() => setRefreshing(false), 15_000);
+  };
 
   const join = (url: string) => {
     api.openUrl(url).catch(() => push({ title: "Couldn't open the link", tone: "danger" }));
@@ -68,6 +62,11 @@ export function BriefingScreen() {
     <div className="flex h-full flex-col">
       {/* Draggable title-bar strip; the traffic lights sit at the left. */}
       <div data-tauri-drag-region className="flex h-11 shrink-0 items-center justify-end px-3">
+        <Tooltip content="Refresh">
+          <IconButton label="Refresh" onClick={refresh} disabled={refreshing}>
+            <RefreshCw className={`size-[17px] ${refreshing ? "animate-spin" : ""}`} />
+          </IconButton>
+        </Tooltip>
         <Tooltip content="Settings">
           <IconButton label="Settings" onClick={() => setSettingsOpen(true)}>
             <SettingsIcon className="size-[18px]" />

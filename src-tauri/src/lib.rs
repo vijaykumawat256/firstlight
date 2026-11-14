@@ -2,96 +2,37 @@
 //! small set of commands the UI is allowed to call. All calendar logic lives in
 //! `daybrief-core`.
 
+mod commands;
 mod keychain;
+mod providers;
+mod scheduler;
 mod unlock;
 
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::Utc;
 use chrono_tz::Tz;
-use daybrief_core::model::{Calendar, Event};
-use daybrief_core::providers::{Provider, Window, fixture::FixtureProvider};
-use daybrief_core::secrets::load_or_create_db_key;
+use daybrief_core::http::ReqwestClient;
+use daybrief_core::secrets::{Redacted, load_or_create_db_key};
 use daybrief_core::store::Store;
-use std::sync::Mutex;
+use providers::Deps;
+use scheduler::{SyncHandle, Trigger};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
 const KEYCHAIN_SERVICE: &str = "com.daybrief.app";
 const MAIN_WINDOW: &str = "main";
-/// Longest range the UI may ask for in one call.
-const MAX_RANGE_DAYS: i64 = 62;
 
-struct AppState {
-    store: Mutex<Store>,
-    tz: Tz,
-}
-
-type CmdResult<T> = Result<T, String>;
-
-fn internal<E: std::fmt::Debug>(what: &'static str) -> impl Fn(E) -> String {
-    // Log the detail (never content), return a generic message to the UI.
-    move |e| {
-        log::error!("{what}: {e:?}");
-        format!("{what} failed")
-    }
-}
-
-// ---- commands (inputs are validated here, never trusted from the UI) ----------
-
-#[tauri::command]
-fn get_events(state: State<AppState>, start: String, end: String) -> CmdResult<Vec<Event>> {
-    let start = DateTime::parse_from_rfc3339(&start)
-        .map_err(|_| "invalid start")?
-        .with_timezone(&Utc);
-    let end = DateTime::parse_from_rfc3339(&end)
-        .map_err(|_| "invalid end")?
-        .with_timezone(&Utc);
-    if end <= start {
-        return Err("end must be after start".into());
-    }
-    if end - start > Duration::days(MAX_RANGE_DAYS) {
-        return Err("range too large".into());
-    }
-    let store = state.store.lock().map_err(|_| "state unavailable")?;
-    store
-        .events_between(start, end)
-        .map_err(internal("loading events"))
-}
-
-#[tauri::command]
-fn get_calendars(state: State<AppState>) -> CmdResult<Vec<Calendar>> {
-    let store = state.store.lock().map_err(|_| "state unavailable")?;
-    store
-        .list_calendars()
-        .map_err(internal("loading calendars"))
-}
-
-#[tauri::command]
-fn get_autostart(app: AppHandle) -> CmdResult<bool> {
-    app.autolaunch()
-        .is_enabled()
-        .map_err(internal("reading autostart"))
-}
-
-#[tauri::command]
-fn set_autostart(app: AppHandle, enabled: bool) -> CmdResult<()> {
-    let launcher = app.autolaunch();
-    if enabled {
-        launcher.enable()
-    } else {
-        launcher.disable()
-    }
-    .map_err(internal("changing autostart"))
-}
-
-#[tauri::command]
-fn get_unlock_count_today(state: State<AppState>) -> CmdResult<i64> {
-    let store = state.store.lock().map_err(|_| "state unavailable")?;
-    let today = Utc::now().with_timezone(&state.tz).date_naive();
-    store
-        .count_briefing_log(today, "unlock")
-        .map_err(internal("reading unlock log"))
+pub(crate) struct AppState {
+    /// The UI's own connection. Sync work uses separate connections so it never blocks this one.
+    pub store: Mutex<Store>,
+    pub db_path: PathBuf,
+    pub key: Redacted,
+    pub tz: Tz,
+    pub deps: Deps,
+    pub sync: SyncHandle,
 }
 
 // ---- helpers --------------------------------------------------------------
@@ -109,25 +50,6 @@ fn show_main(app: &AppHandle) {
         let _ = w.show();
         let _ = w.set_focus();
     }
-}
-
-/// Phase 1 only: load the fixture calendars into the encrypted store so the UI has data.
-fn seed_fixture(store: &mut Store, today: NaiveDate, tz: Tz) -> daybrief_core::Result<()> {
-    let provider = FixtureProvider::new(today, tz);
-    let account = FixtureProvider::account(Utc::now());
-    store.upsert_account(&account)?;
-    let from = Utc::now() - Duration::days(30);
-    let window = Window {
-        from,
-        to: from + Duration::days(120),
-    };
-    for cal in provider.list_calendars(&account)? {
-        store.upsert_calendar(&cal)?;
-        let result = provider.sync_events(&cal, None, &window)?;
-        store.replace_events(&cal.id, &result.changed)?;
-        store.set_sync_state(&cal.id, result.next_state.as_deref(), None)?;
-    }
-    Ok(())
 }
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -204,11 +126,19 @@ pub fn run() {
             Some(vec!["--hidden"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            get_events,
-            get_calendars,
-            get_autostart,
-            set_autostart,
-            get_unlock_count_today
+            commands::get_events,
+            commands::get_calendars,
+            commands::list_accounts,
+            commands::add_ics_account,
+            commands::add_demo_account,
+            commands::remove_account,
+            commands::rename_account,
+            commands::set_calendar_visible,
+            commands::set_calendar_colour,
+            commands::refresh_now,
+            commands::get_autostart,
+            commands::set_autostart,
+            commands::get_unlock_count_today,
         ])
         .on_window_event(|window, event| {
             // Closing hides to the tray; Quit lives in the tray menu.
@@ -230,17 +160,32 @@ pub fn run() {
 
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
-            let mut store = Store::open(&dir.join("daybrief.db"), &key).map_err(|e| {
+            let db_path = dir.join("daybrief.db");
+            let store = Store::open(&db_path, &key).map_err(|e| {
                 log::error!("cannot open database: {e}");
                 e.to_string()
             })?;
 
             let tz = local_tz();
-            let today = Utc::now().with_timezone(&tz).date_naive();
-            seed_fixture(&mut store, today, tz).map_err(|e| e.to_string())?;
+            let deps = Deps {
+                http: Arc::new(ReqwestClient::new().map_err(|e| e.to_string())?),
+                secrets: Arc::new(keychain),
+                tz,
+            };
+            let sync = scheduler::spawn(
+                app.handle().clone(),
+                db_path.clone(),
+                key.clone(),
+                deps.clone(),
+            );
+            sync.trigger(Trigger::Launch);
             app.manage(AppState {
                 store: Mutex::new(store),
+                db_path,
+                key,
                 tz,
+                deps,
+                sync,
             });
 
             build_tray(app.handle())?;
@@ -258,6 +203,8 @@ pub fn run() {
                             now,
                         );
                     }
+                    // Refresh calendars (skipped if one just ran; see scheduler::UNLOCK_COOLDOWN).
+                    state.sync.trigger(Trigger::Unlock);
                 }
                 let _ = handle.emit("system-unlock", ());
             });

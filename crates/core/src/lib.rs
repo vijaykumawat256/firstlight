@@ -17,3 +17,4 @@ pub mod sync;
 pub mod tz;
 
 pub use error::{Error, Result};
+pub use sync::SyncReport;

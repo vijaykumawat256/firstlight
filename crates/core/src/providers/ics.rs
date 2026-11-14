@@ -278,3 +278,68 @@ mod tests {
         ));
     }
 }
+
+/// Live check against a real public feed. Ignored by default (needs the internet):
+/// `cargo test -p daybrief-core live_ -- --ignored --nocapture`
+#[cfg(test)]
+mod live {
+    use super::*;
+    use crate::http::ReqwestClient;
+    use crate::secrets::MemorySecretStore;
+    use chrono::{Duration, Utc};
+
+    #[test]
+    #[ignore = "network"]
+    fn live_public_holiday_feed_parses_with_the_production_client() {
+        let url = "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics";
+        let secrets = Arc::new(MemorySecretStore::default());
+        secrets.set(&IcsProvider::secret_key("live"), url).unwrap();
+        let p = IcsProvider::new(
+            Arc::new(ReqwestClient::new().unwrap()),
+            secrets,
+            chrono_tz::UTC,
+        );
+        let acct = Account {
+            id: "live".into(),
+            provider: ProviderKind::Ics,
+            display_name: "US holidays".into(),
+            email: None,
+            status: AccountStatus::Ok,
+            secret_ref: Some(IcsProvider::secret_key("live")),
+            created_at: Utc::now(),
+        };
+        let cal = p.list_calendars(&acct).unwrap().remove(0);
+        let now = Utc::now();
+        let w = Window {
+            from: now - Duration::days(30),
+            to: now + Duration::days(365),
+        };
+
+        let first = p.sync_events(&cal, None, &w).unwrap();
+        println!("fetched {} events in the next year", first.changed.len());
+        for e in first.changed.iter().take(6) {
+            println!("  {:?}  {}", e.when, e.title);
+        }
+        assert!(
+            first.changed.len() > 5,
+            "a year of US holidays should have many events"
+        );
+        assert!(
+            first
+                .changed
+                .iter()
+                .all(|e| matches!(e.when, When::AllDay { .. })),
+            "holidays are all-day"
+        );
+
+        // Second request with the stored state should be a cheap 304 when the server supports it.
+        let second = p
+            .sync_events(&cal, first.next_state.as_deref(), &w)
+            .unwrap();
+        println!(
+            "second sync: full={} changed={}",
+            second.full,
+            second.changed.len()
+        );
+    }
+}

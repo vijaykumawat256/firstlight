@@ -4,6 +4,27 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+/// A random 128-bit id as 32 hex characters.
+pub fn new_id() -> String {
+    let mut b = [0u8; 16];
+    getrandom::fill(&mut b).expect("system randomness unavailable");
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+/// An account plus what the UI needs to show it. Contains no secrets.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccountView {
+    pub id: String,
+    pub provider: ProviderKind,
+    pub display_name: String,
+    pub email: Option<String>,
+    pub status: AccountStatus,
+    pub calendars: Vec<Calendar>,
+    pub last_synced_at: Option<DateTime<Utc>>,
+    /// A short code: "auth", "offline", "failed" (never content).
+    pub last_error: Option<String>,
+}
+
 /// Calendar colour names. The actual colours live in the UI's design tokens.
 pub const CALENDAR_COLOURS: [&str; 10] = [
     "red", "orange", "yellow", "green", "teal", "blue", "indigo", "purple", "pink", "brown",

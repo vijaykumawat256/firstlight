@@ -8,11 +8,6 @@
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
-    "allow-get-events",
-    "allow-get-calendars",
-    "allow-get-autostart",
-    "allow-set-autostart",
-    "allow-get-unlock-count-today",
     "core:window:allow-start-dragging",
     {
       "identifier": "opener:allow-open-url",
@@ -21,6 +16,19 @@
           "url": "https://*"
         }
       ]
-    }
+    },
+    "allow-get-events",
+    "allow-get-calendars",
+    "allow-list-accounts",
+    "allow-add-ics-account",
+    "allow-add-demo-account",
+    "allow-remove-account",
+    "allow-rename-account",
+    "allow-set-calendar-visible",
+    "allow-set-calendar-colour",
+    "allow-refresh-now",
+    "allow-get-autostart",
+    "allow-set-autostart",
+    "allow-get-unlock-count-today"
   ]
 }

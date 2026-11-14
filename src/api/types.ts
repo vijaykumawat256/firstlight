@@ -33,3 +33,24 @@ export interface CalendarInfo {
   visible: boolean;
   read_only: boolean;
 }
+
+export type ProviderKind = "fixture" | "google" | "microsoft" | "caldav" | "ics" | "system";
+export type AccountStatus = "ok" | "needs_attention";
+
+export interface AccountView {
+  id: string;
+  provider: ProviderKind;
+  display_name: string;
+  email: string | null;
+  status: AccountStatus;
+  calendars: CalendarInfo[];
+  last_synced_at: string | null;
+  /** A short code ("auth" | "offline" | "failed"), never content. */
+  last_error: string | null;
+}
+
+export interface SyncSummary {
+  ok: boolean;
+  offline: boolean;
+  needs_attention: boolean;
+}

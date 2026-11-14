@@ -1,5 +1,5 @@
 import { assertHttps, type Backend } from "./backend";
-import type { CalendarInfo, CalEvent } from "./types";
+import type { AccountView, CalendarInfo, CalEvent, SyncSummary } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -96,14 +96,101 @@ function overlaps(e: CalEvent, from: Date, to: Date): boolean {
   return s < to && en > from;
 }
 
+const DEMO_ID = "fixture-account";
+
+function demoAccount(): AccountView {
+  return {
+    id: DEMO_ID,
+    provider: "fixture",
+    display_name: "Demo account",
+    email: null,
+    status: "ok",
+    calendars: CALENDARS.map((c) => ({ ...c })),
+    last_synced_at: new Date().toISOString(),
+    last_error: null,
+  };
+}
+
+/**
+ * Mutable in-memory state. Starts with the demo account unless the page is opened with
+ * `?fresh` (to exercise onboarding) or `?attention` (an account needing reconnection).
+ */
+const params = typeof location === "undefined" ? new URLSearchParams() : new URLSearchParams(location.search);
+let accounts: AccountView[] = params.has("fresh") ? [] : [demoAccount()];
+if (params.has("attention")) {
+  accounts.push({
+    id: "ics-old",
+    provider: "ics",
+    display_name: "Team holidays",
+    email: null,
+    status: "needs_attention",
+    calendars: [{ id: "ics-old:ics", account_id: "ics-old", remote_id: "ics", name: "Team holidays", colour: "orange", visible: true, read_only: true }],
+    last_synced_at: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+    last_error: "auth",
+  });
+}
+const listeners = new Set<(s: SyncSummary) => void>();
+const notify = () => listeners.forEach((l) => l({ ok: true, offline: false, needs_attention: false }));
+
+const visibleCalendarIds = () =>
+  new Set(accounts.flatMap((a) => a.calendars.filter((c) => c.visible).map((c) => c.id)));
+
 export const fixtureBackend: Backend = {
   async getEvents(startIso, endIso) {
     const from = new Date(startIso);
     const to = new Date(endIso);
-    return fixtureEvents().filter((e) => overlaps(e, from, to));
+    const ids = visibleCalendarIds();
+    return fixtureEvents().filter((e) => ids.has(e.calendar_id) && overlaps(e, from, to));
   },
   async getCalendars() {
-    return CALENDARS;
+    return accounts.flatMap((a) => a.calendars);
+  },
+  async listAccounts() {
+    return structuredClone(accounts);
+  },
+  async addIcsAccount(name, url) {
+    if (!/^(https|webcal):\/\/\S{4,}$/i.test(url.trim())) throw new Error("Calendar address must be an https:// or webcal:// link");
+    if (url.includes("fail")) throw new Error("Couldn't read a calendar from that link. Check the address and try again.");
+    const id = `ics-${accounts.length + 1}-${Math.floor(Math.random() * 1e6)}`;
+    const view: AccountView = {
+      id,
+      provider: "ics",
+      display_name: name.trim() || "Subscribed calendar",
+      email: null,
+      status: "ok",
+      calendars: [{ id: `${id}:ics`, account_id: id, remote_id: "ics", name: name.trim() || "Subscribed calendar", colour: "orange", visible: true, read_only: true }],
+      last_synced_at: new Date().toISOString(),
+      last_error: null,
+    };
+    accounts = [...accounts, view];
+    notify();
+    return structuredClone(view);
+  },
+  async addDemoAccount() {
+    accounts = [...accounts.filter((a) => a.id !== DEMO_ID), demoAccount()];
+    notify();
+    return demoAccount();
+  },
+  async removeAccount(id) {
+    accounts = accounts.filter((a) => a.id !== id);
+    notify();
+  },
+  async renameAccount(id, name) {
+    if (!name.trim() || name.trim().length > 80) throw new Error("name must be 1-80 characters");
+    accounts = accounts.map((a) => (a.id === id ? { ...a, display_name: name.trim() } : a));
+  },
+  async setCalendarVisible(calendarId, visible) {
+    accounts = accounts.map((a) => ({ ...a, calendars: a.calendars.map((c) => (c.id === calendarId ? { ...c, visible } : c)) }));
+  },
+  async setCalendarColour(calendarId, colour) {
+    accounts = accounts.map((a) => ({ ...a, calendars: a.calendars.map((c) => (c.id === calendarId ? { ...c, colour } : c)) }));
+  },
+  async refreshNow() {
+    setTimeout(notify, 600);
+  },
+  async onSyncFinished(cb) {
+    listeners.add(cb);
+    return () => listeners.delete(cb);
   },
   async getAutostart() {
     return false;

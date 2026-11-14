@@ -52,8 +52,11 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
-test("keyboard: tab reaches the settings button and Enter opens the sheet", async ({ page }) => {
+test("keyboard: tab reaches refresh then settings, and Enter opens the sheet", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Refresh" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Settings" })).toBeFocused();
   await page.keyboard.press("Enter");

@@ -35,7 +35,10 @@ impl Store {
             r.get::<_, i64>(0)
         })
         .map_err(|_| Error::DatabaseLocked)?;
-        conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
+        // WAL lets the UI read while a background sync writes; busy_timeout covers brief write overlaps.
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
+        )?;
         let mut store = Self { conn };
         migrations::run(&mut store.conn)?;
         Ok(store)
@@ -333,6 +336,38 @@ fn insert_event(conn: &Connection, e: &Event) -> Result<()> {
 }
 
 impl Store {
+    /// Every account with its calendars and the freshest sync state, for the Accounts screen.
+    pub fn account_views(&self) -> Result<Vec<AccountView>> {
+        let calendars = self.list_calendars()?;
+        let mut out = Vec::new();
+        for a in self.list_accounts()? {
+            let cals: Vec<Calendar> = calendars
+                .iter()
+                .filter(|c| c.account_id == a.id)
+                .cloned()
+                .collect();
+            let mut last_synced_at = None;
+            let mut last_error = None;
+            for c in &cals {
+                if let Some(info) = self.sync_info(&c.id)? {
+                    last_synced_at = last_synced_at.max(info.last_synced_at);
+                    last_error = last_error.or(info.last_error);
+                }
+            }
+            out.push(AccountView {
+                id: a.id,
+                provider: a.provider,
+                display_name: a.display_name,
+                email: a.email,
+                status: a.status,
+                calendars: cals,
+                last_synced_at,
+                last_error,
+            });
+        }
+        Ok(out)
+    }
+
     pub fn get_account(&self, id: &str) -> Result<Option<Account>> {
         Ok(self.list_accounts()?.into_iter().find(|a| a.id == id))
     }
@@ -630,6 +665,53 @@ mod tests {
             assert!(!bytes.windows(22).any(|w| w == b"PLAINTEXT-MARKER-12345"));
         }
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn account_views_combine_calendars_and_sync_state() {
+        let s = seeded();
+        s.set_sync_state("fixture-work", None, None).unwrap();
+        s.set_sync_error("fixture-personal", "offline").unwrap();
+        let views = s.account_views().unwrap();
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].calendars.len(), 2);
+        assert!(views[0].last_synced_at.is_some());
+        assert_eq!(views[0].last_error.as_deref(), Some("offline"));
+    }
+
+    #[test]
+    fn removing_an_account_cascades_to_everything() {
+        let s = seeded();
+        s.remove_account("fixture-account").unwrap();
+        assert!(s.list_calendars().unwrap().is_empty());
+        let from = Utc.with_ymd_and_hms(2026, 3, 1, 0, 0, 0).unwrap();
+        assert!(
+            s.events_between(from, from + Duration::days(60))
+                .unwrap()
+                .is_empty()
+        );
+        assert!(s.sync_info("fixture-work").unwrap().is_none());
+    }
+
+    #[test]
+    fn colour_and_name_validation() {
+        let s = seeded();
+        assert!(s.set_calendar_colour("fixture-work", "pink").is_ok());
+        assert!(s.set_calendar_colour("fixture-work", "#ff0000").is_err());
+        assert!(s.rename_account("fixture-account", "  ").is_err());
+        assert!(
+            s.rename_account("fixture-account", &"x".repeat(81))
+                .is_err()
+        );
+        assert!(s.rename_account("fixture-account", "Mine").is_ok());
+    }
+
+    #[test]
+    fn new_ids_are_unique_hex() {
+        let (a, b) = (new_id(), new_id());
+        assert_ne!(a, b);
+        assert_eq!(a.len(), 32);
+        assert!(a.bytes().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]
