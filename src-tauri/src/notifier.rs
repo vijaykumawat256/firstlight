@@ -6,9 +6,8 @@
 
 use chrono::{Duration, Utc};
 use chrono_tz::Tz;
-use daybrief_core::briefing::notify::{NotifySettings, due};
-use daybrief_core::briefing::rules::UnlockRules;
-use daybrief_core::briefing::{BriefingSettings, day_bounds};
+use daybrief_core::briefing::day_bounds;
+use daybrief_core::briefing::notify::due;
 use daybrief_core::dedupe::dedupe;
 use daybrief_core::secrets::Redacted;
 use daybrief_core::store::Store;
@@ -34,14 +33,6 @@ fn system_uses_24h() -> bool {
     {
         false
     }
-}
-
-fn saved<T: serde::de::DeserializeOwned>(store: &Store, key: &str) -> Option<T> {
-    store
-        .get_setting(key)
-        .ok()
-        .flatten()
-        .and_then(|v| serde_json::from_value(v).ok())
 }
 
 /// Shows one notification, asking macOS for permission the first time it is needed.
@@ -70,17 +61,15 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted, tz: Tz) {
                     return;
                 }
             };
-            let default = NotifySettings {
-                time_24h: system_uses_24h(),
-                ..Default::default()
-            };
+            let system_24h = system_uses_24h();
             // Give the first sync a moment so we don't announce from stale data at launch.
             std::thread::sleep(StdDuration::from_secs(8));
             loop {
                 let now = Utc::now();
-                let ns: NotifySettings = saved(&store, "notify").unwrap_or_else(|| default.clone());
-                let bs: BriefingSettings = saved(&store, "briefing").unwrap_or_default();
-                let rules: UnlockRules = saved(&store, "unlock_rules").unwrap_or_default();
+                // Re-read every tick so a change in Settings applies at once, without a restart.
+                let settings = store.load_settings();
+                let ns = settings.notify_for_engine(system_24h);
+                let (bs, rules) = (settings.briefing, settings.unlock);
                 let today = now.with_timezone(&tz).date_naive();
                 let (from, _) = day_bounds(today, tz);
                 let (_, to) = day_bounds(today + Duration::days(1), tz);

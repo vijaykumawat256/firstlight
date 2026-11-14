@@ -40,6 +40,12 @@
     "allow-get-unlock-count-today",
     "allow-get-briefing",
     "allow-dismiss-up-next",
-    "allow-open-briefing"
+    "allow-open-briefing",
+    "allow-get-settings",
+    "allow-set-settings",
+    "allow-export-settings",
+    "allow-save-settings-export",
+    "allow-import-settings",
+    "allow-erase-all-data"
   ]
 }

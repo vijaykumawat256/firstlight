@@ -131,11 +131,11 @@ function NowMarker({ now }: { now: Date }) {
   );
 }
 
-export function TodaySection({ b, now, colourOf, onOpen }: { b: Briefing; now: Date; colourOf: ColourOf; onOpen: Open }) {
+export function TodaySection({ b, now, colourOf, onOpen, showFreeTime = true }: { b: Briefing; now: Date; colourOf: ColourOf; onOpen: Open; showFreeTime?: boolean }) {
   const conflicted = new Set(b.conflicts.flatMap((c) => [c.a, c.b]));
   const hasTimed = b.past.length + b.remaining.length > 0;
   if (!hasTimed && b.all_day_today.length === 0) return null;
-  const gaps = b.free_gaps.slice(0, 3);
+  const gaps = showFreeTime ? b.free_gaps.slice(0, 3) : [];
   return (
     <section aria-label="Today">
       <SectionHeader title="Today" trailing={b.all_day_today.length ? b.all_day_today.map((e) => e.title).join(" · ") : undefined} />

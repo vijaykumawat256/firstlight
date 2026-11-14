@@ -3,9 +3,10 @@
 The full brief is `PLAN.md`; read it first. This file records what is true *now* and what you'd otherwise rediscover.
 
 ## Status
-Phases 1, 2 and 3 built, except what is listed under "Not yet verified". Next: Phase 4 (settings). Do not build ahead.
-Phase 3 delivered: briefing engine (`crates/core/src/briefing`), unlock rules (`rules.rs`), notifications (`notify.rs` + `src-tauri/src/notifier.rs`), `get_briefing`, event detail sheet, compact up-next window, day and week calendar views (`src/features/calendar`).
-Phase 3 gaps: full-screen-app detection (the rule exists; detection is stubbed to false); clicking a notification does not open the app; the settings that tune all this (rules, notification times, 12/24h) have defaults and are read from the `unlock_rules`, `notify` and `briefing` settings keys, but have no UI until Phase 4.
+Phases 1-4 built, except what is listed under "Not yet verified". Next: Phase 5 (email digest + optional AI summaries; includes the queued Apple Mail digest). Do not build ahead.
+Phase 4 delivered: one typed, versioned settings document (`crates/core/src/settings`), tolerant per-field loading + migration from the old scattered keys, Settings screen with all seven sections, live apply (theme, accent, clock, week start, default view, shortcut, sync interval, notifications, unlock rules), export/import, "Erase all data".
+Phase 3 delivered: briefing engine, unlock rules, notifications, `get_briefing`, event detail, compact up-next window, day/week views.
+Known gaps: full-screen-app detection (rule exists, detection stubbed, so no setting is shown for it); notification click does not open the app; the macOS system accent colour is not read (accent is Default or a palette colour).
 Calendar app (macOS EventKit) provider: built; its permission prompt has not been clicked through yet.
 Queued, not built: Apple Mail digest (unread, important senders, invitations) via AppleScript; planned with Phase 5.
 
@@ -53,3 +54,11 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Notification times use 12/24h from the `notify` setting; the default is read from macOS (`AppleICUForce24HourTime`).
 - Calendar views hide cancelled and declined events (same rule as the briefing). Hour rows use the wall clock, so daylight-saving days line up.
 - Notifications in `tauri dev` appear to come from the terminal app; a signed bundle (Phase 6) fixes the attribution.
+
+## Phase 4 notes
+- Settings live under one key, `app_settings` (JSON). Every consumer calls `store.load_settings()`; never read the old keys (`briefing`, `unlock_rules`, `notify`, `sync_interval_minutes`) directly. They are only read once, by the migration.
+- Adding a setting: add the field with a default in `settings/mod.rs`, clamp it in `sanitize()`, mirror it in `src/api/types.ts` and `DEFAULT_SETTINGS` in `src/api/fixture.ts`, add the control in `SettingsScreen.tsx`. `merge_valid` keeps a bad value from costing its siblings.
+- Settings never contain secrets (a test scans the export), so export/import are always safe.
+- Erase keeps the empty encrypted database and its key; it removes every account credential from the keychain first, and stops if the keychain refuses.
+- The tree is remounted when the clock format or week start changes (`SettingsApplier`), because they are read while rendering.
+- The browser fixture engine (`fixtureBriefing.ts`) honours the briefing settings; keep it in step when the engine gains options.

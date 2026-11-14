@@ -6,6 +6,7 @@
 
 pub mod briefing;
 pub mod dedupe;
+pub mod erase;
 pub mod error;
 pub mod http;
 pub mod ics;
@@ -14,6 +15,7 @@ pub mod model;
 pub mod oauth;
 pub mod providers;
 pub mod secrets;
+pub mod settings;
 pub mod store;
 pub mod sync;
 pub mod tz;

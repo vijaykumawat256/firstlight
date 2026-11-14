@@ -18,7 +18,14 @@ const key = (d: Date) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 
-const shown = (e: CalEvent) => e.status !== "cancelled" && e.my_response !== "declined";
+export interface FixtureOptions {
+  showDeclined: boolean;
+  minGapMinutes: number;
+  workStartHour: number;
+  workEndHour: number;
+  earlyHour: number;
+}
+const DEFAULTS: FixtureOptions = { showDeclined: false, minGapMinutes: 30, workStartHour: 9, workEndHour: 18, earlyHour: 8 };
 
 function timed(events: CalEvent[], from: Date, to: Date): BriefingItem[] {
   const out: BriefingItem[] = [];
@@ -34,8 +41,8 @@ function timed(events: CalEvent[], from: Date, to: Date): BriefingItem[] {
 const allDay = (events: CalEvent[], date: Date) =>
   events.filter((e) => e.when.kind === "all_day" && e.when.start <= key(date) && key(date) < e.when.end);
 
-export function fixtureBriefing(all: CalEvent[], now: Date): Briefing {
-  const events = all.filter(shown);
+export function fixtureBriefing(all: CalEvent[], now: Date, options: FixtureOptions = DEFAULTS): Briefing {
+  const events = all.filter((e) => e.status !== "cancelled" && (options.showDeclined || e.my_response !== "declined"));
   const t0 = startOfDay(now);
   const t1 = startOfDay(now, 1);
   const t2 = startOfDay(now, 2);
@@ -60,11 +67,11 @@ export function fixtureBriefing(all: CalEvent[], now: Date): Briefing {
     return d;
   };
   const free_gaps: Briefing["free_gaps"] = [];
-  let cursor = new Date(Math.max(+now, +work(9)));
+  let cursor = new Date(Math.max(+now, +work(options.workStartHour)));
   for (const i of remaining) {
-    const end = new Date(Math.min(+new Date(i.start), +work(18)));
+    const end = new Date(Math.min(+new Date(i.start), +work(options.workEndHour)));
     const minutes = Math.round((+end - +cursor) / 60_000);
-    if (minutes >= 30) free_gaps.push({ start: cursor.toISOString(), end: end.toISOString(), minutes });
+    if (minutes >= options.minGapMinutes) free_gaps.push({ start: cursor.toISOString(), end: end.toISOString(), minutes });
     cursor = new Date(Math.max(+cursor, +new Date(i.end)));
   }
 
@@ -89,7 +96,7 @@ export function fixtureBriefing(all: CalEvent[], now: Date): Briefing {
     tomorrow: {
       timed: tomorrowItems,
       all_day: allDay(events, new Date(+t0 + DAY * 1.5)),
-      early_start: tomorrowItems.some((i) => new Date(i.start).getHours() < 8),
+      early_start: tomorrowItems.some((i) => new Date(i.start).getHours() < options.earlyHour),
     },
   };
 }

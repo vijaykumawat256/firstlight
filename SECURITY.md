@@ -33,6 +33,8 @@ Status: Phase 1. Update this file whenever a phase changes what we store, send o
 | Browser is only ever opened to an allow-listed sign-in host over https | `commands.rs` `SIGN_IN_HOSTS` |
 | XML from servers is parsed with no entity expansion and a depth cap | `crates/core/src/xml.rs` (tested) |
 | Calendar app access is read-only EventKit; permission is the user's per-app macOS grant, and losing it marks the account for attention instead of returning an empty calendar that would wipe the cache | `providers/system`, `eventkit.rs` |
+| Settings are one validated document with no secrets in it (tested); loading never fails and never trusts a value outside its range; imports are size-limited and format-checked | `crates/core/src/settings` |
+| "Erase all data" deletes each account's keychain entry first, then every row, then compacts the file; if the keychain refuses, nothing is deleted so credentials are never orphaned | `crates/core/src/erase.rs` (tested) |
 | A failed first sync rolls back: no half-connected account or stray credential is left | `commands.rs` `connect` |
 
 ## Known gaps and decisions

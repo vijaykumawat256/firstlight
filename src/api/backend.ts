@@ -1,4 +1,4 @@
-import type { AccountView, Briefing, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
+import type { AccountView, AppSettings, Briefing, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -8,6 +8,17 @@ export interface Backend {
   /** Events touching `[startIso, endIso)`. */
   getEvents(startIso: string, endIso: string): Promise<CalEvent[]>;
   getCalendars(): Promise<CalendarInfo[]>;
+  getSettings(): Promise<AppSettings>;
+  /** Validates, applies and saves. Resolves to the settings as stored (out-of-range values corrected). */
+  setSettings(settings: AppSettings): Promise<AppSettings>;
+  /** The settings as portable JSON text: no accounts, no secrets. */
+  exportSettings(): Promise<string>;
+  /** Saves the export into the Downloads folder; resolves to the file's path. */
+  saveSettingsExport(): Promise<string>;
+  importSettings(text: string): Promise<AppSettings>;
+  /** Deletes all accounts, events, history, settings and saved credentials. */
+  eraseAllData(): Promise<void>;
+  onSettingsChanged(callback: () => void): Promise<() => void>;
   /** Today and tomorrow, worked out by the briefing engine. */
   getBriefing(): Promise<Briefing>;
   /** Hides the small "up next" panel. */

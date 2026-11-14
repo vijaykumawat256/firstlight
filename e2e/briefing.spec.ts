@@ -34,11 +34,11 @@ for (const scheme of ["light", "dark"] as const) {
       await page.screenshot({ path: `${SHOTS}/briefing-afternoon-${scheme}.png` });
     });
 
-    test("settings sheet", async ({ page }) => {
+    test("settings screen", async ({ page }) => {
       await page.clock.install({ time: todayAt(9, 30) });
       await page.goto("/");
       await page.getByRole("button", { name: "Settings" }).click();
-      await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
       await expect(page.getByRole("switch", { name: "Start at login" })).toBeVisible();
       await page.screenshot({ path: `${SHOTS}/settings-${scheme}.png` });
     });
@@ -62,9 +62,7 @@ test("keyboard: tab reaches calendar, refresh, then settings, and Enter opens th
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Settings" })).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
 });
 
 test("only https join links are accepted", async ({ page }) => {

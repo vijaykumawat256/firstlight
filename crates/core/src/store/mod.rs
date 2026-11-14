@@ -538,10 +538,50 @@ impl Store {
             .optional()?)
     }
 
-    /// Wipes every account, calendar and event (settings are kept). Used by "Erase all data" in Phase 4.
-    pub fn erase_calendar_data(&self) -> Result<()> {
+    /// The user's settings. Never fails: missing, damaged or old data falls back to defaults, and the
+    /// scattered keys used before the unified document existed are migrated on first read.
+    pub fn load_settings(&self) -> crate::settings::AppSettings {
+        use crate::settings::{AppSettings, SETTINGS_KEY};
+        if let Ok(Some(v)) = self.get_setting(SETTINGS_KEY) {
+            return AppSettings::from_value(&v);
+        }
+        let get = |k: &str| self.get_setting(k).ok().flatten();
+        let mut legacy = serde_json::Map::new();
+        for (old, new) in [
+            ("briefing", "briefing"),
+            ("unlock_rules", "unlock"),
+            ("notify", "notify"),
+        ] {
+            if let Some(v) = get(old) {
+                legacy.insert(new.into(), v);
+            }
+        }
+        if let Some(m) = get("sync_interval_minutes") {
+            legacy.insert(
+                "general".into(),
+                serde_json::json!({ "sync_interval_minutes": m }),
+            );
+        }
+        AppSettings::from_value(&serde_json::Value::Object(legacy))
+    }
+
+    pub fn save_settings(&self, s: &crate::settings::AppSettings) -> Result<()> {
+        let v =
+            serde_json::to_value(s).map_err(|_| Error::Invalid("settings could not be saved"))?;
+        self.set_setting(crate::settings::SETTINGS_KEY, &v)
+    }
+
+    /// Deletes every account, calendar, event, log entry and setting, then compacts the file so the
+    /// removed rows are physically gone. The (empty) database and its key remain.
+    pub fn erase_all(&self) -> Result<()> {
+        self.conn.execute_batch(
+            "DELETE FROM accounts;      -- cascades to calendars, events and sync state
+             DELETE FROM briefing_log;
+             DELETE FROM notifications_sent;
+             DELETE FROM settings;",
+        )?;
         self.conn
-            .execute_batch("DELETE FROM accounts; DELETE FROM briefing_log;")?;
+            .execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")?;
         Ok(())
     }
 }
@@ -748,6 +788,95 @@ mod tests {
                 .is_err()
         );
         assert!(s.rename_account("fixture-account", "Mine").is_ok());
+    }
+
+    #[test]
+    fn settings_load_defaults_save_and_reload() {
+        use crate::settings::{AppSettings, DefaultView};
+        let s = seeded();
+        assert_eq!(s.load_settings(), AppSettings::default());
+        let mut custom = AppSettings::default();
+        custom.general.default_view = DefaultView::Week;
+        custom.notify.before_minutes = 20;
+        s.save_settings(&custom).unwrap();
+        assert_eq!(s.load_settings(), custom);
+    }
+
+    #[test]
+    fn settings_from_the_earlier_scattered_keys_are_migrated() {
+        let s = seeded();
+        s.set_setting(
+            "briefing",
+            &serde_json::json!({"show_declined": true, "min_gap_minutes": 45}),
+        )
+        .unwrap();
+        s.set_setting(
+            "unlock_rules",
+            &serde_json::json!({"min_interval_minutes": 90}),
+        )
+        .unwrap();
+        s.set_setting("notify", &serde_json::json!({"before_minutes": 5}))
+            .unwrap();
+        s.set_setting("sync_interval_minutes", &serde_json::json!(3))
+            .unwrap();
+        let m = s.load_settings();
+        assert!(m.briefing.show_declined);
+        assert_eq!(m.briefing.min_gap_minutes, 45);
+        assert_eq!(m.unlock.min_interval_minutes, 90);
+        assert_eq!(m.notify.before_minutes, 5);
+        assert_eq!(m.general.sync_interval_minutes, 3);
+        // Once the new document exists it wins over the old keys.
+        s.save_settings(&crate::settings::AppSettings::default())
+            .unwrap();
+        assert!(!s.load_settings().briefing.show_declined);
+    }
+
+    #[test]
+    fn a_corrupt_stored_document_loads_as_defaults_instead_of_failing() {
+        let s = seeded();
+        s.set_setting("app_settings", &serde_json::json!("garbage"))
+            .unwrap();
+        assert_eq!(s.load_settings(), crate::settings::AppSettings::default());
+        s.set_setting("app_settings", &serde_json::json!({"general": {"sync_interval_minutes": "NaN"}, "unlock": {"first_unlock_after_hour": 7}})).unwrap();
+        let l = s.load_settings();
+        assert_eq!(l.general.sync_interval_minutes, 10);
+        assert_eq!(l.unlock.first_unlock_after_hour, 7);
+    }
+
+    #[test]
+    fn erase_all_removes_everything() {
+        let s = seeded();
+        s.save_settings(&crate::settings::AppSettings::default())
+            .unwrap();
+        s.log_briefing(
+            NaiveDate::from_ymd_opt(2026, 3, 10).unwrap(),
+            "full",
+            Utc::now(),
+        )
+        .unwrap();
+        s.mark_notification_sent("x", Utc::now()).unwrap();
+        s.erase_all().unwrap();
+        for table in [
+            "accounts",
+            "calendars",
+            "events",
+            "sync_state",
+            "settings",
+            "briefing_log",
+            "notifications_sent",
+        ] {
+            let n: i64 = s
+                .conn
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(n, 0, "{table} should be empty");
+        }
+        assert_eq!(s.load_settings(), crate::settings::AppSettings::default());
+        // The database is still usable afterwards.
+        s.upsert_account(&crate::providers::fixture::FixtureProvider::account(
+            Utc::now(),
+        ))
+        .unwrap();
     }
 
     #[test]

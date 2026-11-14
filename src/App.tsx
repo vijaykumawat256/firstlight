@@ -6,6 +6,8 @@ import { Skeleton, ToastHost, TooltipProvider } from "@/design";
 import { Gallery } from "@/design/Gallery";
 import { AccountsScreen } from "@/features/accounts/AccountsScreen";
 import { Onboarding } from "@/features/accounts/Onboarding";
+import { SettingsApplier } from "@/features/settings/SettingsApplier";
+import { SettingsScreen } from "@/features/settings/SettingsScreen";
 import { BriefingScreen } from "@/features/briefing/BriefingScreen";
 import { CalendarScreen } from "@/features/calendar/CalendarScreen";
 import { UpNextPanel } from "@/features/briefing/UpNextPanel";
@@ -57,6 +59,7 @@ function Shell() {
   if ((accounts.data ?? []).length === 0) return <Onboarding />;
   if (view === "accounts") return <AccountsScreen />;
   if (view === "calendar") return <CalendarScreen />;
+  if (view === "settings") return <SettingsScreen />;
   return <BriefingScreen />;
 }
 
@@ -66,7 +69,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ToastHost>
-          {hash === "#/upnext" ? <UpNextPanel /> : import.meta.env.DEV && hash === "#/gallery" ? <Gallery /> : <Shell />}
+          <SettingsApplier>{hash === "#/upnext" ? <UpNextPanel /> : import.meta.env.DEV && hash === "#/gallery" ? <Gallery /> : <Shell />}</SettingsApplier>
         </ToastHost>
       </TooltipProvider>
     </QueryClientProvider>

@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, Briefing, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
+import type { AccountView, AppSettings, Briefing, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -10,6 +10,13 @@ export const tauriBackend: Backend = {
   dismissUpNext: () => invoke<void>("dismiss_up_next"),
   openBriefing: () => invoke<void>("open_briefing"),
   onUpNextShown: async (callback) => listen("up-next-shown", () => callback()),
+  getSettings: () => invoke<AppSettings>("get_settings"),
+  setSettings: (settings) => invoke<AppSettings>("set_settings", { settings }),
+  exportSettings: () => invoke<string>("export_settings"),
+  saveSettingsExport: () => invoke<string>("save_settings_export"),
+  importSettings: (text) => invoke<AppSettings>("import_settings", { text }),
+  eraseAllData: () => invoke<void>("erase_all_data"),
+  onSettingsChanged: async (callback) => listen("settings-changed", () => callback()),
   getCalendars: () => invoke<CalendarInfo[]>("get_calendars"),
   listAccounts: () => invoke<AccountView[]>("list_accounts"),
   addIcsAccount: (name, url) => invoke<AccountView>("add_ics_account", { name, url }),

@@ -4,10 +4,10 @@ import { useNav } from "@/app/nav";
 import { useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
 import { Button, EmptyState, IconButton, Skeleton, Tooltip, useToasts } from "@/design";
-import { SettingsSheet } from "@/features/settings/SettingsSheet";
 import { formatDate, greeting } from "./format";
 import { useNow, useOnline } from "./hooks";
 import { AttentionSection, ClearDay, TodaySection, TomorrowSection, UpNextCard } from "./parts";
+import { useSettings } from "@/features/settings/useSettings";
 import { EventDetail } from "./EventDetail";
 import { summarise } from "./summary";
 
@@ -29,7 +29,8 @@ export function BriefingScreen() {
   const online = useOnline();
   const push = useToasts((s) => s.push);
   const go = useNav((s) => s.go);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { settings } = useSettings();
+  const sections = settings?.sections ?? { tomorrow: true, free_time: true, attention: true };
 
   // The engine works out today and tomorrow; refetch each minute so past/next stay accurate while open.
   const briefing = useQuery({ queryKey: ["briefing"], queryFn: () => api.getBriefing(), refetchInterval: 60_000, staleTime: 15_000 });
@@ -70,7 +71,7 @@ export function BriefingScreen() {
           </IconButton>
         </Tooltip>
         <Tooltip content="Settings">
-          <IconButton label="Settings" onClick={() => setSettingsOpen(true)}>
+          <IconButton label="Settings" onClick={() => go("settings")}>
             <SettingsIcon className="size-[18px]" />
           </IconButton>
         </Tooltip>
@@ -108,14 +109,13 @@ export function BriefingScreen() {
         ) : (
           <div className="flex flex-col gap-6">
             {b.next ? <UpNextCard next={b.next} now={now} colourOf={colourOf} onJoin={join} onOpen={setDetail} /> : <ClearDay />}
-            <AttentionSection b={b} />
-            <TodaySection b={b} now={now} colourOf={colourOf} onOpen={setDetail} />
-            <TomorrowSection b={b} colourOf={colourOf} onOpen={setDetail} />
+            {sections.attention && <AttentionSection b={b} />}
+            <TodaySection b={b} now={now} colourOf={colourOf} onOpen={setDetail} showFreeTime={sections.free_time} />
+            {sections.tomorrow && <TomorrowSection b={b} colourOf={colourOf} onOpen={setDetail} />}
           </div>
         )}
       </main>
 
-      <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
       <EventDetail event={detail} calendars={calendars.data ?? []} onClose={() => setDetail(null)} onJoin={join} />
     </div>
   );

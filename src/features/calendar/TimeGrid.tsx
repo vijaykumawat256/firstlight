@@ -2,15 +2,13 @@ import clsx from "clsx";
 import { useEffect, useMemo, useRef } from "react";
 import type { CalEvent } from "@/api";
 import { calendarColour } from "@/design";
-import { formatTime } from "@/features/briefing/format";
+import { formatHour, formatTime } from "@/features/briefing/format";
 import { layoutColumn, sameDay, startOfLocalDay } from "./layout";
 
 const HOUR = 52; // px per hour
 const GUTTER = 48; // px for the hour labels
 
-// Hour-only labels ("10 AM", or "10" on a 24-hour clock) fit the narrow gutter and read like Apple's Calendar.
-const hourFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric" });
-const hourLabel = (h: number) => hourFmt.format(new Date(2000, 0, 1, h));
+const hourLabel = formatHour;
 const dayName = new Intl.DateTimeFormat(undefined, { weekday: "short" });
 
 /** Events a calendar view shows: cancelled and declined stay hidden, as in the briefing. */

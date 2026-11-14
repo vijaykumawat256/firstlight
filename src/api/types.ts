@@ -97,3 +97,34 @@ export interface Briefing {
   needs_response: CalEvent[];
   tomorrow: { timed: BriefingItem[]; all_day: CalEvent[]; early_start: boolean };
 }
+
+/** Mirrors `daybrief_core::settings::AppSettings`. */
+export type DefaultView = "briefing" | "day" | "week";
+export type WeekStart = "auto" | "monday" | "sunday" | "saturday";
+export type TimeFormat = "auto" | "h12" | "h24";
+export type ThemeChoice = "system" | "light" | "dark";
+
+export interface AppSettings {
+  version: number;
+  general: {
+    sync_interval_minutes: number;
+    default_view: DefaultView;
+    week_start: WeekStart;
+    time_format: TimeFormat;
+    global_shortcut: string | null;
+  };
+  briefing: { show_declined: boolean; min_gap_minutes: number; work_start_hour: number; work_end_hour: number; early_hour: number };
+  sections: { tomorrow: boolean; free_time: boolean; attention: boolean };
+  unlock: {
+    first_unlock_after_hour: number;
+    min_interval_minutes: number;
+    /** `[from, to]` local hours; may wrap midnight. `null` means no quiet hours. */
+    quiet_hours: [number, number] | null;
+    /** Monday first. */
+    days: boolean[];
+    up_next_lead_minutes: number;
+    skip_when_fullscreen: boolean;
+  };
+  notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; time_24h: boolean };
+  appearance: { theme: ThemeChoice; accent: string };
+}

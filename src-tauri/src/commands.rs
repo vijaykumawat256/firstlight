@@ -665,26 +665,16 @@ pub async fn open_privacy_settings(app: AppHandle, pane: String) -> CmdResult<()
 
 // ---- the briefing ------------------------------------------------------------------
 
-/// Loads the saved settings for a feature, falling back to defaults on anything unreadable.
-fn saved<T: serde::de::DeserializeOwned + Default>(store: &Store, key: &str) -> T {
-    store
-        .get_setting(key)
-        .ok()
-        .flatten()
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default()
-}
-
 /// Today and tomorrow, worked out by the briefing engine (pure; see daybrief-core).
 #[tauri::command]
 pub async fn get_briefing(
     state: State<'_, AppState>,
 ) -> CmdResult<daybrief_core::briefing::Briefing> {
-    use daybrief_core::briefing::{BriefingSettings, build, day_bounds};
+    use daybrief_core::briefing::{build, day_bounds};
     let now = Utc::now();
     let tz = state.tz;
     let store = lock_store(&state)?;
-    let settings: BriefingSettings = saved(&store, "briefing");
+    let settings = store.load_settings().briefing;
     let today = now.with_timezone(&tz).date_naive();
     let (from, _) = day_bounds(today, tz);
     let (_, to) = day_bounds(today + Duration::days(1), tz);
@@ -708,5 +698,102 @@ pub async fn dismiss_up_next(app: AppHandle) -> CmdResult<()> {
 pub async fn open_briefing(app: AppHandle) -> CmdResult<()> {
     crate::hide_up_next(&app);
     crate::show_main(&app);
+    Ok(())
+}
+
+// ---- settings --------------------------------------------------------------------------
+
+use daybrief_core::settings::AppSettings;
+
+#[tauri::command]
+pub async fn get_settings(state: State<'_, AppState>) -> CmdResult<AppSettings> {
+    Ok(lock_store(&state)?.load_settings())
+}
+
+/// Checks, applies and saves new settings, and returns them as stored (out-of-range values are corrected).
+fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdResult<AppSettings> {
+    s.validate()?;
+    s.sanitize();
+    // Try the shortcut first: if the system refuses it, nothing is saved and the user is told why.
+    crate::apply_shortcut(app, s.general.global_shortcut.as_deref())?;
+    lock_store(state)?
+        .save_settings(&s)
+        .map_err(internal("saving settings"))?;
+    let _ = app.emit("settings-changed", ());
+    Ok(s)
+}
+
+#[tauri::command]
+pub async fn set_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: AppSettings,
+) -> CmdResult<AppSettings> {
+    apply_and_save(&app, &state, settings)
+}
+
+/// The settings as a portable JSON document. Contains no accounts and no secrets.
+#[tauri::command]
+pub async fn export_settings(state: State<'_, AppState>) -> CmdResult<String> {
+    Ok(lock_store(&state)?.load_settings().export())
+}
+
+/// Writes the export to the Downloads folder and returns where it went.
+#[tauri::command]
+pub async fn save_settings_export(app: AppHandle, state: State<'_, AppState>) -> CmdResult<String> {
+    use tauri::Manager;
+    let text = lock_store(&state)?.load_settings().export();
+    let dir = app
+        .path()
+        .download_dir()
+        .map_err(|_| "Couldn't find your Downloads folder.".to_string())?;
+    let mut path = dir.join("daybrief-settings.json");
+    // Never overwrite something the user already has.
+    for n in 2..100 {
+        if !path.exists() {
+            break;
+        }
+        path = dir.join(format!("daybrief-settings ({n}).json"));
+    }
+    std::fs::write(&path, text).map_err(|_| "Couldn't save the file.".to_string())?;
+    Ok(path.display().to_string())
+}
+
+#[tauri::command]
+pub async fn import_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    text: String,
+) -> CmdResult<AppSettings> {
+    let imported = AppSettings::import(&text)?;
+    apply_and_save(&app, &state, imported)
+}
+
+/// Deletes all accounts, cached events, history and settings, plus every saved credential.
+/// The caller must have asked the user to confirm.
+#[tauri::command]
+pub async fn erase_all_data(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+    use tauri_plugin_autostart::ManagerExt;
+    let report = {
+        let store = lock_store(&state)?;
+        daybrief_core::erase::erase_everything(&store, state.deps.secrets.as_ref())
+            .map_err(internal("erasing data"))?
+    };
+    log::info!(
+        "erased {} accounts and {} credentials",
+        report.accounts,
+        report.credentials
+    );
+    let _ = app.autolaunch().disable();
+    let _ = crate::apply_shortcut(&app, None);
+    let _ = app.emit("settings-changed", ());
+    let _ = app.emit(
+        "sync-finished",
+        crate::scheduler::SyncSummary {
+            ok: true,
+            offline: false,
+            needs_attention: false,
+        },
+    );
     Ok(())
 }

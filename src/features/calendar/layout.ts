@@ -68,8 +68,16 @@ export function layoutColumn(blocks: Block[], day: Date, minMinutes = 20): Place
   return placed;
 }
 
-/** The first day of the week for the user's locale as a JS weekday (0 = Sunday). Falls back to Monday. */
+let weekStartPref: "auto" | "monday" | "sunday" | "saturday" = "auto";
+export function setWeekStart(pref: typeof weekStartPref) {
+  weekStartPref = pref;
+}
+
+/** The first day of the week as a JS weekday (0 = Sunday): the user's choice, else their region's. */
 export function localeFirstDay(): number {
+  if (weekStartPref === "monday") return 1;
+  if (weekStartPref === "sunday") return 0;
+  if (weekStartPref === "saturday") return 6;
   try {
     const loc = new Intl.Locale(navigator.language) as Intl.Locale & { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } };
     const first = loc.getWeekInfo?.().firstDay ?? loc.weekInfo?.firstDay;

@@ -17,7 +17,6 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::Duration as StdDuration;
 use tauri::{AppHandle, Emitter};
 
-const DEFAULT_INTERVAL_MINUTES: i64 = 10;
 /// Unlocks within this window of the last sync do not trigger another one.
 const UNLOCK_COOLDOWN: Duration = Duration::minutes(2);
 const TICK: StdDuration = StdDuration::from_secs(30);
@@ -81,14 +80,13 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted, deps: Deps) -> Syn
 }
 
 fn interval(store: &Store) -> Duration {
-    let mins = store
-        .get_setting("sync_interval_minutes")
-        .ok()
-        .flatten()
-        .and_then(|v| v.as_i64())
-        .filter(|m| (1..=1440).contains(m))
-        .unwrap_or(DEFAULT_INTERVAL_MINUTES);
-    Duration::minutes(mins)
+    Duration::minutes(
+        store
+            .load_settings()
+            .general
+            .sync_interval_minutes
+            .clamp(1, 1440),
+    )
 }
 
 /// One pass over all accounts. Returns a summary if anything was synced.

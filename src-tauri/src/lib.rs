@@ -61,6 +61,31 @@ fn show_main(app: &AppHandle) {
     }
 }
 
+/// Shows the main window, or hides it if it is already in front. Used by the global shortcut.
+fn toggle_main(app: &AppHandle) {
+    match app.get_webview_window(MAIN_WINDOW) {
+        Some(w) if w.is_visible().unwrap_or(false) && w.is_focused().unwrap_or(false) => {
+            let _ = w.hide();
+        }
+        _ => show_main(app),
+    }
+}
+
+/// Registers (or clears) the global shortcut. Returns a plain-language error if the system refuses it.
+pub(crate) fn apply_shortcut(app: &AppHandle, shortcut: Option<&str>) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+    let gs = app.global_shortcut();
+    gs.unregister_all()
+        .map_err(|_| "Couldn't clear the old shortcut.".to_string())?;
+    let Some(s) = shortcut else { return Ok(()) };
+    gs.on_shortcut(s, |app, _shortcut, event| {
+        if event.state == ShortcutState::Pressed {
+            toggle_main(app);
+        }
+    })
+    .map_err(|_| "That shortcut couldn't be used. Another app may already own it.".to_string())
+}
+
 /// Shows the small "up next" panel in the top-right corner, creating it the first time.
 fn show_up_next(app: &AppHandle) {
     use tauri::{LogicalPosition, WebviewUrl, WebviewWindowBuilder};
@@ -243,6 +268,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
@@ -269,6 +295,12 @@ pub fn run() {
             commands::set_autostart,
             commands::get_unlock_count_today,
             commands::get_briefing,
+            commands::get_settings,
+            commands::set_settings,
+            commands::export_settings,
+            commands::save_settings_export,
+            commands::import_settings,
+            commands::erase_all_data,
             commands::dismiss_up_next,
             commands::open_briefing,
         ])
@@ -326,6 +358,16 @@ pub fn run() {
                 oauth_lock: Arc::new(Mutex::new(())),
             });
 
+            let startup = app
+                .state::<AppState>()
+                .store
+                .lock()
+                .map(|st| st.load_settings().general.global_shortcut)
+                .ok()
+                .flatten();
+            if let Err(e) = apply_shortcut(app.handle(), startup.as_deref()) {
+                log::warn!("saved shortcut not registered: {e}");
+            }
             notifier::spawn(
                 app.handle().clone(),
                 db_path_for_notifier,

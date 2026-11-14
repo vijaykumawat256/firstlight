@@ -19,7 +19,7 @@ export function CalendarScreen() {
   const go = useNav((s) => s.go);
   const push = useToasts((s) => s.push);
   const now = useNow(60_000);
-  const [mode, setMode] = useState<Mode>("day");
+  const [mode, setMode] = useState<Mode>(() => useNav.getState().calendarMode);
   const [anchor, setAnchor] = useState(() => startOfLocalDay(new Date()));
   const [detail, setDetail] = useState<CalEvent | null>(null);
 
