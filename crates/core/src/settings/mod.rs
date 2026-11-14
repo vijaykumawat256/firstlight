@@ -118,6 +118,89 @@ impl Default for AppearanceSettings {
     }
 }
 
+/// The optional email digest. Off by default; nothing mail-related runs until it is turned on.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EmailSettings {
+    pub enabled: bool,
+    /// Read the Mail app on this Mac.
+    pub apple_mail: bool,
+    /// Connected Google/Microsoft accounts the user has allowed mail access for.
+    pub account_ids: Vec<String>,
+    /// Addresses, `@domain`s, domains or names whose mail always shows.
+    pub important_senders: Vec<String>,
+    pub days_back: i64,
+}
+
+impl Default for EmailSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            apple_mail: false,
+            account_ids: vec![],
+            important_senders: vec![],
+            days_back: 3,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AiProvider {
+    /// Anthropic's API with the user's own key.
+    #[default]
+    Anthropic,
+    /// A model running on this computer (Ollama, LM Studio, llama.cpp server, ...).
+    Local,
+}
+
+pub const DEFAULT_LOCAL_ENDPOINT: &str = "http://127.0.0.1:11434";
+pub const DEFAULT_ANTHROPIC_MODEL: &str = "claude-haiku-5-5";
+pub const DEFAULT_LOCAL_MODEL: &str = "llama3.2";
+
+/// Optional AI summaries. Off by default; nothing is sent anywhere until the user has read exactly what
+/// would be sent and agreed on this computer.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AiSettings {
+    pub enabled: bool,
+    pub provider: AiProvider,
+    pub model: String,
+    /// Only used for the local provider, and only loopback addresses are allowed.
+    pub endpoint: String,
+    /// Also share sender names and subjects of important mail (never snippets or bodies).
+    pub include_email: bool,
+    /// The provider the user agreed to. Set only by the explicit enable action; never by import or save.
+    pub consented: Option<AiProvider>,
+}
+
+impl Default for AiSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: AiProvider::Anthropic,
+            model: DEFAULT_ANTHROPIC_MODEL.into(),
+            endpoint: DEFAULT_LOCAL_ENDPOINT.into(),
+            include_email: false,
+            consented: None,
+        }
+    }
+}
+
+/// A local-model address: http or https, loopback host only, no credentials.
+pub fn valid_local_endpoint(s: &str) -> bool {
+    let Ok(u) = reqwest::Url::parse(s) else {
+        return false;
+    };
+    matches!(u.scheme(), "http" | "https")
+        && u.username().is_empty()
+        && u.password().is_none()
+        && matches!(
+            u.host_str(),
+            Some("127.0.0.1" | "localhost" | "[::1]" | "::1")
+        )
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
@@ -128,6 +211,8 @@ pub struct AppSettings {
     pub unlock: UnlockRules,
     pub notify: NotifySettings,
     pub appearance: AppearanceSettings,
+    pub email: EmailSettings,
+    pub ai: AiSettings,
 }
 
 impl Default for AppSettings {
@@ -140,6 +225,8 @@ impl Default for AppSettings {
             unlock: Default::default(),
             notify: Default::default(),
             appearance: Default::default(),
+            email: Default::default(),
+            ai: Default::default(),
         }
     }
 }
@@ -236,6 +323,8 @@ impl AppSettings {
             unlock: merge_valid(&d.unlock, &section("unlock")),
             notify: merge_valid(&d.notify, &section("notify")),
             appearance: merge_valid(&d.appearance, &section("appearance")),
+            email: merge_valid(&d.email, &section("email")),
+            ai: merge_valid(&d.ai, &section("ai")),
         };
         s.sanitize();
         s
@@ -277,6 +366,57 @@ impl AppSettings {
         n.before_minutes = n.before_minutes.clamp(1, 120);
         n.morning_hour = n.morning_hour.min(11); // the morning briefing is due until noon
         n.evening_hour = n.evening_hour.clamp(12, 22); // and the evening one until 23:00
+
+        let e = &mut self.email;
+        e.days_back = e.days_back.clamp(1, 14);
+        let mut seen = std::collections::HashSet::new();
+        e.important_senders = std::mem::take(&mut e.important_senders)
+            .into_iter()
+            .map(|p| p.trim().to_string())
+            .filter(|p| {
+                !p.is_empty()
+                    && p.chars().count() <= 254
+                    && !p.chars().any(char::is_control)
+                    && seen.insert(p.to_ascii_lowercase())
+            })
+            .take(50)
+            .collect();
+        let mut ids = std::collections::HashSet::new();
+        e.account_ids = std::mem::take(&mut e.account_ids)
+            .into_iter()
+            .filter(|id| {
+                !id.is_empty()
+                    && id.len() <= 64
+                    && id
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"-_:".contains(&b))
+                    && ids.insert(id.clone())
+            })
+            .take(20)
+            .collect();
+
+        let ai = &mut self.ai;
+        ai.model = ai.model.trim().to_string();
+        let model_ok = !ai.model.is_empty()
+            && ai.model.len() <= 100
+            && ai
+                .model
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"-._:/".contains(&b));
+        if !model_ok {
+            ai.model = match ai.provider {
+                AiProvider::Anthropic => DEFAULT_ANTHROPIC_MODEL,
+                AiProvider::Local => DEFAULT_LOCAL_MODEL,
+            }
+            .into();
+        }
+        if !valid_local_endpoint(&ai.endpoint) {
+            ai.endpoint = DEFAULT_LOCAL_ENDPOINT.into();
+        }
+        // AI can only be on for a provider the user explicitly agreed to on this computer.
+        if ai.consented != Some(ai.provider) {
+            ai.enabled = false;
+        }
 
         let accent = &self.appearance.accent;
         if accent != "system" && !CALENDAR_COLOURS.contains(&accent.as_str()) {
@@ -331,7 +471,12 @@ impl AppSettings {
         let Some(inner) = v.get("settings") else {
             return Err("That settings file is empty.".into());
         };
-        Ok(Self::from_value(inner))
+        let mut imported = Self::from_value(inner);
+        // Agreement to send data to an AI service must be given on this computer, never inherited from a file.
+        imported.ai.consented = None;
+        imported.ai.enabled = false;
+        imported.sanitize();
+        Ok(imported)
     }
 }
 

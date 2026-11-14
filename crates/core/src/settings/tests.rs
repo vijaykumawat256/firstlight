@@ -271,7 +271,9 @@ fn import_refuses_foreign_oversized_and_broken_files_without_changing_anything()
 
 #[test]
 fn settings_never_contain_anything_secret() {
-    let text = AppSettings::default().export().to_ascii_lowercase();
+    let mut s = AppSettings::default();
+    s.email.important_senders = vec!["boss@acme.com".into()];
+    let text = s.export().to_ascii_lowercase();
     for word in [
         "token",
         "secret",
@@ -280,9 +282,124 @@ fn settings_never_contain_anything_secret() {
         "apikey",
         "api_key",
         "bearer",
-        "url",
-        "http",
+        "sk-ant",
     ] {
         assert!(!text.contains(word), "export mentions {word}");
     }
+    // The only address in there is the local-model default on this computer.
+    for part in text.split("http").skip(1) {
+        assert!(
+            part.starts_with("://127.0.0.1") || part.starts_with("://localhost"),
+            "export contains a remote address: http{part:.30}"
+        );
+    }
+}
+
+#[test]
+fn email_and_ai_are_off_by_default() {
+    let d = AppSettings::default();
+    assert!(
+        !d.email.enabled
+            && !d.email.apple_mail
+            && d.email.account_ids.is_empty()
+            && d.email.important_senders.is_empty()
+    );
+    assert!(!d.ai.enabled && d.ai.consented.is_none() && !d.ai.include_email);
+}
+
+#[test]
+fn ai_cannot_be_on_without_consent_for_that_provider() {
+    let on = parse(r#"{"ai":{"enabled":true,"provider":"anthropic"}}"#);
+    assert!(!on.ai.enabled, "no consent recorded");
+    let mismatch = parse(r#"{"ai":{"enabled":true,"provider":"local","consented":"anthropic"}}"#);
+    assert!(!mismatch.ai.enabled, "consent was for a different provider");
+    let ok = parse(r#"{"ai":{"enabled":true,"provider":"anthropic","consented":"anthropic"}}"#);
+    assert!(ok.ai.enabled);
+}
+
+#[test]
+fn an_imported_file_can_never_grant_consent_or_switch_ai_on() {
+    let file = r#"{"format":"daybrief-settings","settings":{"ai":{"enabled":true,"provider":"anthropic","consented":"anthropic","model":"claude-haiku-5-5"}}}"#;
+    let s = AppSettings::import(file).unwrap();
+    assert_eq!((s.ai.enabled, s.ai.consented), (false, None));
+    assert_eq!(
+        s.ai.model, "claude-haiku-5-5",
+        "harmless preferences still import"
+    );
+}
+
+#[test]
+fn the_local_model_endpoint_must_be_this_computer() {
+    for ok in [
+        "http://127.0.0.1:11434",
+        "http://localhost:1234",
+        "https://localhost:8443/v1",
+        "http://[::1]:8080",
+    ] {
+        assert!(valid_local_endpoint(ok), "{ok}");
+    }
+    for bad in [
+        "http://example.com",
+        "http://192.168.1.5:11434",
+        "http://127.0.0.1.evil.com",
+        "http://user:pw@127.0.0.1",
+        "ftp://127.0.0.1",
+        "javascript:1",
+        "",
+        "localhost:11434",
+        "http://localhost.evil.com",
+    ] {
+        assert!(!valid_local_endpoint(bad), "{bad}");
+    }
+    let s = parse(r#"{"ai":{"endpoint":"http://evil.example.com"}}"#);
+    assert_eq!(
+        s.ai.endpoint, DEFAULT_LOCAL_ENDPOINT,
+        "a remote address is replaced, not trusted"
+    );
+}
+
+#[test]
+fn model_names_are_restricted_and_default_per_provider() {
+    assert_eq!(
+        parse(r#"{"ai":{"model":"claude-haiku-5-5"}}"#).ai.model,
+        "claude-haiku-5-5"
+    );
+    assert_eq!(
+        parse(r#"{"ai":{"model":"llama3.2:3b"}}"#).ai.model,
+        "llama3.2:3b"
+    );
+    assert_eq!(
+        parse(r#"{"ai":{"model":"bad model; rm -rf"}}"#).ai.model,
+        DEFAULT_ANTHROPIC_MODEL
+    );
+    assert_eq!(
+        parse(r#"{"ai":{"provider":"local","model":""}}"#).ai.model,
+        DEFAULT_LOCAL_MODEL
+    );
+}
+
+#[test]
+fn important_senders_are_cleaned_deduplicated_and_capped() {
+    let many: Vec<String> = (0..80).map(|i| format!("p{i}@x.com")).collect();
+    let json = serde_json::json!({"email": {"important_senders": [" boss@acme.com ", "BOSS@acme.com", "", "  ", "@clients.org", "bad\u{7}entry", "x".repeat(300)]}});
+    let s = AppSettings::from_value(&json);
+    assert_eq!(s.email.important_senders, ["boss@acme.com", "@clients.org"]);
+    let capped =
+        AppSettings::from_value(&serde_json::json!({"email": {"important_senders": many}}));
+    assert_eq!(capped.email.important_senders.len(), 50);
+}
+
+#[test]
+fn email_account_ids_and_days_are_sanitised() {
+    let s = AppSettings::from_value(
+        &serde_json::json!({"email": {"account_ids": ["abc123", "abc123", "has space", "../etc", "ok-id_1"], "days_back": 400}}),
+    );
+    assert_eq!(s.email.account_ids, ["abc123", "ok-id_1"]);
+    assert_eq!(s.email.days_back, 14);
+    assert_eq!(
+        AppSettings::from_value(&serde_json::json!({"email": {"days_back": 0}}))
+            .email
+            .days_back,
+        1
+    );
 }

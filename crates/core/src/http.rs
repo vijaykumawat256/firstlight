@@ -96,40 +96,66 @@ pub fn normalise_calendar_url(input: &str) -> Result<String> {
     Ok(url)
 }
 
+/// Which addresses a client may talk to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Transport {
+    /// https only. What every remote service uses.
+    HttpsOnly,
+    /// https anywhere, plus plain http to this computer only (for a model running locally).
+    HttpsOrLoopback,
+    /// Anything, including plain http. Tests only.
+    Anything,
+}
+
+fn is_loopback_host(host: Option<&str>) -> bool {
+    matches!(host, Some("127.0.0.1" | "localhost" | "[::1]" | "::1"))
+}
+
+fn allowed(t: Transport, url: &Url) -> bool {
+    match t {
+        Transport::Anything => true,
+        Transport::HttpsOnly => url.scheme() == "https",
+        Transport::HttpsOrLoopback => {
+            url.scheme() == "https" || (url.scheme() == "http" && is_loopback_host(url.host_str()))
+        }
+    }
+}
+
 pub struct ReqwestClient {
     client: reqwest::blocking::Client,
+    transport: Transport,
 }
 
 impl ReqwestClient {
     /// Production client: https only.
     pub fn new() -> Result<Self> {
-        Self::build(false)
+        Self::with_options(TIMEOUT, Transport::HttpsOnly)
     }
 
     /// Allows plain `http` (for loopback test servers). Never use outside tests.
     #[doc(hidden)]
     pub fn new_allow_http_for_tests() -> Result<Self> {
-        Self::build(true)
+        Self::with_options(TIMEOUT, Transport::Anything)
     }
 
-    fn build(allow_http: bool) -> Result<Self> {
+    pub fn with_options(timeout: Duration, transport: Transport) -> Result<Self> {
         let policy = reqwest::redirect::Policy::custom(move |attempt| {
             if attempt.previous().len() >= 5 {
                 attempt.error("too many redirects")
-            } else if !allow_http && attempt.url().scheme() != "https" {
-                attempt.error("redirect to a non-https address refused")
+            } else if !allowed(transport, attempt.url()) {
+                attempt.error("redirect to a disallowed address refused")
             } else {
                 attempt.follow()
             }
         });
         let client = reqwest::blocking::Client::builder()
-            .https_only(!allow_http)
+            .https_only(transport == Transport::HttpsOnly)
             .redirect(policy)
-            .timeout(TIMEOUT)
+            .timeout(timeout)
             .user_agent(concat!("Daybrief/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(|_| Error::Provider("could not create HTTP client".into()))?;
-        Ok(Self { client })
+        Ok(Self { client, transport })
     }
 }
 
@@ -152,6 +178,11 @@ fn classify(e: reqwest::Error) -> Error {
 
 impl HttpClient for ReqwestClient {
     fn send(&self, req: &HttpRequest) -> Result<HttpResponse> {
+        // Checked before anything is sent, so a refused address never sees a request.
+        let url = Url::parse(&req.url).map_err(|_| Error::Invalid("bad address"))?;
+        if !allowed(self.transport, &url) {
+            return Err(Error::Invalid("this address is not allowed"));
+        }
         let method = reqwest::Method::from_bytes(req.method.as_bytes())
             .map_err(|_| Error::Invalid("bad HTTP method"))?;
         let mut b = self.client.request(method, &req.url);
@@ -389,6 +420,40 @@ mod tests {
             "{shown}"
         );
         assert!(matches!(err, Error::Offline));
+    }
+
+    #[test]
+    fn the_loopback_client_allows_http_to_this_computer_and_nowhere_else() {
+        let server = TestServer::start(|_| Resp::ok("local"));
+        let c = ReqwestClient::with_options(Duration::from_secs(5), Transport::HttpsOrLoopback)
+            .unwrap();
+        assert_eq!(
+            c.send(&HttpRequest::get(server.url("/"))).unwrap().text(),
+            "local"
+        );
+        for bad in [
+            "http://example.com/",
+            "http://192.168.1.10/",
+            "http://127.0.0.1.evil.com/",
+            "ftp://127.0.0.1/",
+            "http://localhost.evil.com/",
+        ] {
+            let err = c.send(&HttpRequest::get(bad)).unwrap_err();
+            assert!(
+                matches!(err, Error::Invalid(_)),
+                "{bad} must be refused before any connection: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_loopback_redirect_cannot_escape_to_a_remote_http_address() {
+        let server = TestServer::start(|_| {
+            Resp::status(302).with_header("Location", "http://example.com/steal")
+        });
+        let c = ReqwestClient::with_options(Duration::from_secs(5), Transport::HttpsOrLoopback)
+            .unwrap();
+        assert!(c.send(&HttpRequest::get(server.url("/"))).is_err());
     }
 
     #[test]

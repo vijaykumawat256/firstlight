@@ -17,6 +17,9 @@ pub enum Error {
     /// Credentials were rejected or revoked; the user must reconnect. Never retried in a loop.
     #[error("authorisation was revoked or expired")]
     AuthRevoked,
+    /// A permission the user has not granted (or has withdrawn) is needed, for example mail access.
+    #[error("permission needed")]
+    PermissionNeeded,
     /// The network could not be reached (offline, DNS, timeout). Safe to retry later.
     #[error("network unavailable")]
     Offline,

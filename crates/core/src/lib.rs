@@ -4,6 +4,7 @@
 //! are reached through traits or plain types so the same logic can later run
 //! behind a web front end (see PLAN.md, section 3).
 
+pub mod ai;
 pub mod briefing;
 pub mod dedupe;
 pub mod erase;
@@ -11,6 +12,7 @@ pub mod error;
 pub mod http;
 pub mod ics;
 pub mod join;
+pub mod mail;
 pub mod model;
 pub mod oauth;
 pub mod providers;
