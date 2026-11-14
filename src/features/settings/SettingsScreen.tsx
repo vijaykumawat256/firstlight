@@ -1,16 +1,60 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { Bell, CalendarDays, ChevronLeft, Info, LockOpen, Mail, Palette, Settings2, ShieldCheck, Sparkles, Sunrise, type LucideIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type DefaultView, type ThemeChoice, type TimeFormat, type WeekStart } from "@/api";
-import { useNav } from "@/app/nav";
-import { Button, CALENDAR_COLOURS, Dialog, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
-import { DayPicker, Group, HourSelect, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
+import { useNav, type View } from "@/app/nav";
+import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
+import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
 import { AiGroup, EmailGroup } from "./EmailAiSettings";
 import { useSettings } from "./useSettings";
 
 const ACCENTS = ["system", ...CALENDAR_COLOURS.filter((c) => !["blue", "yellow", "brown"].includes(c))];
 
+type Section = "general" | "appearance" | "briefing" | "appears" | "notifications" | "email" | "ai" | "privacy";
+interface HomeItem {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  /** Opens a page of settings… */
+  section?: Section;
+  /** …or another screen. */
+  view?: View;
+}
+
+/** The settings home: a few short clusters, each row opening one page. */
+const HOME: HomeItem[][] = [
+  [
+    { section: "general", title: "General", description: "Start at login, shortcut, sync and updates", icon: Settings2 },
+    { section: "appearance", title: "Appearance", description: "Theme, accent colour, time format and week start", icon: Palette },
+  ],
+  [
+    { section: "briefing", title: "Briefing", description: "What the briefing shows and your working hours", icon: Sunrise },
+    { section: "appears", title: "When it appears", description: "Unlock rules, days and quiet hours", icon: LockOpen },
+    { section: "notifications", title: "Notifications", description: "Meeting heads-ups and daily summaries", icon: Bell },
+  ],
+  [
+    { view: "accounts", title: "Accounts & calendars", description: "Connect accounts, choose calendars and colours", icon: CalendarDays },
+    { section: "email", title: "Email", description: "Unread mail and invitations in the briefing", icon: Mail },
+    { section: "ai", title: "AI summaries", description: "An optional smarter summary of your day", icon: Sparkles },
+  ],
+  [
+    { section: "privacy", title: "Privacy & data", description: "Backup, crash reports and erasing everything", icon: ShieldCheck },
+    { view: "about", title: "About Firstlight", description: "Version, help, privacy policy and licences", icon: Info },
+  ],
+];
+const titleOf = (section: Section) => HOME.flat().find((i) => i.section === section)?.title ?? "Settings";
+
 export function SettingsScreen() {
+  const section = useNav((n) => n.settingsSection) as Section | null;
+  const setSection = useNav((n) => n.setSettingsSection);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const first = useRef(true);
+  // Moving between the list and a page replaces everything on screen, so put keyboard and screen-reader focus on the new title.
+  useEffect(() => {
+    if (first.current) first.current = false;
+    else heading.current?.focus();
+  }, [section]);
+
   const go = useNav((s) => s.go);
   const qc = useQueryClient();
   const push = useToasts((s) => s.push);
@@ -70,21 +114,37 @@ export function SettingsScreen() {
   return (
     <div className="flex h-full flex-col">
       <div data-tauri-drag-region className="flex h-11 shrink-0 items-center px-3 pl-20">
-        <Button variant="plain" size="sm" leading={<ChevronLeft className="size-4" />} onClick={() => go("briefing")}>
-          Briefing
+        <Button variant="plain" size="sm" leading={<ChevronLeft className="size-4" />} onClick={() => (section ? setSection(null) : go("briefing"))}>
+          {section ? "Settings" : "Briefing"}
         </Button>
       </div>
-      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-10">
-        <h1 className="mb-6 text-largetitle font-bold tracking-tight text-fg">Settings</h1>
-        {!s ? (
+      <main key={section ?? "home"} className="min-h-0 flex-1 overflow-y-auto px-5 pb-10">
+        <h1 ref={heading} tabIndex={-1} className="mb-6 text-largetitle font-bold tracking-tight text-fg outline-none">
+          {section ? titleOf(section) : "Settings"}
+        </h1>
+        {!s && (
           <div className="flex flex-col gap-3" aria-busy>
             <Skeleton className="h-5 w-24" />
             <Skeleton className="h-40 rounded-card" />
           </div>
-        ) : (
+        )}
+        {s && (
+          <>
+        {section === null && (
+          <div className="flex flex-col gap-5">
+            {HOME.map((cluster) => (
+              <ListGroup key={cluster.map((i) => i.title).join()}>
+                {cluster.map((item) => (
+                  <NavRow key={item.title} icon={item.icon} title={item.title} description={item.description} onClick={() => (item.view ? go(item.view) : setSection(item.section ?? null))} />
+                ))}
+              </ListGroup>
+            ))}
+          </div>
+        )}
+        {section === "general" && (
           <div className="flex flex-col gap-7">
-            <Group title="General">
-              <SettingRow title="Start at login" description="Open Daybrief quietly when you sign in.">
+            <Group title="Startup">
+              <SettingRow title="Start at login" description="Open Firstlight quietly when you sign in.">
                 <Switch label="Start at login" checked={autostart.data ?? false} disabled={autostart.isPending} onCheckedChange={(v) => toggleAutostart.mutate(v)} />
               </SettingRow>
               <SettingRow title="Opens to">
@@ -99,34 +159,18 @@ export function SettingsScreen() {
                   ]}
                 />
               </SettingRow>
+              <SettingRow title="Show or hide the briefing" description="A shortcut that works from any app.">
+                <ShortcutRecorder value={s.general.global_shortcut} onChange={(v) => update((d) => void (d.general.global_shortcut = v))} />
+              </SettingRow>
+            </Group>
+
+            <Group title="Sync">
               <SettingRow title="Refresh calendars every">
                 <NumberSelect label="Refresh interval" unit="min" options={[1, 5, 10, 15, 30, 60]} value={s.general.sync_interval_minutes} onChange={(n) => update((d) => void (d.general.sync_interval_minutes = n))} />
               </SettingRow>
-              <SettingRow title="Time format">
-                <Segmented
-                  label="Time format"
-                  value={s.general.time_format}
-                  onValueChange={(v) => update((d) => void (d.general.time_format = v as TimeFormat))}
-                  options={[
-                    { value: "auto", label: "Auto" },
-                    { value: "h12", label: "12-hour" },
-                    { value: "h24", label: "24-hour" },
-                  ]}
-                />
-              </SettingRow>
-              <SettingRow title="Week starts on">
-                <Select
-                  label="Week starts on"
-                  value={s.general.week_start}
-                  onValueChange={(v) => update((d) => void (d.general.week_start = v as WeekStart))}
-                  options={[
-                    { value: "auto", label: "Automatic" },
-                    { value: "monday", label: "Monday" },
-                    { value: "sunday", label: "Sunday" },
-                    { value: "saturday", label: "Saturday" },
-                  ]}
-                />
-              </SettingRow>
+            </Group>
+
+            <Group title="Updates">
               <SettingRow title="Check for updates" description="About once a day. Sends only the app's version and your operating system.">
                 <Switch label="Check for updates automatically" checked={s.general.check_for_updates} onCheckedChange={(v) => update((d) => void (d.general.check_for_updates = v))} />
               </SettingRow>
@@ -143,132 +187,12 @@ export function SettingsScreen() {
                   />
                 </SettingRow>
               )}
-              <SettingRow title="Show or hide the briefing" description="A shortcut that works from any app.">
-                <ShortcutRecorder value={s.general.global_shortcut} onChange={(v) => update((d) => void (d.general.global_shortcut = v))} />
-              </SettingRow>
             </Group>
-
-            <Group title="Briefing" footer="Choose what the briefing shows. Cancelled events are never shown.">
-              <SettingRow title="Needs attention" description="Overlaps, back-to-back runs and unanswered invitations.">
-                <Switch label="Show needs attention" checked={s.sections.attention} onCheckedChange={(v) => update((d) => void (d.sections.attention = v))} />
-              </SettingRow>
-              <SettingRow title="Free time" description="Gaps between today's meetings.">
-                <Switch label="Show free time" checked={s.sections.free_time} onCheckedChange={(v) => update((d) => void (d.sections.free_time = v))} />
-              </SettingRow>
-              <SettingRow title="Tomorrow">
-                <Switch label="Show tomorrow" checked={s.sections.tomorrow} onCheckedChange={(v) => update((d) => void (d.sections.tomorrow = v))} />
-              </SettingRow>
-              <SettingRow title="Declined events" description="Show events you have said no to.">
-                <Switch label="Show declined events" checked={s.briefing.show_declined} onCheckedChange={(v) => update((d) => void (d.briefing.show_declined = v))} />
-              </SettingRow>
-              <SettingRow title="Working day starts">
-                <HourSelect label="Working day starts" from={0} to={12} value={s.briefing.work_start_hour} onChange={(h) => update((d) => void (d.briefing.work_start_hour = h))} />
-              </SettingRow>
-              <SettingRow title="Working day ends">
-                <HourSelect label="Working day ends" from={13} to={23} value={s.briefing.work_end_hour} onChange={(h) => update((d) => void (d.briefing.work_end_hour = h))} />
-              </SettingRow>
-              <SettingRow title="Mention free time longer than">
-                <NumberSelect label="Minimum free time" unit="min" options={[15, 30, 45, 60, 90]} value={s.briefing.min_gap_minutes} onChange={(n) => update((d) => void (d.briefing.min_gap_minutes = n))} />
-              </SettingRow>
-              <SettingRow title="Flag tomorrow's early start before">
-                <HourSelect label="Early start before" from={5} to={11} value={s.briefing.early_hour} onChange={(h) => update((d) => void (d.briefing.early_hour = h))} />
-              </SettingRow>
-            </Group>
-
-            <Group title="When Daybrief appears" footer="The first unlock of the day opens your briefing. Later unlocks only show a small reminder when a meeting is about to start.">
-              <SettingRow title="First unlock after">
-                <HourSelect label="First unlock after" from={0} to={12} value={s.unlock.first_unlock_after_hour} onChange={(h) => update((d) => void (d.unlock.first_unlock_after_hour = h))} />
-              </SettingRow>
-              <SettingRow title="Remind me about meetings starting within">
-                <NumberSelect label="Reminder window" unit="min" options={[5, 10, 15, 30, 60]} value={s.unlock.up_next_lead_minutes} onChange={(n) => update((d) => void (d.unlock.up_next_lead_minutes = n))} />
-              </SettingRow>
-              <SettingRow title="At least this long between appearances">
-                <NumberSelect label="Minimum time between appearances" unit="min" options={[0, 15, 30, 60, 120]} value={s.unlock.min_interval_minutes} onChange={(n) => update((d) => void (d.unlock.min_interval_minutes = n))} />
-              </SettingRow>
-              <SettingRow title="Days" description="It stays quiet on the others." stack>
-                <DayPicker days={s.unlock.days} onChange={(days) => update((d) => void (d.unlock.days = days))} />
-              </SettingRow>
-              <SettingRow title="Quiet hours" description="Nothing appears, and no summaries are sent.">
-                <Switch
-                  label="Quiet hours"
-                  checked={s.unlock.quiet_hours !== null}
-                  onCheckedChange={(on) => update((d) => void (d.unlock.quiet_hours = on ? [22, 6] : null))}
-                />
-              </SettingRow>
-              {s.unlock.quiet_hours && (
-                <SettingRow title="From and until">
-                  <div className="flex items-center gap-2">
-                    <HourSelect label="Quiet hours from" from={0} to={23} value={s.unlock.quiet_hours[0]} onChange={(h) => update((d) => void (d.unlock.quiet_hours = [h, d.unlock.quiet_hours?.[1] ?? 6]))} />
-                    <span className="text-footnote text-fg-2">to</span>
-                    <HourSelect label="Quiet hours until" from={0} to={23} value={s.unlock.quiet_hours[1]} onChange={(h) => update((d) => void (d.unlock.quiet_hours = [d.unlock.quiet_hours?.[0] ?? 22, h]))} />
-                  </div>
-                </SettingRow>
-              )}
-            </Group>
-
-            <Group title="Notifications" footer="Heads-ups still arrive during quiet hours, so an early meeting is never missed.">
-              <SettingRow title="Show event names" description="Turn off to keep names and places out of notifications, which appear on the lock screen and in screen shares.">
-                <Switch label="Show event names in notifications" checked={!s.notify.hide_titles} onCheckedChange={(v) => update((d) => void (d.notify.hide_titles = !v))} />
-              </SettingRow>
-              <SettingRow title="Before each event">
-                <Switch label="Notify before events" checked={s.notify.before_event} onCheckedChange={(v) => update((d) => void (d.notify.before_event = v))} />
-              </SettingRow>
-              {s.notify.before_event && (
-                <SettingRow title="How early">
-                  <NumberSelect label="Notify how early" unit="min" options={[5, 10, 15, 30]} value={s.notify.before_minutes} onChange={(n) => update((d) => void (d.notify.before_minutes = n))} />
-                </SettingRow>
-              )}
-              <SettingRow title="Morning briefing" description="A short summary of your day.">
-                <Switch label="Morning briefing" checked={s.notify.morning} onCheckedChange={(v) => update((d) => void (d.notify.morning = v))} />
-              </SettingRow>
-              {s.notify.morning && (
-                <SettingRow title="Morning briefing time">
-                  <HourSelect label="Morning briefing time" from={4} to={11} value={s.notify.morning_hour} onChange={(h) => update((d) => void (d.notify.morning_hour = h))} />
-                </SettingRow>
-              )}
-              <SettingRow title="Evening look-ahead" description="A heads-up about tomorrow.">
-                <Switch label="Evening look-ahead" checked={s.notify.evening} onCheckedChange={(v) => update((d) => void (d.notify.evening = v))} />
-              </SettingRow>
-              {s.notify.evening && (
-                <SettingRow title="Evening look-ahead time">
-                  <HourSelect label="Evening look-ahead time" from={12} to={22} value={s.notify.evening_hour} onChange={(h) => update((d) => void (d.notify.evening_hour = h))} />
-                </SettingRow>
-              )}
-            </Group>
-
-            <EmailGroup />
-
-            <AiGroup />
-
-            <Group title="Calendars">
-              <li>
-                <button
-                  type="button"
-                  onClick={() => go("accounts")}
-                  className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong"
-                >
-                  <span>
-                    <span className="block text-headline font-medium text-fg">Accounts &amp; calendars</span>
-                    <span className="block text-footnote text-fg-2">Connect accounts, choose which calendars show, and pick their colours.</span>
-                  </span>
-                  <ChevronRight className="size-4 shrink-0 text-fg-3" aria-hidden />
-                </button>
-              </li>
-            </Group>
-
-            <Group title="About">
-              <li>
-                <button type="button" onClick={() => go("about")} className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong">
-                  <span>
-                    <span className="block text-headline font-medium text-fg">About Daybrief</span>
-                    <span className="block text-footnote text-fg-2">Version, updates, help, privacy policy and open-source licences.</span>
-                  </span>
-                  <ChevronRight className="size-4 shrink-0 text-fg-3" aria-hidden />
-                </button>
-              </li>
-            </Group>
-
-            <Group title="Appearance">
+          </div>
+        )}
+        {section === "appearance" && (
+          <div className="flex flex-col gap-7">
+            <Group title="Look">
               <SettingRow title="Theme">
                 <Segmented
                   label="Theme"
@@ -299,7 +223,146 @@ export function SettingsScreen() {
               </SettingRow>
             </Group>
 
-            <Group title="Privacy" footer="Daybrief has no server and no account. Your events stay on this computer, your passwords and sign-ins live in the system keychain, and nothing is sent anywhere except to your own calendar providers.">
+            <Group title="Date and time">
+              <SettingRow title="Time format">
+                <Segmented
+                  label="Time format"
+                  value={s.general.time_format}
+                  onValueChange={(v) => update((d) => void (d.general.time_format = v as TimeFormat))}
+                  options={[
+                    { value: "auto", label: "Auto" },
+                    { value: "h12", label: "12-hour" },
+                    { value: "h24", label: "24-hour" },
+                  ]}
+                />
+              </SettingRow>
+              <SettingRow title="Week starts on">
+                <Select
+                  label="Week starts on"
+                  value={s.general.week_start}
+                  onValueChange={(v) => update((d) => void (d.general.week_start = v as WeekStart))}
+                  options={[
+                    { value: "auto", label: "Automatic" },
+                    { value: "monday", label: "Monday" },
+                    { value: "sunday", label: "Sunday" },
+                    { value: "saturday", label: "Saturday" },
+                  ]}
+                />
+              </SettingRow>
+            </Group>
+          </div>
+        )}
+        {section === "briefing" && (
+          <div className="flex flex-col gap-7">
+            <Group title="Sections" footer="Choose what the briefing shows. Cancelled events are never shown.">
+              <SettingRow title="Needs attention" description="Overlaps, back-to-back runs and unanswered invitations.">
+                <Switch label="Show needs attention" checked={s.sections.attention} onCheckedChange={(v) => update((d) => void (d.sections.attention = v))} />
+              </SettingRow>
+              <SettingRow title="Free time" description="Gaps between today's meetings.">
+                <Switch label="Show free time" checked={s.sections.free_time} onCheckedChange={(v) => update((d) => void (d.sections.free_time = v))} />
+              </SettingRow>
+              <SettingRow title="Tomorrow">
+                <Switch label="Show tomorrow" checked={s.sections.tomorrow} onCheckedChange={(v) => update((d) => void (d.sections.tomorrow = v))} />
+              </SettingRow>
+              <SettingRow title="Declined events" description="Show events you have said no to.">
+                <Switch label="Show declined events" checked={s.briefing.show_declined} onCheckedChange={(v) => update((d) => void (d.briefing.show_declined = v))} />
+              </SettingRow>
+            </Group>
+
+            <Group title="Your day">
+              <SettingRow title="Working day starts">
+                <HourSelect label="Working day starts" from={0} to={12} value={s.briefing.work_start_hour} onChange={(h) => update((d) => void (d.briefing.work_start_hour = h))} />
+              </SettingRow>
+              <SettingRow title="Working day ends">
+                <HourSelect label="Working day ends" from={13} to={23} value={s.briefing.work_end_hour} onChange={(h) => update((d) => void (d.briefing.work_end_hour = h))} />
+              </SettingRow>
+              <SettingRow title="Mention free time longer than">
+                <NumberSelect label="Minimum free time" unit="min" options={[15, 30, 45, 60, 90]} value={s.briefing.min_gap_minutes} onChange={(n) => update((d) => void (d.briefing.min_gap_minutes = n))} />
+              </SettingRow>
+              <SettingRow title="Flag tomorrow's early start before">
+                <HourSelect label="Early start before" from={5} to={11} value={s.briefing.early_hour} onChange={(h) => update((d) => void (d.briefing.early_hour = h))} />
+              </SettingRow>
+            </Group>
+          </div>
+        )}
+        {section === "appears" && (
+          <div className="flex flex-col gap-7">
+            <Group title="On unlock" footer="The first unlock of the day opens your briefing. Later unlocks only show a small reminder when a meeting is about to start.">
+              <SettingRow title="First unlock after">
+                <HourSelect label="First unlock after" from={0} to={12} value={s.unlock.first_unlock_after_hour} onChange={(h) => update((d) => void (d.unlock.first_unlock_after_hour = h))} />
+              </SettingRow>
+              <SettingRow title="Remind me about meetings starting within">
+                <NumberSelect label="Reminder window" unit="min" options={[5, 10, 15, 30, 60]} value={s.unlock.up_next_lead_minutes} onChange={(n) => update((d) => void (d.unlock.up_next_lead_minutes = n))} />
+              </SettingRow>
+              <SettingRow title="At least this long between appearances">
+                <NumberSelect label="Minimum time between appearances" unit="min" options={[0, 15, 30, 60, 120]} value={s.unlock.min_interval_minutes} onChange={(n) => update((d) => void (d.unlock.min_interval_minutes = n))} />
+              </SettingRow>
+            </Group>
+
+            <Group title="Quiet times">
+              <SettingRow title="Days" description="It stays quiet on the others." stack>
+                <DayPicker days={s.unlock.days} onChange={(days) => update((d) => void (d.unlock.days = days))} />
+              </SettingRow>
+              <SettingRow title="Quiet hours" description="Nothing appears, and no summaries are sent.">
+                <Switch
+                  label="Quiet hours"
+                  checked={s.unlock.quiet_hours !== null}
+                  onCheckedChange={(on) => update((d) => void (d.unlock.quiet_hours = on ? [22, 6] : null))}
+                />
+              </SettingRow>
+              {s.unlock.quiet_hours && (
+                <SettingRow title="From and until">
+                  <div className="flex items-center gap-2">
+                    <HourSelect label="Quiet hours from" from={0} to={23} value={s.unlock.quiet_hours[0]} onChange={(h) => update((d) => void (d.unlock.quiet_hours = [h, d.unlock.quiet_hours?.[1] ?? 6]))} />
+                    <span className="text-footnote text-fg-2">to</span>
+                    <HourSelect label="Quiet hours until" from={0} to={23} value={s.unlock.quiet_hours[1]} onChange={(h) => update((d) => void (d.unlock.quiet_hours = [d.unlock.quiet_hours?.[0] ?? 22, h]))} />
+                  </div>
+                </SettingRow>
+              )}
+            </Group>
+          </div>
+        )}
+        {section === "notifications" && (
+          <div className="flex flex-col gap-7">
+            <Group title="Meetings" footer="Heads-ups still arrive during quiet hours, so an early meeting is never missed.">
+              <SettingRow title="Show event names" description="Turn off to keep names and places out of notifications, which appear on the lock screen and in screen shares.">
+                <Switch label="Show event names in notifications" checked={!s.notify.hide_titles} onCheckedChange={(v) => update((d) => void (d.notify.hide_titles = !v))} />
+              </SettingRow>
+              <SettingRow title="Before each event">
+                <Switch label="Notify before events" checked={s.notify.before_event} onCheckedChange={(v) => update((d) => void (d.notify.before_event = v))} />
+              </SettingRow>
+              {s.notify.before_event && (
+                <SettingRow title="How early">
+                  <NumberSelect label="Notify how early" unit="min" options={[5, 10, 15, 30]} value={s.notify.before_minutes} onChange={(n) => update((d) => void (d.notify.before_minutes = n))} />
+                </SettingRow>
+              )}
+            </Group>
+
+            <Group title="Daily summaries">
+              <SettingRow title="Morning briefing" description="A short summary of your day.">
+                <Switch label="Morning briefing" checked={s.notify.morning} onCheckedChange={(v) => update((d) => void (d.notify.morning = v))} />
+              </SettingRow>
+              {s.notify.morning && (
+                <SettingRow title="Morning briefing time">
+                  <HourSelect label="Morning briefing time" from={4} to={11} value={s.notify.morning_hour} onChange={(h) => update((d) => void (d.notify.morning_hour = h))} />
+                </SettingRow>
+              )}
+              <SettingRow title="Evening look-ahead" description="A heads-up about tomorrow.">
+                <Switch label="Evening look-ahead" checked={s.notify.evening} onCheckedChange={(v) => update((d) => void (d.notify.evening = v))} />
+              </SettingRow>
+              {s.notify.evening && (
+                <SettingRow title="Evening look-ahead time">
+                  <HourSelect label="Evening look-ahead time" from={12} to={22} value={s.notify.evening_hour} onChange={(h) => update((d) => void (d.notify.evening_hour = h))} />
+                </SettingRow>
+              )}
+            </Group>
+          </div>
+        )}
+        {section === "email" && <EmailGroup />}
+        {section === "ai" && <AiGroup />}
+        {section === "privacy" && (
+          <div className="flex flex-col gap-7">
+            <Group title="Backup">
               <SettingRow title="Back up your settings" description="Settings only. No accounts, links or passwords are included.">
                 <div className="flex gap-1">
                   <Button size="sm" variant="secondary" onClick={() => exportFile.mutate()}>
@@ -315,7 +378,10 @@ export function SettingsScreen() {
                   Import…
                 </Button>
               </SettingRow>
-              <SettingRow title="Crash reports" description="If Daybrief stops unexpectedly, save a short report on this computer. It contains no calendar or email information and is never sent anywhere.">
+            </Group>
+
+            <Group title="Crash reports">
+              <SettingRow title="Crash reports" description="If Firstlight stops unexpectedly, save a short report on this computer. It contains no calendar or email information and is never sent anywhere.">
                 <Switch label="Save crash reports" checked={s.privacy.crash_reports} onCheckedChange={(v) => update((d) => void (d.privacy.crash_reports = v))} />
               </SettingRow>
               {crash.data && (
@@ -325,6 +391,9 @@ export function SettingsScreen() {
                   </Button>
                 </SettingRow>
               )}
+            </Group>
+
+            <Group title="Your data" footer="Firstlight has no server and no account. Your events stay on this computer, your passwords and sign-ins live in the system keychain, and nothing is sent anywhere except to your own calendar providers.">
               <SettingRow title="Erase all data" description="Removes every account, saved password and link, event and setting from this computer.">
                 <Button size="sm" variant="danger" onClick={() => setErasing(true)}>
                   Erase…
@@ -332,6 +401,8 @@ export function SettingsScreen() {
               </SettingRow>
             </Group>
           </div>
+        )}
+          </>
         )}
       </main>
 
@@ -342,7 +413,7 @@ export function SettingsScreen() {
           if (!o) importMutation.reset();
         }}
         title="Import settings"
-        description="Paste the contents of a Daybrief settings file."
+        description="Paste the contents of a Firstlight settings file."
         footer={
           <>
             <Button onClick={() => setImporting(false)}>Cancel</Button>

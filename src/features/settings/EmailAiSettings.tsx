@@ -53,7 +53,7 @@ export function EmailGroup() {
   };
 
   return (
-    <Group title="Email" footer="Off by default. Daybrief reads only each message's sender, subject and a short preview. It never stores whole messages, never loads images or links, and never changes, moves or sends mail.">
+    <Group title="Email" footer="Off by default. Firstlight reads only each message's sender, subject and a short preview. It never stores whole messages, never loads images or links, and never changes, moves or sends mail.">
       <SettingRow title="Show email in the briefing" description="Unread count, invitations and mail from people who matter.">
         <Switch label="Show email in the briefing" checked={e.enabled} onCheckedChange={(v) => update((d) => void (d.email.enabled = v))} />
       </SettingRow>
@@ -63,7 +63,7 @@ export function EmailGroup() {
           {nothingChosen && <SettingRow title="Choose where to read email from" description="Connect the Mail app or one of your accounts below." />}
 
           {system.data?.supported && (
-            <SettingRow title="Mail app" description={e.apple_mail ? "Reading unread mail from the Mail app on this Mac." : "macOS will ask you to allow Daybrief to control Mail."}>
+            <SettingRow title="Mail app" description={e.apple_mail ? "Reading unread mail from the Mail app on this Mac." : "macOS will ask you to allow Firstlight to control Mail."}>
               {e.apple_mail ? (
                 <Switch label="Read the Mail app" checked onCheckedChange={() => update((d) => void (d.email.apple_mail = false))} />
               ) : (
@@ -96,7 +96,7 @@ export function EmailGroup() {
               </Button>
             </SettingRow>
           ))}
-          <SettingRow title="Yahoo or iCloud mail" description="Sign in with an app-specific password. Daybrief only looks; it never changes your mail.">
+          <SettingRow title="Yahoo or iCloud mail" description="Sign in with an app-specific password. Firstlight only looks; it never changes your mail.">
             <Button size="sm" variant="secondary" disabled={e.imap.length >= 4} onClick={() => setAddMailbox(true)}>
               Add mailbox…
             </Button>
@@ -232,7 +232,7 @@ export function AiGroup() {
 
   return (
     <Group title="AI summaries" footer="Off by default. When on, a short summary of your day is written by an AI service you choose, using only the information you are shown before you agree. If it ever fails, the normal summary is used.">
-      <SettingRow title="Smarter day summary" description="Written by AI instead of Daybrief's built-in summary.">
+      <SettingRow title="Smarter day summary" description="Written by AI instead of Firstlight's built-in summary.">
         <Switch
           label="AI summaries"
           checked={ai.enabled}

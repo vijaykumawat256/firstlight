@@ -18,9 +18,9 @@ pub struct Loopback {
 }
 
 const PAGE: &str = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>\
-<title>Daybrief</title><style>body{font:16px -apple-system,Segoe UI,sans-serif;display:grid;place-items:center;height:100vh;margin:0;background:#f5f5f7;color:#1d1d1f}\
+<title>Firstlight</title><style>body{font:16px -apple-system,Segoe UI,sans-serif;display:grid;place-items:center;height:100vh;margin:0;background:#f5f5f7;color:#1d1d1f}\
 div{text-align:center}h1{font-size:22px;margin:0 0 8px}p{color:#6e6e73;margin:0}@media(prefers-color-scheme:dark){body{background:#1c1c1e;color:#f5f5f7}}</style>\
-<div><h1>MESSAGE</h1><p>You can close this tab and return to Daybrief.</p></div>";
+<div><h1>MESSAGE</h1><p>You can close this tab and return to Firstlight.</p></div>";
 
 fn respond(stream: &mut TcpStream, status: &str, message: &str) {
     let body = PAGE.replace("MESSAGE", message);
@@ -109,7 +109,7 @@ impl Loopback {
             respond(
                 stream,
                 "400 Bad Request",
-                "That sign-in link wasn't started by Daybrief",
+                "That sign-in link wasn't started by Firstlight",
             );
             return None;
         }

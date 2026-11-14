@@ -1,10 +1,10 @@
-# Daybrief privacy policy
+# Firstlight privacy policy
 
-*Last updated: November 2026. This is a plain-language description of exactly what Daybrief does with your information.*
+*Last updated: November 2026. This is a plain-language description of exactly what Firstlight does with your information.*
 
 ## The short version
 
-Daybrief has **no server, no account and no analytics**. It runs entirely on your computer. It talks only to the calendar and email services *you* connect, and to nobody else. We (the makers) never receive your calendar, your email, your passwords or anything about how you use the app.
+Firstlight has **no server, no account and no analytics**. It runs entirely on your computer. It talks only to the calendar and email services *you* connect, and to nobody else. We (the makers) never receive your calendar, your email, your passwords or anything about how you use the app.
 
 ## What is stored on your computer
 
@@ -19,18 +19,18 @@ Your connection to each calendar: calendar links, app passwords, and sign-in per
 
 ## Where information goes
 
-Daybrief connects only to services you set up:
+Firstlight connects only to services you set up:
 
-- **Your calendar providers** (Google, Microsoft, iCloud, Yahoo, or any calendar server or link you add) to read your events. Daybrief only reads; it never changes, creates or deletes events.
-- **Your mail provider**, only if you turn email on. Daybrief reads the sender, subject and a short preview of recent unread messages. It never stores whole messages, never loads images or links in them, and never changes, moves or sends mail. The Mail app on a Mac is read through macOS itself. For Yahoo and iCloud, Daybrief connects directly to Yahoo's or Apple's mail server over an encrypted connection using an app-specific password that you create; the password is kept in your system keychain. For those it reads only the sender, subject and date (no preview) and never marks anything as read.
+- **Your calendar providers** (Google, Microsoft, iCloud, Yahoo, or any calendar server or link you add) to read your events. Firstlight only reads; it never changes, creates or deletes events.
+- **Your mail provider**, only if you turn email on. Firstlight reads the sender, subject and a short preview of recent unread messages. It never stores whole messages, never loads images or links in them, and never changes, moves or sends mail. The Mail app on a Mac is read through macOS itself. For Yahoo and iCloud, Firstlight connects directly to Yahoo's or Apple's mail server over an encrypted connection using an app-specific password that you create; the password is kept in your system keychain. For those it reads only the sender, subject and date (no preview) and never marks anything as read.
 - **Anthropic**, only if you turn on AI summaries with your own key. See below.
-- **The update server**, to learn whether a newer Daybrief exists. This sends only the app's version and your operating system, about once a day, and you can turn it off in Settings.
+- **The update server**, to learn whether a newer Firstlight exists. This sends only the app's version and your operating system, about once a day, and you can turn it off in Settings.
 
 Each of these services has its own privacy policy, which applies to what you share with them.
 
 ## AI summaries (optional, off by default)
 
-If you turn them on, a short summary of your day is written by an AI service you choose: Anthropic (with your own key) or a model running on your own computer. Before you agree, Daybrief shows you **the exact text that will be sent**. It contains event titles, times and places, counts, and (only if you choose) the names and subjects of mail from your important senders. It never contains meeting links, descriptions, attendees, message text or email addresses. It is sent about every five minutes while the briefing is open. With a model on your own computer, nothing leaves your computer. You can turn AI off at any time, and removing your key withdraws your agreement.
+If you turn them on, a short summary of your day is written by an AI service you choose: Anthropic (with your own key) or a model running on your own computer. Before you agree, Firstlight shows you **the exact text that will be sent**. It contains event titles, times and places, counts, and (only if you choose) the names and subjects of mail from your important senders. It never contains meeting links, descriptions, attendees, message text or email addresses. It is sent about every five minutes while the briefing is open. With a model on your own computer, nothing leaves your computer. You can turn AI off at any time, and removing your key withdraws your agreement.
 
 ## Notifications
 
@@ -40,15 +40,15 @@ Notifications show event names unless you turn that off in Settings. Notificatio
 
 - **Erase all data** (Settings, Privacy) removes every account, saved password and link, event and setting from your computer.
 - **Removing an account** deletes its events and its keychain entries.
-- To stop Daybrief reading a calendar or mail account, remove the account here, and revoke its access in your Google or Microsoft account settings.
+- To stop Firstlight reading a calendar or mail account, remove the account here, and revoke its access in your Google or Microsoft account settings.
 
-## What Daybrief never does
+## What Firstlight never does
 
 It does not collect analytics or usage data, show advertising, sell or share information, build a profile of you, or send anything to us.
 
 ## Children
 
-Daybrief is a general-purpose tool and is not directed at children.
+Firstlight is a general-purpose tool and is not directed at children.
 
 ## Changes
 

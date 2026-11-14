@@ -58,15 +58,23 @@ test("the whole UI works under the strict release CSP with zero violations", asy
 
   // Settings: every kind of control, dropdowns (portals), accent (inline CSS variables), dialogs
   await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^General/ }).click();
   await page.getByRole("combobox", { name: "Refresh interval" }).click();
   await page.getByRole("option", { name: "30 min" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("main").getByRole("button", { name: /^Appearance/ }).click();
   await page.getByRole("radio", { name: "purple" }).click();
   await page.getByRole("radio", { name: "Dark" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("main").getByRole("button", { name: /^AI summaries/ }).click();
   await page.getByRole("switch", { name: "AI summaries" }).click();
   await expect(page.getByRole("dialog", { name: "Turn on AI summaries?" })).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("main").getByRole("button", { name: /^Privacy & data/ }).click();
   await page.getByRole("button", { name: "Erase…" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
 
   // Accounts + add sheet
   await page.getByRole("button", { name: /Accounts & calendars/ }).click();

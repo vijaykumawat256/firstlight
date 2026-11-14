@@ -2,7 +2,7 @@
 //!
 //! Any account added to the Mac (iCloud, Gmail, Outlook/Exchange, Yahoo, ...) appears here with no
 //! extra sign-in. This module holds the platform-independent half: permission handling, the mapping
-//! to Daybrief events, and the rules around all-day dates. The operating-system half implements
+//! to Firstlight events, and the rules around all-day dates. The operating-system half implements
 //! [`SystemSource`] in the desktop shell.
 
 use super::{Capabilities, Provider, SyncResult, Window, short_hash};

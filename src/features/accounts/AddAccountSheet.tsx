@@ -113,7 +113,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
       open={open}
       onOpenChange={close}
       title={step === "choose" ? "Add a calendar" : step === "system" ? "Calendar app" : step === "ics" ? "Calendar link" : step === "oauth" ? `Sign in with ${OAUTH_LABEL[oauthProvider]}` : "iCloud, Yahoo and others"}
-      description={step === "choose" ? "Choose how to connect." : step === "system" ? "Use the calendars already on this computer." : step === "ics" ? "Paste the address of a published calendar." : step === "oauth" ? "Daybrief only asks to view your calendar." : "Sign in with an app password."}
+      description={step === "choose" ? "Choose how to connect." : step === "system" ? "Use the calendars already on this computer." : step === "ics" ? "Paste the address of a published calendar." : step === "oauth" ? "Firstlight only asks to view your calendar." : "Sign in with an app password."}
       footer={
         step === "system" ? (
           <>
@@ -185,7 +185,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
           </ListGroup>
           {!hasDemo && (
             <ListGroup>
-              <Choice icon={<Sparkles />} title="Try with sample data" subtitle="See how Daybrief looks. Removable any time." onClick={() => demo.mutate()} />
+              <Choice icon={<Sparkles />} title="Try with sample data" subtitle="See how Firstlight looks. Removable any time." onClick={() => demo.mutate()} />
             </ListGroup>
           )}
           {demo.isError && <p role="alert" className="px-1 text-footnote text-danger">{errorMessage(demo.error)}</p>}
@@ -198,11 +198,11 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
             </p>
           )}
           <p className="text-body text-fg">
-            Daybrief will read the calendars in your Calendar app, so any account you've added to this computer shows up here with no extra sign-in.
+            Firstlight will read the calendars in your Calendar app, so any account you've added to this computer shows up here with no extra sign-in.
           </p>
           <ul className="flex flex-col gap-1.5 text-body text-fg-2">
             <li>• macOS will ask you to allow access. Choose <span className="font-medium text-fg">Allow Full Access</span>.</li>
-            <li>• Daybrief only reads. It never changes or deletes events.</li>
+            <li>• Firstlight only reads. It never changes or deletes events.</li>
             <li>• Birthdays and subscribed calendars start hidden; you can turn them on.</li>
           </ul>
           {(sys.isError || system.data?.access === "denied") && (
@@ -226,7 +226,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
               </div>
             </>
           )}
-          <p className="max-w-[34ch] text-footnote text-fg-3">Daybrief never sees your password, only a revocable permission to read your calendar.</p>
+          <p className="max-w-[34ch] text-footnote text-fg-3">Firstlight never sees your password, only a revocable permission to read your calendar.</p>
         </div>
       ) : step === "caldav" ? (
         <form
@@ -290,7 +290,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
               {presetInfo.helpLabel} <ExternalLink className="size-3.5" aria-hidden />
             </button>
           )}
-          <p className="text-footnote text-fg-2">Daybrief keeps your password in the system keychain, never in a file.</p>
+          <p className="text-footnote text-fg-2">Firstlight keeps your password in the system keychain, never in a file.</p>
         </form>
       ) : (
         <form
@@ -319,7 +319,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
             spellCheck={false}
             inputMode="url"
           />
-          <p className="text-footnote text-fg-2">Private links work like a password. Daybrief keeps yours in the system keychain, never in a file.</p>
+          <p className="text-footnote text-fg-2">Private links work like a password. Firstlight keeps yours in the system keychain, never in a file.</p>
         </form>
       )}
     </Sheet>

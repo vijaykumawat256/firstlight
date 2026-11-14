@@ -11,7 +11,7 @@ async function openAdd(page: Page) {
 
 test("first run shows onboarding and sample data fills the briefing", async ({ page }) => {
   await page.goto("/?fresh");
-  await expect(page.getByRole("heading", { name: "Welcome to Daybrief" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome to Firstlight" })).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/onboarding.png` });
 
   await openAdd(page);
@@ -40,7 +40,7 @@ test("adding a calendar link validates, explains failures, and connects", async 
   await page.screenshot({ path: `${SHOTS}/add-ics-error.png` });
   // The modal keeps the page behind it hidden from assistive tech; closing it shows nothing was added.
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "Welcome to Daybrief" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome to Firstlight" })).toBeVisible();
 
   // A good link
   await openAdd(page);
@@ -85,7 +85,7 @@ test("accounts screen: hide a calendar, rename, remove", async ({ page }) => {
   await page.getByRole("button", { name: "Remove" }).click();
   await page.screenshot({ path: `${SHOTS}/remove-confirm.png` });
   await page.getByRole("dialog").getByRole("button", { name: "Remove" }).click();
-  await expect(page.getByRole("heading", { name: "Welcome to Daybrief" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome to Firstlight" })).toBeVisible();
 });
 
 test("an account that needs attention says so", async ({ page }) => {
@@ -234,7 +234,7 @@ test("Calendar app: denied access shows the way to System Settings", async ({ pa
   await expect(page.getByRole("button", { name: "Check again" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open System Settings" })).toBeVisible();
   await page.getByRole("button", { name: "Check again" }).click();
-  await expect(page.getByRole("alert")).toContainText("turned off for Daybrief");
+  await expect(page.getByRole("alert")).toContainText("turned off for Firstlight");
 });
 
 test("Calendar app option is hidden where it is unsupported", async ({ page }) => {

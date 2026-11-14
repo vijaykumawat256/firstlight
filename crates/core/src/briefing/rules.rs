@@ -1,6 +1,6 @@
 //! When should the briefing appear on its own? Pure decision logic, driven by the unlock event.
 //!
-//! The rules exist so Daybrief is never annoying: people unlock their computer dozens of times a day.
+//! The rules exist so Firstlight is never annoying: people unlock their computer dozens of times a day.
 
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Timelike, Utc, Weekday};
 use chrono_tz::Tz;

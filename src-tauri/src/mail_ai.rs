@@ -338,7 +338,7 @@ fn save_settings(
     Ok(s)
 }
 
-/// Turns on reading the Mail app. Triggers macOS's one-time "Daybrief wants to control Mail" prompt.
+/// Turns on reading the Mail app. Triggers macOS's one-time "Firstlight wants to control Mail" prompt.
 #[tauri::command]
 pub async fn enable_apple_mail(
     app: AppHandle,
@@ -354,7 +354,7 @@ pub async fn enable_apple_mail(
             s.email.apple_mail = true;
             s.email.enabled = true;
         }),
-        Err(RunError::Permission) => Err("Daybrief isn't allowed to control Mail. Open System Settings, go to Automation, switch Mail on under Daybrief, then try again.".into()),
+        Err(RunError::Permission) => Err("Firstlight isn't allowed to control Mail. Open System Settings, go to Automation, switch Mail on under Firstlight, then try again.".into()),
         Err(RunError::Timeout) => Err("Mail didn't respond. Open Mail, then try again.".into()),
         Err(RunError::Failed) => Err("Couldn't talk to Mail. Make sure the Mail app is installed and has an account.".into()),
     }
@@ -461,7 +461,7 @@ pub async fn add_imap_mailbox(
     if existing.is_none()
         && lock_store(&state)?.load_settings().email.imap.len() >= imap::MAX_MAILBOXES
     {
-        return Err("That's the most mailboxes Daybrief can read. Remove one first.".into());
+        return Err("That's the most mailboxes Firstlight can read. Remove one first.".into());
     }
     let id = existing
         .as_ref()

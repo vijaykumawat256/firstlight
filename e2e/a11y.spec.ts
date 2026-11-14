@@ -11,6 +11,13 @@ async function scan(page: Page, label: string) {
   expect(summary, `${label}: accessibility violations`).toEqual([]);
 }
 
+/** Opens one page of settings from the settings list. */
+async function section(page: Page, name: string) {
+  await page.getByRole("main").getByRole("button", { name: new RegExp(`^${name}`) }).click();
+  await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+}
+const toList = (page: Page) => page.getByRole("button", { name: "Settings", exact: true }).click();
+
 const at = (h: number, m: number) => new Date(new Date().setHours(h, m, 0, 0));
 
 for (const scheme of ["light", "dark"] as const) {
@@ -27,7 +34,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     test("onboarding and the add-account sheet", async ({ page }) => {
       await page.goto("/?fresh");
-      await expect(page.getByRole("heading", { name: "Welcome to Daybrief" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Welcome to Firstlight" })).toBeVisible();
       await scan(page, "onboarding");
       await page.getByRole("button", { name: "Add a calendar" }).click();
       await expect(page.getByRole("dialog", { name: "Add a calendar" })).toBeVisible();
@@ -39,7 +46,12 @@ for (const scheme of ["light", "dark"] as const) {
       await page.goto("/?mailon&withgoogle");
       await page.getByRole("button", { name: "Settings" }).click();
       await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
-      await scan(page, "settings");
+      await scan(page, "settings list");
+      for (const name of ["General", "Appearance", "Briefing", "When it appears", "Notifications", "Email", "AI summaries", "Privacy & data"]) {
+        await section(page, name);
+        await scan(page, `settings: ${name}`);
+        await toList(page);
+      }
     });
 
     test("accounts", async ({ page }) => {
@@ -69,10 +81,13 @@ for (const scheme of ["light", "dark"] as const) {
       await scan(page, "event detail");
       await page.keyboard.press("Escape");
       await page.getByRole("button", { name: "Settings" }).click();
+      await section(page, "AI summaries");
       await page.getByRole("switch", { name: "AI summaries" }).click();
       await expect(page.getByRole("dialog", { name: "Turn on AI summaries?" })).toBeVisible();
       await scan(page, "AI consent");
       await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+      await toList(page);
+      await section(page, "Privacy & data");
       await page.getByRole("button", { name: "Erase…" }).click();
       await scan(page, "erase confirmation");
     });
@@ -80,6 +95,7 @@ for (const scheme of ["light", "dark"] as const) {
     test("the add-mailbox dialog, with an error showing", async ({ page }) => {
       await page.goto("/?mailon&imapbad");
       await page.getByRole("button", { name: "Settings" }).click();
+      await section(page, "Email");
       await page.getByRole("button", { name: "Add mailbox…" }).click();
       const dialog = page.getByRole("dialog", { name: "Add a mailbox" });
       await scan(page, "add mailbox");
@@ -126,14 +142,15 @@ for (const scheme of ["light", "dark"] as const) {
     await page.clock.install({ time: at(9, 30) });
     await page.goto("/?mailon");
     await page.getByRole("button", { name: "Settings" }).click();
+    await section(page, "Appearance");
     for (const accent of ["red", "orange", "green", "teal", "indigo", "purple", "pink"]) {
       await page.getByRole("radio", { name: accent }).click();
       await expect(page.locator("html")).toHaveAttribute("data-accent", accent);
       await scan(page, `settings with ${accent} accent`);
     }
-    await page.getByRole("button", { name: "Briefing" }).click();
-    await page.getByRole("button", { name: "Settings" }).click();
-    await page.getByRole("button", { name: "Briefing" }).click();
+    await toList(page);
+    await scan(page, "settings list with a custom accent");
+    await page.getByRole("button", { name: "Briefing", exact: true }).click();
     await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
     await scan(page, "briefing with a custom accent");
   });

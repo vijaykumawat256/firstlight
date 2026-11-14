@@ -1,4 +1,6 @@
-# Daybrief: working notes for agents
+# Firstlight: working notes for agents
+
+The app's name is **Firstlight** (renamed from the placeholder "Daybrief"). Only the display name changed: the bundle identifier (`com.daybrief.app`), keychain service, database file, crate names, `DAYBRIEF_*` env vars and the `daybrief-settings` export format keep the old word on purpose, so existing data keeps working. Changing the identifier is a separate decision (it orphans the keychain key and database).
 
 The full brief is `PLAN.md`; read it first. This file records what is true *now* and what you'd otherwise rediscover.
 
@@ -91,3 +93,8 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 
 ## Time zone
 - Never store the time zone: call `crate::local_tz()` (or `deps.tz()`) each time. It reads the system zone fresh, so travel or a changed zone applies without a restart. Not exercised by actually changing the system zone; the webview's own clock formatting may still need a relaunch.
+
+## Settings layout
+- Settings is a list of categories (`HOME` in `SettingsScreen.tsx`); each opens its own page. The open page lives in the nav store (`settingsSection`) because changing clock format or week start remounts the tree. `go()` always resets it to the list.
+- Adding a setting: put its row in the right page's `Group`. e2e tests open a page with `getByRole("main").getByRole("button", { name: /^General/ })`; the back button is "Settings" on a page and "Briefing" on the list.
+- Toast text exists twice in the DOM (visible + screen-reader announcement): use `.first()` when asserting on it.

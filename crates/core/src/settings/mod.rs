@@ -69,7 +69,7 @@ pub enum UpdateChannel {
     Beta,
 }
 
-/// Choices about what Daybrief does on its own and what it keeps.
+/// Choices about what Firstlight does on its own and what it keeps.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct PrivacySettings {
@@ -501,12 +501,12 @@ impl AppSettings {
 
     pub fn import(text: &str) -> Result<Self, String> {
         if text.len() > MAX_IMPORT_BYTES {
-            return Err("That file is too large to be a Daybrief settings file.".into());
+            return Err("That file is too large to be a Firstlight settings file.".into());
         }
         let v: Value = serde_json::from_str(text)
             .map_err(|_| "That isn't a valid settings file.".to_string())?;
         if v.get("format").and_then(Value::as_str) != Some(EXPORT_FORMAT) {
-            return Err("That isn't a Daybrief settings file.".into());
+            return Err("That isn't a Firstlight settings file.".into());
         }
         let Some(inner) = v.get("settings") else {
             return Err("That settings file is empty.".into());

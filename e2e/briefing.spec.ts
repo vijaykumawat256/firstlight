@@ -39,7 +39,7 @@ for (const scheme of ["light", "dark"] as const) {
       await page.goto("/");
       await page.getByRole("button", { name: "Settings" }).click();
       await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
-      await expect(page.getByRole("switch", { name: "Start at login" })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Privacy & data/ })).toBeVisible();
       await page.screenshot({ path: `${SHOTS}/settings-${scheme}.png` });
     });
 

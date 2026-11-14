@@ -1,7 +1,7 @@
 //! The macOS half of the system-calendar provider: reads the Calendar app's data through EventKit.
 //!
 //! Calendar access is a per-app permission the user grants once (System Settings, then Privacy and Security,
-//! then Calendars). Daybrief only ever reads. A fresh `EKEventStore` is created per call, so no
+//! then Calendars). Firstlight only ever reads. A fresh `EKEventStore` is created per call, so no
 //! non-thread-safe Objective-C object is shared between threads.
 
 use chrono::{DateTime, Utc};

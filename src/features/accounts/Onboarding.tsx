@@ -14,13 +14,13 @@ export function Onboarding() {
           <CalendarDays className="size-10" strokeWidth={1.5} aria-hidden />
         </div>
         <div>
-          <h1 className="text-largetitle font-bold tracking-tight text-fg">Welcome to Daybrief</h1>
+          <h1 className="text-largetitle font-bold tracking-tight text-fg">Welcome to Firstlight</h1>
           <p className="mx-auto mt-2 max-w-[30ch] text-headline text-fg-2">Your day at a glance, every time you unlock. Connect a calendar to begin.</p>
         </div>
         <Button variant="primary" size="md" className="min-w-44" onClick={() => setOpen(true)}>
           Add a calendar
         </Button>
-        <p className="max-w-[34ch] text-footnote text-fg-3">Everything stays on this computer. Daybrief talks to your calendar provider directly and has no server of its own.</p>
+        <p className="max-w-[34ch] text-footnote text-fg-3">Everything stays on this computer. Firstlight talks to your calendar provider directly and has no server of its own.</p>
       </main>
       <AddAccountSheet open={open} onOpenChange={setOpen} hasDemo={false} />
     </div>

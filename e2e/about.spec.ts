@@ -6,7 +6,7 @@ async function openAbout(page: Page, query = "") {
   await page.goto(`/${query}`);
   await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByRole("button", { name: /About Daybrief/ }).click();
+  await page.getByRole("button", { name: /About Firstlight/ }).click();
   await expect(page.getByRole("heading", { name: "About", level: 1 })).toBeVisible();
 }
 
@@ -37,7 +37,7 @@ test("checking for updates: up to date, available (and install), and failure", a
 
 test("help explains the product in plain language", async ({ page }) => {
   await openAbout(page);
-  await expect(page.getByRole("heading", { name: "When does Daybrief appear?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "When does Firstlight appear?" })).toBeVisible();
   await expect(page.getByText(/first time you unlock your computer each day/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Email and AI (both optional)" })).toBeVisible();
 });
@@ -49,7 +49,7 @@ test("the privacy policy is the published document, and says what it must", asyn
   await expect(policy).toContainText("no server, no account and no analytics");
   await expect(policy).toContainText("never receive your calendar");
   await expect(policy).toContainText("the exact text that will be sent");
-  await expect(policy.getByRole("heading", { name: "What Daybrief never does" })).toBeVisible();
+  await expect(policy.getByRole("heading", { name: "What Firstlight never does" })).toBeVisible();
   await expect(policy.locator("script, a, img")).toHaveCount(0);
 });
 
@@ -77,6 +77,7 @@ test("licences: searchable, with the real text for each package", async ({ page 
 test("crash reports are off by default, and a saved one can be read and deleted", async ({ page }) => {
   await page.goto("/?crashreport");
   await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^Privacy & data/ }).click();
   await expect(page.getByRole("switch", { name: "Save crash reports" })).toHaveAttribute("aria-checked", "false");
   await page.getByRole("button", { name: "View…" }).click();
   const dialog = page.getByRole("dialog", { name: "Last crash report" });
@@ -89,6 +90,7 @@ test("crash reports are off by default, and a saved one can be read and deleted"
 test("update settings: automatic checks and channel", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^General/ }).click();
   await expect(page.getByRole("switch", { name: "Check for updates automatically" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("radio", { name: "Beta" }).click();
   await expect(page.getByRole("radio", { name: "Beta" })).toHaveAttribute("aria-checked", "true");

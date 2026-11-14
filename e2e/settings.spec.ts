@@ -18,39 +18,76 @@ async function openSettings(page: Page, query = "") {
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
 }
 
-const back = (page: Page) => page.getByRole("button", { name: "Briefing" }).click();
+/** Opens one page of settings from the settings list. */
+const section = (page: Page, name: string) => page.getByRole("main").getByRole("button", { name: new RegExp(`^${name}`) }).click();
+
+/** Back to the briefing, from a settings page or the settings list. */
+async function back(page: Page) {
+  const toList = page.getByRole("button", { name: "Settings", exact: true });
+  if (await toList.count()) await toList.click();
+  await page.getByRole("button", { name: "Briefing", exact: true }).click();
+}
+
+async function openSection(page: Page, name: string, query = "") {
+  await openSettings(page, query);
+  await section(page, name);
+  await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+}
 
 test("every section from the plan is there", async ({ page }) => {
   await page.setViewportSize({ width: 420, height: 900 });
   await openSettings(page);
-  for (const name of ["General", "Briefing", "When Daybrief appears", "Notifications", "Calendars", "Appearance", "Privacy"]) {
-    await expect(page.getByRole("region", { name, exact: true })).toBeVisible();
+  // Every section opens its own page, and each page has the groups it promises.
+  const pages: Record<string, string[]> = {
+    General: ["Startup", "Sync", "Updates"],
+    Appearance: ["Look", "Date and time"],
+    Briefing: ["Sections", "Your day"],
+    "When it appears": ["On unlock", "Quiet times"],
+    Notifications: ["Meetings", "Daily summaries"],
+    Email: ["Email"],
+    "AI summaries": ["AI summaries"],
+    "Privacy & data": ["Backup", "Crash reports", "Your data"],
+  };
+  for (const [name, groups] of Object.entries(pages)) {
+    await section(page, name);
+    await expect(page.getByRole("heading", { name, level: 1 })).toBeFocused();
+    for (const g of groups) await expect(page.getByRole("region", { name: g, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
   }
+  for (const name of ["Accounts & calendars", "About Firstlight"]) await expect(page.getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
 });
 
 for (const scheme of ["light", "dark"] as const) {
   test(`full settings page (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
-    await page.setViewportSize({ width: 420, height: 2300 });
+    await page.setViewportSize({ width: 420, height: 760 });
     await openSettings(page);
     await page.screenshot({ path: `${SHOTS}/settings-full-${scheme}.png` });
+    for (const name of ["General", "Appearance", "Briefing", "When it appears", "Notifications", "Privacy & data"]) {
+      await section(page, name);
+      await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+      await page.screenshot({ path: `${SHOTS}/settings-${name.split(" ")[0].toLowerCase()}-${scheme}.png`, fullPage: true });
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+    }
   });
 }
 
 test("time format changes how times read everywhere, immediately", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "Appearance");
   await page.getByRole("radio", { name: "24-hour" }).click();
   await back(page);
   await expect(page.getByLabel("Up next")).toContainText("10:30 – 11:30");
   await expect(page.getByLabel("Up next")).not.toContainText("AM");
   await page.getByRole("button", { name: "Settings" }).click();
+  await section(page, "Appearance");
   await page.getByRole("radio", { name: "12-hour" }).click();
   await back(page);
   await expect(page.getByLabel("Up next")).toContainText("10:30 AM – 11:30 AM");
 });
 
 test("the briefing sections can be switched off and on", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "Briefing");
   await page.getByRole("switch", { name: "Show tomorrow" }).click();
   await page.getByRole("switch", { name: "Show needs attention" }).click();
   await page.getByRole("switch", { name: "Show free time" }).click();
@@ -61,20 +98,21 @@ test("the briefing sections can be switched off and on", async ({ page }) => {
   await expect(page.getByLabel("Today")).toBeVisible();
 
   await page.getByRole("button", { name: "Settings" }).click();
+  await section(page, "Briefing");
   await page.getByRole("switch", { name: "Show tomorrow" }).click();
   await back(page);
   await expect(page.getByLabel("Tomorrow")).toBeVisible();
 });
 
 test("declined events can be shown", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "Briefing");
   await page.getByRole("switch", { name: "Show declined events" }).click();
   await back(page);
   await expect(page.getByText("All-hands rehearsal")).toBeVisible();
 });
 
 test("theme and accent apply at once", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "Appearance");
   await page.getByRole("radio", { name: "Dark" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByRole("radio", { name: "Light" }).click();
@@ -88,7 +126,7 @@ test("theme and accent apply at once", async ({ page }) => {
 });
 
 test("quiet hours reveal their times; days toggle", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "When it appears");
   await expect(page.getByRole("combobox", { name: "Quiet hours from" })).toBeVisible();
   await page.getByRole("switch", { name: "Quiet hours" }).click();
   await expect(page.getByRole("combobox", { name: "Quiet hours from" })).toHaveCount(0);
@@ -104,7 +142,7 @@ test("quiet hours reveal their times; days toggle", async ({ page }) => {
 });
 
 test("notification options appear only when their switch is on", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "Notifications");
   await expect(page.getByRole("combobox", { name: "Notify how early" })).toBeVisible();
   await page.getByRole("switch", { name: "Notify before events" }).click();
   await expect(page.getByRole("combobox", { name: "Notify how early" })).toHaveCount(0);
@@ -115,17 +153,18 @@ test("notification options appear only when their switch is on", async ({ page }
 });
 
 test("a values dropdown saves its choice", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "General");
   await page.getByRole("combobox", { name: "Refresh interval" }).click();
   await page.getByRole("option", { name: "30 min" }).click();
   await expect(page.getByRole("combobox", { name: "Refresh interval" })).toContainText("30 min");
   await back(page);
   await page.getByRole("button", { name: "Settings" }).click();
+  await section(page, "General");
   await expect(page.getByRole("combobox", { name: "Refresh interval" })).toContainText("30 min");
 });
 
 test("recording a shortcut, and a refused one is put back with a reason", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "General");
   const button = page.getByRole("button", { name: "Global shortcut" });
   await expect(button).toHaveText("Not set");
   await button.click();
@@ -151,7 +190,7 @@ test("recording a shortcut, and a refused one is put back with a reason", async 
 });
 
 test("backing up and restoring settings", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "Privacy & data");
   await page.getByRole("button", { name: "Save to Downloads" }).click();
   await expect(page.getByText("Settings saved")).toBeVisible();
 
@@ -164,11 +203,13 @@ test("backing up and restoring settings", async ({ page }) => {
   await dialog.getByLabel("Settings file contents").fill(JSON.stringify({ format: "daybrief-settings", settings: { general: { default_view: "week" } } }));
   await dialog.getByRole("button", { name: "Import" }).click();
   await expect(page.getByText("Settings imported")).toBeVisible();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await section(page, "General");
   await expect(page.getByRole("combobox", { name: "Opens to" })).toContainText("Week view");
 });
 
 test("erase all data asks first, then returns to the welcome screen", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "Privacy & data");
   await page.getByRole("button", { name: "Erase…" }).click();
   const dialog = page.getByRole("dialog", { name: "Erase all data?" });
   await expect(dialog).toContainText("cannot be undone");
@@ -177,11 +218,11 @@ test("erase all data asks first, then returns to the welcome screen", async ({ p
   // Cancel changes nothing.
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
-  await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Privacy & data", level: 1 })).toBeVisible();
 
   await page.getByRole("button", { name: "Erase…" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Erase everything" }).click();
-  await expect(page.getByRole("heading", { name: "Welcome to Daybrief" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome to Firstlight" })).toBeVisible();
 });
 
 test("the app can open straight to the week view", async ({ page }) => {
@@ -191,10 +232,10 @@ test("the app can open straight to the week view", async ({ page }) => {
 });
 
 test("changing 'Opens to' does not move you off the settings screen", async ({ page }) => {
-  await openSettings(page);
+  await openSection(page, "General");
   await page.getByRole("combobox", { name: "Opens to" }).click();
   await page.getByRole("option", { name: "Week view" }).click();
-  await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "General", level: 1 })).toBeVisible();
 });
 
 test("the calendars section leads to accounts", async ({ page }) => {

@@ -1,4 +1,4 @@
-//! Daybrief desktop shell: windows, tray, autostart, unlock detection, and the
+//! Firstlight desktop shell: windows, tray, autostart, unlock detection, and the
 //! small set of commands the UI is allowed to call. All calendar logic lives in
 //! `daybrief-core`.
 
@@ -123,7 +123,7 @@ fn show_up_next(app: &AppHandle) {
                 UP_NEXT_WINDOW,
                 WebviewUrl::App("index.html#/upnext".into()),
             )
-            .title("Daybrief")
+            .title("Firstlight")
             .inner_size(w, h)
             .resizable(false)
             .decorations(false)
@@ -233,7 +233,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         app.autolaunch().is_enabled().unwrap_or(false),
         None::<&str>,
     )?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Daybrief", true, Some("CmdOrCtrl+Q"))?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Firstlight", true, Some("CmdOrCtrl+Q"))?;
     let menu = Menu::with_items(
         app,
         &[
@@ -248,7 +248,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id("main")
         .icon(icon)
         .icon_as_template(true)
-        .tooltip("Daybrief")
+        .tooltip("Firstlight")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id().as_ref() {
@@ -504,7 +504,7 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running Daybrief");
+        .expect("error while running Firstlight");
 }
 
 #[cfg(test)]

@@ -70,7 +70,7 @@ pub fn start(on_unlock: impl Fn() + Send + Sync + 'static) {
                 log::error!("unlock detection: no module handle");
                 return;
             };
-            let class = w!("DaybriefUnlockWatcher");
+            let class = w!("FirstlightUnlockWatcher");
             let wc = WNDCLASSW {
                 lpfnWndProc: Some(window_proc),
                 hInstance: instance.into(),
@@ -84,7 +84,7 @@ pub fn start(on_unlock: impl Fn() + Send + Sync + 'static) {
             let hwnd = match CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 class,
-                w!("Daybrief"),
+                w!("Firstlight"),
                 WINDOW_STYLE(0),
                 0,
                 0,

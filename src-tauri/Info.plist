@@ -5,12 +5,12 @@
   <key>CFBundleIdentifier</key>
   <string>com.daybrief.app</string>
   <key>CFBundleName</key>
-  <string>Daybrief</string>
+  <string>Firstlight</string>
   <key>NSCalendarsFullAccessUsageDescription</key>
-  <string>Daybrief reads the calendars in your Calendar app to show what is coming up today and tomorrow. It never changes them.</string>
+  <string>Firstlight reads the calendars in your Calendar app to show what is coming up today and tomorrow. It never changes them.</string>
   <key>NSCalendarsUsageDescription</key>
-  <string>Daybrief reads the calendars in your Calendar app to show what is coming up today and tomorrow. It never changes them.</string>
+  <string>Firstlight reads the calendars in your Calendar app to show what is coming up today and tomorrow. It never changes them.</string>
   <key>NSAppleEventsUsageDescription</key>
-  <string>Daybrief asks Mail for your unread messages and meeting invitations so it can summarise them. It never changes or sends mail.</string>
+  <string>Firstlight asks Mail for your unread messages and meeting invitations so it can summarise them. It never changes or sends mail.</string>
 </dict>
 </plist>

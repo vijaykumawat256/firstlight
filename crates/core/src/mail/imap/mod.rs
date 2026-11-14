@@ -239,7 +239,7 @@ fn login(conn: &mut Conn, address: &str, password: &str) -> Result<()> {
     // Yahoo wants to know who is connecting before it lets anyone in. Name and version only.
     if caps_text.split_whitespace().any(|w| w == "ID") {
         let _ = conn.run(&format!(
-            "ID (\"name\" \"Daybrief\" \"version\" \"{}\")",
+            "ID (\"name\" \"Firstlight\" \"version\" \"{}\")",
             env!("CARGO_PKG_VERSION")
         ));
     }

@@ -3,7 +3,7 @@ name = "daybrief"
 version.workspace = true
 edition.workspace = true
 publish = false
-description = "Daybrief desktop shell"
+description = "Firstlight desktop shell"
 
 [lib]
 name = "daybrief_lib"

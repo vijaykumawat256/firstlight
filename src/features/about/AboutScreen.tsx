@@ -11,16 +11,16 @@ type Tab = "help" | "privacy" | "licences";
 
 const HELP: Array<{ title: string; body: string[] }> = [
   {
-    title: "When does Daybrief appear?",
+    title: "When does Firstlight appear?",
     body: [
-      "The first time you unlock your computer each day, Daybrief opens your briefing: what is left today, what is next, and a look at tomorrow.",
-      "On later unlocks it stays out of the way, and only shows a small reminder if a meeting is about to start. It never appears during quiet hours or on days you turn off. All of this is in Settings, under “When Daybrief appears”.",
+      "The first time you unlock your computer each day, Firstlight opens your briefing: what is left today, what is next, and a look at tomorrow.",
+      "On later unlocks it stays out of the way, and only shows a small reminder if a meeting is about to start. It never appears during quiet hours or on days you turn off. All of this is in Settings, under “When Firstlight appears”.",
     ],
   },
   {
     title: "Connecting calendars",
     body: [
-      "Use Add a calendar. Google and Microsoft sign in through your browser, so Daybrief never sees your password. iCloud, Yahoo and others use an app password you create in your account. Any calendar link works too. On a Mac, you can also use the calendars already in your Calendar app.",
+      "Use Add a calendar. Google and Microsoft sign in through your browser, so Firstlight never sees your password. iCloud, Yahoo and others use an app password you create in your account. Any calendar link works too. On a Mac, you can also use the calendars already in your Calendar app.",
       "If the same meeting is in two accounts, it appears once.",
     ],
   },
@@ -40,7 +40,7 @@ const HELP: Array<{ title: string; body: string[] }> = [
   {
     title: "Keyboard",
     body: [
-      "Everything can be used with the keyboard: Tab moves between controls, Space and Enter activate them, and Escape closes a panel. Set a global shortcut in Settings to show or hide Daybrief from any app.",
+      "Everything can be used with the keyboard: Tab moves between controls, Space and Enter activate them, and Escape closes a panel. Set a global shortcut in Settings to show or hide Firstlight from any app.",
     ],
   },
 ];
@@ -117,7 +117,7 @@ function Licences() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-body text-fg-2">
-        Daybrief is built with {all.length} open-source packages. Their licences, as of {data.generated}:
+        Firstlight is built with {all.length} open-source packages. Their licences, as of {data.generated}:
       </p>
       <label className="relative block">
         <span className="sr-only">Search licences</span>

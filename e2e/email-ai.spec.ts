@@ -16,10 +16,22 @@ async function loadBriefing(page: Page, query = "") {
   await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
 }
 
-async function openSettings(page: Page, query = "") {
-  await loadBriefing(page, query);
+/** Opens one page of settings ("Email" or "AI summaries") from the settings list. */
+async function openSection(page: Page, name: string) {
   await page.getByRole("button", { name: "Settings" }).click();
-  await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+  await page.getByRole("main").getByRole("button", { name: new RegExp(`^${name}`) }).click();
+  await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+}
+
+async function openSettings(page: Page, query = "", section = "Email") {
+  await loadBriefing(page, query);
+  await openSection(page, section);
+}
+
+/** Back to the briefing from a settings page. */
+async function toBriefing(page: Page) {
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Briefing", exact: true }).click();
 }
 
 const calls = (page: Page, name: "__mailCalls" | "__aiCalls") => page.evaluate((n) => (globalThis as unknown as Record<string, number>)[n] ?? 0, name);
@@ -31,7 +43,7 @@ test("email is off by default: no inbox, no mail requests, and only the master s
   await expect(page.getByRole("region", { name: "Inbox" })).toHaveCount(0);
   expect(await calls(page, "__mailCalls")).toBe(0);
 
-  await page.getByRole("button", { name: "Settings" }).click();
+  await openSection(page, "Email");
   const email = page.getByRole("region", { name: "Email", exact: true });
   await expect(email.getByRole("switch", { name: "Show email in the briefing" })).toHaveAttribute("aria-checked", "false");
   await expect(email.getByText("Important senders")).toHaveCount(0);
@@ -46,7 +58,7 @@ test("connecting the Mail app shows the inbox in the briefing", async ({ page })
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByRole("switch", { name: "Read the Mail app" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Briefing" }).click();
+  await toBriefing(page);
   const inbox = page.getByRole("region", { name: "Inbox" });
   await expect(inbox).toBeVisible();
   await expect(inbox).toContainText("37 unread");
@@ -62,15 +74,15 @@ test("a refused Mail permission is explained", async ({ page }) => {
   await openSettings(page, "?macdenied");
   await page.getByRole("switch", { name: "Show email in the briefing" }).click();
   await page.getByRole("button", { name: "Connect", exact: true }).click();
-  await expect(page.getByText("Couldn't connect Mail")).toBeVisible();
-  await expect(page.getByText(/switch Mail on under Daybrief/)).toBeVisible();
+  await expect(page.getByText("Couldn't connect Mail").first()).toBeVisible();
+  await expect(page.getByText(/switch Mail on under Firstlight/).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect", exact: true })).toBeVisible(); // still not connected
 });
 
 test("inbox problems say what to do", async ({ page }) => {
   await loadBriefing(page, "?mailon&mailproblem=permission");
   const inbox = page.getByRole("region", { name: "Inbox" });
-  await expect(inbox).toContainText("Allow Daybrief to control Mail");
+  await expect(inbox).toContainText("Allow Firstlight to control Mail");
   await expect(inbox.getByRole("button", { name: "Open Settings" })).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/inbox-problem.png` });
 });
@@ -115,13 +127,13 @@ test("AI is off by default: no summary, no AI requests", async ({ page }) => {
   await loadBriefing(page);
   await expect(page.getByText("Summary by AI")).toHaveCount(0);
   expect(await calls(page, "__aiCalls")).toBe(0);
-  await page.getByRole("button", { name: "Settings" }).click();
+  await openSection(page, "AI summaries");
   await expect(page.getByRole("switch", { name: "AI summaries" })).toHaveAttribute("aria-checked", "false");
   expect(await calls(page, "__aiCalls")).toBe(0);
 });
 
 test("turning on AI shows exactly what is sent and needs a key and agreement", async ({ page }) => {
-  await openSettings(page);
+  await openSettings(page, "", "AI summaries");
   await page.getByRole("switch", { name: "AI summaries" }).click();
   const dialog = page.getByRole("dialog", { name: "Turn on AI summaries?" });
   await expect(dialog).toBeVisible();
@@ -154,7 +166,7 @@ test("turning on AI shows exactly what is sent and needs a key and agreement", a
 });
 
 test("cancelling the agreement changes nothing", async ({ page }) => {
-  await openSettings(page);
+  await openSettings(page, "", "AI summaries");
   await page.getByRole("switch", { name: "AI summaries" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByRole("switch", { name: "AI summaries" })).toHaveAttribute("aria-checked", "false");
@@ -162,7 +174,7 @@ test("cancelling the agreement changes nothing", async ({ page }) => {
 });
 
 test("a local model needs no key and says it stays on this computer", async ({ page }) => {
-  await openSettings(page);
+  await openSettings(page, "", "AI summaries");
   await page.getByRole("switch", { name: "AI summaries" }).click();
   const dialog = page.getByRole("dialog", { name: "Turn on AI summaries?" });
   await dialog.getByRole("radio", { name: "On this computer" }).click();
@@ -195,7 +207,7 @@ test("if the AI fails the briefing carries on with its own summary", async ({ pa
 });
 
 test("important email can be included, and the preview shows it", async ({ page }) => {
-  await openSettings(page, "?aion&mailon");
+  await openSettings(page, "?aion&mailon", "AI summaries");
   await page.getByRole("switch", { name: "Include important email in AI summaries" }).click();
   await page.getByRole("button", { name: "See what's sent" }).click();
   const dialog = page.getByRole("dialog", { name: "What is sent" });
@@ -203,7 +215,7 @@ test("important email can be included, and the preview shows it", async ({ page 
 });
 
 test("turning AI off and removing the key", async ({ page }) => {
-  await openSettings(page, "?aion");
+  await openSettings(page, "?aion", "AI summaries");
   await page.getByRole("switch", { name: "AI summaries" }).click(); // off
   await expect(page.getByRole("switch", { name: "AI summaries" })).toHaveAttribute("aria-checked", "false");
   await page.getByRole("switch", { name: "AI summaries" }).click(); // asks again: consent was kept, but turning on re-confirms
@@ -212,10 +224,10 @@ test("turning AI off and removing the key", async ({ page }) => {
 });
 
 test("removing the key withdraws consent and turns AI off", async ({ page }) => {
-  await openSettings(page, "?aion");
+  await openSettings(page, "?aion", "AI summaries");
   await page.getByRole("button", { name: "Remove key and turn off" }).click();
   await expect(page.getByRole("switch", { name: "AI summaries" })).toHaveAttribute("aria-checked", "false");
-  await expect(page.getByText("Key removed")).toBeVisible();
+  await expect(page.getByText("Key removed").first()).toBeVisible();
 });
 
 // ---------------------------------------------------------------------------------- Yahoo / iCloud (IMAP)

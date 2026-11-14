@@ -152,7 +152,7 @@ impl ReqwestClient {
             .https_only(transport == Transport::HttpsOnly)
             .redirect(policy)
             .timeout(timeout)
-            .user_agent(concat!("Daybrief/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("Firstlight/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(|_| Error::Provider("could not create HTTP client".into()))?;
         Ok(Self { client, transport })

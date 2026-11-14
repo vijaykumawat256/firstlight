@@ -1,6 +1,6 @@
 //! Crash reports that contain no content.
 //!
-//! A report says which version of Daybrief stopped, on what system, and *where in the code* (a source file and
+//! A report says which version of Firstlight stopped, on what system, and *where in the code* (a source file and
 //! line). It deliberately cannot say why in words: the panic message is not an input, because it could contain
 //! text from a calendar event or an email. Paths are scrubbed so a username can never appear. Reports are
 //! saved on this computer only, and only if the user turned them on.
@@ -46,7 +46,7 @@ pub fn report_text(
         .take(32)
         .collect();
     format!(
-        "Daybrief crash report\nTime: {}\nVersion: {version}\nSystem: {os} {arch}\nThread: {thread}\nStopped at: {place}\n\nThis report contains no calendar, email or account information.\n",
+        "Firstlight crash report\nTime: {}\nVersion: {version}\nSystem: {os} {arch}\nThread: {thread}\nStopped at: {place}\n\nThis report contains no calendar, email or account information.\n",
         at.format("%Y-%m-%d %H:%M:%S UTC")
     )
 }

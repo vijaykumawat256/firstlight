@@ -226,12 +226,12 @@ const bump = (name: string) => {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let crashReport: string | null = params.has("crashreport")
-  ? "Daybrief crash report\nTime: 2026-11-14 09:30:00 UTC\nVersion: 0.1.0\nSystem: macos aarch64\nThread: sync\nStopped at: crates/core/src/ics/mod.rs:123\n\nThis report contains no calendar, email or account information.\n"
+  ? "Firstlight crash report\nTime: 2026-11-14 09:30:00 UTC\nVersion: 0.1.0\nSystem: macos aarch64\nThread: sync\nStopped at: crates/core/src/ics/mod.rs:123\n\nThis report contains no calendar, email or account information.\n"
   : null;
 
 export const fixtureBackend: Backend = {
   async getAppInfo() {
-    return { name: "Daybrief", version: "0.1.0", os: "macos", arch: "aarch64", updates_configured: params.has("updates") } satisfies AppInfo;
+    return { name: "Firstlight", version: "0.1.0", os: "macos", arch: "aarch64", updates_configured: params.has("updates") } satisfies AppInfo;
   },
   async checkForUpdate() {
     await sleep(300);
@@ -262,7 +262,7 @@ export const fixtureBackend: Backend = {
   },
   async enableAppleMail() {
     await sleep(300);
-    if (params.has("macdenied")) throw new Error("Daybrief isn't allowed to control Mail. Open System Settings, go to Automation, switch Mail on under Daybrief, then try again.");
+    if (params.has("macdenied")) throw new Error("Firstlight isn't allowed to control Mail. Open System Settings, go to Automation, switch Mail on under Firstlight, then try again.");
     settings = { ...settings, email: { ...settings.email, apple_mail: true, enabled: true } };
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
@@ -395,7 +395,7 @@ export const fixtureBackend: Backend = {
     } catch {
       throw new Error("That isn't a valid settings file.");
     }
-    if (parsed.format !== "daybrief-settings") throw new Error("That isn't a Daybrief settings file.");
+    if (parsed.format !== "daybrief-settings") throw new Error("That isn't a Firstlight settings file.");
     settings = { ...structuredClone(DEFAULT_SETTINGS), ...parsed.settings } as AppSettings;
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
@@ -492,7 +492,7 @@ export const fixtureBackend: Backend = {
     return { supported: !params.has("nosystem"), access: params.has("denied") ? "denied" : "not_determined" } as const;
   },
   async addSystemAccount() {
-    if (params.has("denied")) throw new Error("Calendar access is turned off for Daybrief. Open System Settings, switch Daybrief on under Calendars, then try again.");
+    if (params.has("denied")) throw new Error("Calendar access is turned off for Firstlight. Open System Settings, switch Firstlight on under Calendars, then try again.");
     await new Promise((r) => setTimeout(r, 400));
     const view: AccountView = {
       id: "system-account",

@@ -68,7 +68,7 @@ export interface Backend {
    */
   addOauthAccount(provider: "google" | "microsoft"): Promise<AccountView>;
   cancelOauth(): Promise<void>;
-  /** Whether this computer has a Calendar app Daybrief can read, and whether the user allowed it. Never prompts. */
+  /** Whether this computer has a Calendar app Firstlight can read, and whether the user allowed it. Never prompts. */
   systemCalendarStatus(): Promise<SystemStatus>;
   /** Connects the Calendar app; shows the system permission prompt the first time. */
   addSystemAccount(): Promise<AccountView>;

@@ -97,7 +97,7 @@ fn explain(kind: ProviderKind, report: &SyncReport) -> &'static str {
             "Access was refused. Make sure calendar access is allowed for this app, then sign in again."
         }
         (ProviderKind::System, true, _) => {
-            "Calendar access is turned off for Daybrief. Allow it in System Settings, then try again."
+            "Calendar access is turned off for Firstlight. Allow it in System Settings, then try again."
         }
         (_, _, true) => "Couldn't reach the server. Check your connection and try again.",
         (ProviderKind::Ics, ..) => {
@@ -642,7 +642,7 @@ pub async fn add_system_account(
     match access {
         Access::Granted => {}
         Access::NotDetermined => return Err("The permission prompt wasn't answered. Try again.".into()),
-        Access::Denied => return Err("Calendar access is turned off for Daybrief. Open System Settings, switch Daybrief on under Calendars, then try again.".into()),
+        Access::Denied => return Err("Calendar access is turned off for Firstlight. Open System Settings, switch Firstlight on under Calendars, then try again.".into()),
         Access::Restricted => return Err("This Mac's settings don't allow apps to read calendars.".into()),
         Access::Unsupported => return Err("The Calendar app can't be used here. It needs macOS 14 or later.".into()),
     }
@@ -828,7 +828,7 @@ pub struct AppInfo {
 #[tauri::command]
 pub async fn get_app_info() -> CmdResult<AppInfo> {
     Ok(AppInfo {
-        name: "Daybrief",
+        name: "Firstlight",
         version: env!("CARGO_PKG_VERSION"),
         os: std::env::consts::OS,
         arch: std::env::consts::ARCH,

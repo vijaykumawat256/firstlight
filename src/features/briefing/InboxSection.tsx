@@ -17,7 +17,7 @@ function problemText(p: MailProblem): { text: string; action?: "automation" | "s
   switch (p.kind) {
     case "permission":
       return p.source === "apple_mail"
-        ? { text: "Allow Daybrief to control Mail to see your email here.", action: "automation" }
+        ? { text: "Allow Firstlight to control Mail to see your email here.", action: "automation" }
         : { text: `${where} needs mail permission. Allow it in Settings.`, action: "settings" };
     case "not_running":
       return { text: "Open the Mail app to see your email here." };

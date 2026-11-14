@@ -140,7 +140,7 @@ fn reads_unread_mail_read_only() {
     assert!(sent.contains("EXAMINE"));
     assert!(sent.contains("BODY.PEEK[HEADER.FIELDS"));
     assert!(sent.contains("SINCE 06-NOV-2026"));
-    assert!(sent.contains("ID (\"NAME\" \"DAYBRIEF\""));
+    assert!(sent.contains("ID (\"NAME\" \"FIRSTLIGHT\""));
     // Nothing that writes, selects read-write, or fetches a body.
     for forbidden in [
         "SELECT",

@@ -1,4 +1,4 @@
-//! Daybrief core: platform-independent calendar logic.
+//! Firstlight core: platform-independent calendar logic.
 //!
 //! This crate must never depend on Tauri. Storage, secrets and network access
 //! are reached through traits or plain types so the same logic can later run

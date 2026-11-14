@@ -37,7 +37,7 @@ function useBackendEvents() {
       void p.then((off) => (cancelled ? off() : offs.push(off)));
     keep(api.onUnlock(() => void qc.invalidateQueries()));
     keep(api.onSyncFinished(() => void qc.invalidateQueries()));
-    keep(api.onUpdateAvailable((version) => useToasts.getState().push({ title: `Daybrief ${version} is available`, description: "Open Settings, then About, to install it." })));
+    keep(api.onUpdateAvailable((version) => useToasts.getState().push({ title: `Firstlight ${version} is available`, description: "Open Settings, then About, to install it." })));
     return () => {
       cancelled = true;
       offs.forEach((off) => off());

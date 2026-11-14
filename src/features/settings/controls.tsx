@@ -1,5 +1,6 @@
 import * as RToggleGroup from "@radix-ui/react-toggle-group";
 import clsx from "clsx";
+import { ChevronRight, type LucideIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, ListGroup, SectionHeader, Select } from "@/design";
 import { formatHour } from "@/features/briefing/format";
@@ -131,3 +132,19 @@ export function Group({ title, footer, children }: { title: string; footer?: str
 }
 
 // "system" is the default blue, so the palette's own blue would be a duplicate; yellow and brown lack contrast on buttons.
+
+/** A row that opens a page: icon, title, one line of what is inside. */
+export function NavRow({ icon: Icon, title, description, onClick }: { icon: LucideIcon; title: string; description: string; onClick: () => void }) {
+  return (
+    <li>
+      <button type="button" onClick={onClick} className="flex min-h-12 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong">
+        <Icon className="size-5 shrink-0 text-fg-2" aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="block text-headline font-medium text-fg">{title}</span>
+          <span className="block truncate text-footnote text-fg-2">{description}</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-fg-3" aria-hidden />
+      </button>
+    </li>
+  );
+}

@@ -1,4 +1,4 @@
-# Releasing Daybrief
+# Releasing Firstlight
 
 Everything here needs accounts or machines only you have. Nothing below has been run end to end; the pieces that *were* verified are marked.
 
@@ -31,7 +31,7 @@ Tauri signs with the hardened runtime and `src-tauri/entitlements.plist`, then n
 Verified locally: the bundle builds with `--features updater`; `LSMinimumSystemVersion` is 13.0; an ad-hoc signature with `--options runtime` and our entitlements verifies with `codesign --verify --strict`. **Not verified:** a real Developer ID signature, notarisation, Gatekeeper on a clean Mac.
 
 After notarising, check on a machine that has never run the app:
-`spctl -a -vv Daybrief.app` should say `accepted, source=Notarized Developer ID`.
+`spctl -a -vv Firstlight.app` should say `accepted, source=Notarized Developer ID`.
 
 ## 2. Windows
 
@@ -55,13 +55,13 @@ npx tauri signer generate -w ~/.tauri/daybrief-updater.key
 - At build time set `TAURI_SIGNING_PRIVATE_KEY` to the key's *contents* (not a path) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 - Never commit the private key. Rotating it means shipping a build with the new public key *signed by the old key*; plan that before you need it.
 
-Verified: with a throwaway key, the build produced `Daybrief.app.tar.gz` and its `.sig`, and the app started with the updater feature enabled. **Not verified:** a real update from a hosted `latest.json`.
+Verified: with a throwaway key, the build produced `Firstlight.app.tar.gz` and its `.sig`, and the app started with the updater feature enabled. **Not verified:** a real update from a hosted `latest.json`.
 
 ### Update server layout
 ```
 {base}/stable/latest.json
 {base}/beta/latest.json
-{base}/<version>/Daybrief.app.tar.gz  (+ .sig contents inlined in latest.json)
+{base}/<version>/Firstlight.app.tar.gz  (+ .sig contents inlined in latest.json)
 ```
 The app picks the channel from Settings (General). Override the base at build time with `DAYBRIEF_UPDATE_BASE`. `latest.json` follows the Tauri v2 static format (`version`, `notes`, `pub_date`, `platforms.{darwin-aarch64,darwin-x86_64,windows-x86_64}.{url,signature}`).
 
@@ -87,7 +87,7 @@ Use `DAYBRIEF_PROFILE=<name>` when running a release build next to your dev data
 - [ ] Google and Microsoft sign-in against the live services, including a revoked grant and an offline start
 - [ ] Yahoo and iCloud mailbox with real app passwords: add, digest shows unread, nothing becomes read, wrong password message, remove, revoke the app password and see "reconnect"
 - [ ] Gmail / Graph mail upgrade flow; AI consent dialog; key removal
-- [ ] Notifications appear under "Daybrief" (not the terminal) and click behaviour is acceptable (known gap: click does not open the app)
+- [ ] Notifications appear under "Firstlight" (not the terminal) and click behaviour is acceptable (known gap: click does not open the app)
 - [ ] VoiceOver pass through Briefing, Day, Week, Settings, About (axe passes, a screen reader has not been used)
 - [ ] Light, dark, each accent, reduced motion, increased contrast
 - [ ] Start at login across a real logout/login

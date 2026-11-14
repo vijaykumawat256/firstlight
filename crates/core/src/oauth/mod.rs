@@ -1,6 +1,6 @@
 //! OAuth 2.0 authorization-code flow with PKCE for desktop apps (RFC 6749, 7636, 8252).
 //!
-//! * The user signs in in their own browser; Daybrief never sees a password.
+//! * The user signs in in their own browser; Firstlight never sees a password.
 //! * Tokens live only in the secret store. A rotated refresh token is saved *before* it is used.
 //! * A rejected refresh token (`invalid_grant`) means [`Error::AuthRevoked`]: one clear prompt, no retry loop.
 
