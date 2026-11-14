@@ -182,6 +182,9 @@ export function SettingsScreen() {
             </Group>
 
             <Group title="Notifications" footer="Heads-ups still arrive during quiet hours, so an early meeting is never missed.">
+              <SettingRow title="Show event names" description="Turn off to keep names and places out of notifications, which appear on the lock screen and in screen shares.">
+                <Switch label="Show event names in notifications" checked={!s.notify.hide_titles} onCheckedChange={(v) => update((d) => void (d.notify.hide_titles = !v))} />
+              </SettingRow>
               <SettingRow title="Before each event">
                 <Switch label="Notify before events" checked={s.notify.before_event} onCheckedChange={(v) => update((d) => void (d.notify.before_event = v))} />
               </SettingRow>

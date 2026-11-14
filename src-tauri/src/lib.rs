@@ -65,6 +65,24 @@ fn show_main(app: &AppHandle) {
     }
 }
 
+/// Which addresses a window of this app may show. Only the app's own pages: no remote site can ever be
+/// loaded into a window that has our commands available, whatever a link or a script tries.
+pub(crate) fn navigation_allowed(url: &tauri::Url) -> bool {
+    match url.scheme() {
+        "tauri" => url.host_str() == Some("localhost"),
+        // Windows and Android serve the app from this host.
+        "http" | "https" if url.host_str() == Some("tauri.localhost") => true,
+        "about" => url.as_str() == "about:blank",
+        // The development server, never in a release build.
+        "http" => {
+            cfg!(debug_assertions)
+                && url.host_str() == Some("localhost")
+                && url.port() == Some(1420)
+        }
+        _ => false,
+    }
+}
+
 /// Shows the main window, or hides it if it is already in front. Used by the global shortcut.
 fn toggle_main(app: &AppHandle) {
     match app.get_webview_window(MAIN_WINDOW) {
@@ -270,6 +288,11 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main(app)
         }))
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
+                .on_navigation(|_webview, url| navigation_allowed(url))
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -426,4 +449,167 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Daybrief");
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use serde_json::Value;
+
+    fn permissions(file: &str) -> Vec<String> {
+        let v: Value = serde_json::from_str(file).expect("capability file is valid JSON");
+        v["permissions"]
+            .as_array()
+            .expect("permissions list")
+            .iter()
+            .map(|p| {
+                p.as_str()
+                    .or_else(|| p["identifier"].as_str())
+                    .expect("permission id")
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// The panel only ever needs to read, hide itself and open the main window. If it were ever compromised
+    /// it must not be able to erase data, change settings, add accounts or touch the keychain.
+    #[test]
+    fn the_up_next_panel_can_only_read_and_dismiss() {
+        let p = permissions(include_str!("../capabilities/upnext.json"));
+        assert!(p.len() <= 8, "keep this list short: {p:?}");
+        for forbidden in [
+            "erase",
+            "set-settings",
+            "import",
+            "add-",
+            "remove",
+            "rename",
+            "set-calendar",
+            "oauth",
+            "mail",
+            "ai-",
+            "enable",
+            "autostart",
+            "save-settings",
+            "export",
+        ] {
+            assert!(
+                !p.iter().any(|x| x.contains(forbidden)),
+                "up-next window must not have {forbidden}: {p:?}"
+            );
+        }
+        let main_only = [
+            "allow-erase-all-data",
+            "allow-set-settings",
+            "allow-add-ics-account",
+            "allow-remove-account",
+        ];
+        assert!(main_only.iter().all(|m| !p.contains(&m.to_string())));
+    }
+
+    /// Command names from `build.rs`, the single list the permission system is generated from.
+    fn registered_commands() -> Vec<String> {
+        let build = include_str!("../build.rs");
+        let list = build
+            .split(".commands(&[")
+            .nth(1)
+            .and_then(|r| r.split("])").next())
+            .expect("command list in build.rs");
+        list.split('"')
+            .skip(1)
+            .step_by(2)
+            .map(String::from)
+            .collect()
+    }
+
+    #[test]
+    fn every_registered_command_is_granted_to_the_main_window_and_handled() {
+        let main = permissions(include_str!("../capabilities/default.json"));
+        let lib = include_str!("lib.rs");
+        let commands = registered_commands();
+        assert!(commands.len() > 30, "found {} commands", commands.len());
+        for c in &commands {
+            let perm = format!("allow-{}", c.replace('_', "-"));
+            assert!(
+                main.contains(&perm),
+                "{c}: the main window has no permission {perm}"
+            );
+            assert!(
+                lib.contains(&format!("::{c},")) || lib.contains(&format!("::{c}\n")),
+                "{c} is not in generate_handler!"
+            );
+        }
+        // And no permission refers to a command that no longer exists.
+        for p in main.iter().filter(|p| p.starts_with("allow-")) {
+            assert!(
+                commands
+                    .iter()
+                    .any(|c| format!("allow-{}", c.replace('_', "-")) == **p),
+                "stale permission {p}"
+            );
+        }
+    }
+
+    #[test]
+    fn windows_can_only_ever_show_the_apps_own_pages() {
+        let ok = |s: &str| super::navigation_allowed(&s.parse().unwrap());
+        for allowed in [
+            "tauri://localhost/",
+            "tauri://localhost/index.html",
+            "http://tauri.localhost/",
+            "https://tauri.localhost/#/upnext",
+            "about:blank",
+        ] {
+            assert!(ok(allowed), "{allowed}");
+        }
+        for blocked in [
+            "https://example.com/",
+            "http://example.com/",
+            "https://tauri.localhost.evil.com/",
+            "http://localhost.evil.com:1420/",
+            "tauri://evil/",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "data:text/html,<script>1</script>",
+            "ftp://localhost/",
+            "about:srcdoc",
+            "https://accounts.google.com/",
+            "message://%3Cx%3E",
+            "blob:https://tauri.localhost/x",
+        ] {
+            assert!(!ok(blocked), "{blocked}");
+        }
+        // The dev server is only trusted in debug builds, and only on the exact port.
+        assert_eq!(ok("http://localhost:1420/"), cfg!(debug_assertions));
+        assert!(!ok("http://localhost:9999/"));
+    }
+
+    #[test]
+    fn the_two_capabilities_target_different_windows() {
+        let main: Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let up: Value = serde_json::from_str(include_str!("../capabilities/upnext.json")).unwrap();
+        assert_eq!(main["windows"], serde_json::json!(["main"]));
+        assert_eq!(up["windows"], serde_json::json!(["upnext"]));
+    }
+
+    /// Every command the app registers must be a permission of the main window, and nothing else is reachable.
+    #[test]
+    fn the_main_window_holds_every_app_command_and_no_broad_core_permission() {
+        let p = permissions(include_str!("../capabilities/default.json"));
+        assert!(
+            p.iter().all(|x| x.starts_with("allow-")
+                || matches!(
+                    x.as_str(),
+                    "core:event:allow-listen"
+                        | "core:event:allow-unlisten"
+                        | "core:window:allow-start-dragging"
+                        | "opener:allow-open-url"
+                )),
+            "unexpected permission: {p:?}"
+        );
+        assert!(
+            !p.iter().any(|x| x.ends_with(":default")),
+            "no blanket default permission sets"
+        );
+    }
 }

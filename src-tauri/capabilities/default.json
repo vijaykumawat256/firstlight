@@ -1,10 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Least-privilege capability for the app windows: only our own commands and event listening.",
+  "description": "The main window: our own commands, event listening, window dragging, and https links.",
   "windows": [
-    "main",
-    "upnext"
+    "main"
   ],
   "permissions": [
     "core:event:allow-listen",

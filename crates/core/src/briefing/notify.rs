@@ -25,6 +25,8 @@ pub struct NotifySettings {
     pub evening_hour: u32,
     /// Show times as 13:00 instead of 1:00 PM.
     pub time_24h: bool,
+    /// Leave event names (and places) out of notifications. They appear on the lock screen and in screen shares.
+    pub hide_titles: bool,
 }
 
 impl Default for NotifySettings {
@@ -37,6 +39,7 @@ impl Default for NotifySettings {
             evening: true,
             evening_hour: 18,
             time_24h: false,
+            hide_titles: false,
         }
     }
 }
@@ -101,20 +104,29 @@ pub fn due(
             } else {
                 format!("In {mins} min")
             };
-            let tail = item.event.location.clone().or_else(|| {
-                item.event
-                    .join_url
-                    .as_ref()
-                    .map(|_| "Join link ready".to_string())
-            });
+            let tail = if ns.hide_titles {
+                None // not even the place: it can give the meeting away
+            } else {
+                item.event.location.clone().or_else(|| {
+                    item.event
+                        .join_url
+                        .as_ref()
+                        .map(|_| "Join link ready".to_string())
+                })
+            };
             let body = match tail {
                 Some(t) => format!("{when} · {} · {t}", fmt_time(item.start, tz, ns.time_24h)),
                 None => format!("{when} · {}", fmt_time(item.start, tz, ns.time_24h)),
             };
+            let title = if ns.hide_titles {
+                "Meeting starting soon".to_string()
+            } else {
+                item.event.title.clone()
+            };
             out.push(Notification {
                 id,
                 kind: Kind::Before,
-                title: item.event.title.clone(),
+                title,
                 body,
             });
         }
@@ -133,11 +145,18 @@ pub fn due(
         let id = format!("morning:{}", b.date);
         if !sent.contains(&id) {
             let first = &b.remaining[0];
+            let first_part = if ns.hide_titles {
+                format!("First at {}.", fmt_time(first.start, tz, ns.time_24h))
+            } else {
+                format!(
+                    "First: {} at {}.",
+                    first.event.title,
+                    fmt_time(first.start, tz, ns.time_24h)
+                )
+            };
             let mut body = format!(
-                "{} left today. First: {} at {}.",
-                plural(b.remaining.len(), "event", "events"),
-                first.event.title,
-                fmt_time(first.start, tz, ns.time_24h)
+                "{} left today. {first_part}",
+                plural(b.remaining.len(), "event", "events")
             );
             if !b.conflicts.is_empty() {
                 body += &format!(
@@ -489,6 +508,62 @@ mod tests {
                 &HashSet::new()
             )
             .is_empty()
+        );
+    }
+
+    #[test]
+    fn hiding_titles_removes_every_event_name_and_place() {
+        let mut room = ev("SECRET-PROJECT-LAUNCH", at(14, 0), 30);
+        room.location = Some("SECRET-ROOM".into());
+        room.join_url = Some("https://zoom.us/j/1".into());
+        let hide = NotifySettings {
+            hide_titles: true,
+            ..Default::default()
+        };
+        let run = |now| {
+            due(
+                &[room.clone(), ev("SECRET-OTHER", at(15, 0), 30)],
+                now,
+                LONDON,
+                &hide,
+                &BriefingSettings::default(),
+                &UnlockRules::default(),
+                &HashSet::new(),
+            )
+        };
+
+        let before = run(at(13, 52));
+        assert_eq!(before.len(), 1);
+        assert_eq!(before[0].title, "Meeting starting soon");
+        assert_eq!(before[0].body, "In 8 min · 2:00 PM");
+
+        let morning = run(at(8, 30))
+            .into_iter()
+            .find(|n| n.kind == Kind::Morning)
+            .unwrap();
+        assert_eq!(morning.body, "2 events left today. First at 2:00 PM.");
+
+        for n in before.iter().chain(&[morning]) {
+            let text = format!("{} {}", n.title, n.body);
+            assert!(
+                !text.contains("SECRET") && !text.contains("zoom"),
+                "leaked: {text}"
+            );
+        }
+        // Ids are unchanged, so turning the option on or off never repeats or drops a notification.
+        let shown = due(
+            &[room],
+            at(13, 52),
+            LONDON,
+            &NotifySettings::default(),
+            &BriefingSettings::default(),
+            &UnlockRules::default(),
+            &HashSet::new(),
+        );
+        assert_eq!(shown[0].id, before[0].id);
+        assert_eq!(
+            shown[0].title, "SECRET-PROJECT-LAUNCH",
+            "titles are shown by default"
         );
     }
 

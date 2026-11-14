@@ -125,7 +125,7 @@ export interface AppSettings {
     up_next_lead_minutes: number;
     skip_when_fullscreen: boolean;
   };
-  notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; time_24h: boolean };
+  notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; time_24h: boolean; hide_titles: boolean };
   appearance: { theme: ThemeChoice; accent: string };
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; include_email: boolean; consented: AiProvider | null };
