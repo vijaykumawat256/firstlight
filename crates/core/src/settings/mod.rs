@@ -28,6 +28,7 @@ pub enum DefaultView {
     Briefing,
     Day,
     Week,
+    Month,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -130,6 +131,8 @@ pub struct AppearanceSettings {
     pub theme: Theme,
     /// `"system"` (the default blue) or one of the calendar palette names.
     pub accent: String,
+    /// A soft tint behind the app that follows the time of day. Off by default.
+    pub ambient: bool,
 }
 
 impl Default for AppearanceSettings {
@@ -137,6 +140,7 @@ impl Default for AppearanceSettings {
         Self {
             theme: Theme::System,
             accent: "system".into(),
+            ambient: false,
         }
     }
 }

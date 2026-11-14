@@ -394,3 +394,60 @@ fn an_unreadable_record_does_not_hide_the_others() {
     refresh(&mut s, now).unwrap();
     assert_eq!(all(&s).len(), 1);
 }
+
+#[test]
+fn one_day_can_be_removed_from_a_series_and_stays_removed() {
+    let mut s = store();
+    let now = t("2026-11-14T12:00:00Z");
+    let mut input = timed("Standup");
+    input.repeat = Some(RepeatInput {
+        every: "daily".into(),
+        interval: 1,
+        until: Some("2026-11-24".into()),
+    });
+    save(&mut s, None, &input, NY, now).unwrap();
+    let before = all(&s);
+    assert_eq!(before.len(), 5);
+    let victim = before[2].clone();
+
+    skip_occurrence(&mut s, &victim.id, now).unwrap();
+    let after = all(&s);
+    assert_eq!(after.len(), 4);
+    assert!(after.iter().all(|e| e.id != victim.id));
+    // Doing it twice is harmless; editing the series keeps the day removed; a later refresh keeps it too.
+    skip_occurrence(&mut s, &victim.id, now).unwrap();
+    let mut edit = get(&s, &victim.id).unwrap().unwrap().input;
+    edit.title = "Standup (new)".into();
+    save(&mut s, Some(&victim.id), &edit, NY, now).unwrap();
+    refresh(&mut s, now).unwrap();
+    let end = all(&s);
+    assert_eq!(end.len(), 4);
+    assert!(
+        end.iter()
+            .all(|e| e.id != victim.id && e.title == "Standup (new)")
+    );
+}
+
+#[test]
+fn only_a_day_of_a_real_series_can_be_removed() {
+    let mut s = store();
+    let now = t("2026-11-14T12:00:00Z");
+    let single = save(&mut s, None, &timed("One-off"), NY, now).unwrap();
+    assert!(
+        skip_occurrence(&mut s, &single.id, now).is_err(),
+        "no occurrence part"
+    );
+    assert!(
+        skip_occurrence(&mut s, &format!("{}:123", single.id), now).is_err(),
+        "not a series"
+    );
+    for bad in [
+        "fixture-work:x:1",
+        "local-events:",
+        "local-events:zzz:5",
+        "",
+    ] {
+        assert!(skip_occurrence(&mut s, bad, now).is_err(), "{bad}");
+    }
+    assert_eq!(all(&s).len(), 1);
+}

@@ -243,3 +243,43 @@ test("the calendars section leads to accounts", async ({ page }) => {
   await page.getByRole("button", { name: /Accounts & calendars/ }).click();
   await expect(page.getByRole("heading", { name: "Accounts", level: 1 })).toBeVisible();
 });
+
+test("Month is one of the choices for what the app opens to", async ({ page }) => {
+  await openSection(page, "General");
+  await page.getByRole("combobox", { name: "Opens to" }).click();
+  await page.getByRole("option", { name: "Month view" }).click();
+  await expect(page.getByRole("combobox", { name: "Opens to" })).toContainText("Month view");
+  await expect(page.getByRole("heading", { name: "General", level: 1 })).toBeVisible();
+});
+
+test("the app can open straight to the month view", async ({ page }) => {
+  await page.clock.install({ time: todayAt(9, 30) });
+  await page.goto("/?defaultview=month");
+  await expect(page.getByRole("grid", { name: "Month" })).toBeVisible();
+});
+
+test("the time-of-day background is off until chosen, and follows the hour", async ({ page }) => {
+  await page.clock.install({ time: todayAt(8, 15) });
+  await page.goto("/");
+  await expect(page.locator("html")).not.toHaveAttribute("data-ambient", /.+/);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await section(page, "Appearance");
+  await page.getByRole("switch", { name: "Time-of-day background" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-ambient", "morning");
+  await page.clock.fastForward("09:00:00"); // 17:15
+  await expect(page.locator("html")).toHaveAttribute("data-ambient", "evening", { timeout: 10_000 });
+  await page.getByRole("switch", { name: "Time-of-day background" }).click();
+  await expect(page.locator("html")).not.toHaveAttribute("data-ambient", /.+/);
+});
+
+test("the default accent follows the system colour, and a chosen one wins", async ({ page }) => {
+  await page.clock.install({ time: todayAt(9, 30) });
+  await page.goto("/?sysaccent=purple");
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "purple");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await section(page, "Appearance");
+  await page.getByRole("radio", { name: "green" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "green");
+  await page.getByRole("radio", { name: "Default" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "purple");
+});

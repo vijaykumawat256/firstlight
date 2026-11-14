@@ -10,7 +10,7 @@ Phase 5 delivered: email digest (`crates/core/src/mail`: Apple Mail via AppleScr
 Phase 5 gaps: IMAP is built for Yahoo and iCloud only (`mail/imap`; other providers are deliberately not offered), but never run with a real login; "people in today's meetings" is approximated by meeting organiser names only (attendees are not stored); Gmail and Graph mail never ran against the live services; the Apple Mail AppleScript compiles against Mail's dictionary but has not been run (it needs the user's Automation permission).
 Phase 4 delivered: one typed, versioned settings document (`crates/core/src/settings`), tolerant per-field loading + migration from the old scattered keys, Settings screen with all seven sections, live apply (theme, accent, clock, week start, default view, shortcut, sync interval, notifications, unlock rules), export/import, "Erase all data".
 Phase 3 delivered: briefing engine, unlock rules, notifications, `get_briefing`, event detail, compact up-next window, day/week views.
-Known gaps: full-screen-app detection (rule exists, detection stubbed, so no setting is shown for it); notification click does not open the app; the macOS system accent colour is not read (accent is Default or a palette colour).
+Known gaps: full-screen-app detection (rule exists, detection stubbed, so no setting is shown for it); wake-from-sleep fallback for unlock; Google/Microsoft incremental sync. Notification click now brings the app forward (`on_action` in `lib.rs`) but has not been seen working: in `tauri dev` notifications come from the terminal app, so only a bundled build can show it.
 Calendar app (macOS EventKit) provider: built; its permission prompt has not been clicked through yet.
 Queued, not built: Apple Mail digest (unread, important senders, invitations) via AppleScript; planned with Phase 5.
 
@@ -100,10 +100,10 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Toast text exists twice in the DOM (visible + screen-reader announcement): use `.first()` when asserting on it.
 
 ## Views and meeting links
-- Calendar has Day, Week and Month (`MonthGrid.tsx`; a day click opens the Day view). Not yet an "Opens to" choice: that setting is a Rust enum (day/week/briefing) and would need a migration-safe new value.
+- Calendar has Day, Week and Month (`MonthGrid.tsx`; a day click opens the Day view). Month is also an "Opens to" choice (`DefaultView::Month`; an old settings file without it is unaffected because unknown values fall back per field).
 - When today and tomorrow are empty the briefing shows `ClearWeek` (next 14 days) instead of a bare empty state. Browser fixture flag `?quietdays` removes today's and tomorrow's events.
 - Meeting links: Join and Copy link on the up-next card and event detail (`copyLink.ts`). Detection is `crates/core/src/join.rs` (known hosts, or a provider's own conference field for any https link). The compact up-next window has Join only.
-- Sync cadence: on launch, on unlock (2-minute cooldown), every `general.sync_interval_minutes` (default 10), and the manual refresh button. Nothing is pushed from providers, so a new event appears at the next sync.
+- Sync cadence: on launch, on unlock or whenever the window is shown (`show_main` triggers the unlock-style sync, so the 2-minute cooldown applies), every `general.sync_interval_minutes` (default 10), and the manual refresh button. Nothing is pushed from providers, so a new event appears at the next sync.
 
 ## Sizes
 - The real app window is narrow by design (about 420 wide) and resizable; the e2e viewport is 420x680 for that reason. Below 640px the month shows coloured dots instead of titles; the screens' content is capped at `max-w-2xl` and centred so a big laptop screen does not stretch rows. Tested for no sideways scroll at 390 and 1440.
@@ -117,3 +117,8 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Reminders: per-event, timed events only. The notifier shows them itself (`local::due_reminders`) and the general "before each event" heads-up skips events that have one, so nobody is told twice.
 - Invitations (`crates/core/src/invite.rs`): Firstlight NEVER sends mail. `prepare_invite` saves an `.ics` to Downloads (never overwriting), reveals it, and opens a `mailto:` draft in the user's own mail app. Recipients are validated strictly; subject/body are percent-encoded; a connected calendar's description is never copied into an email. METHOD:PUBLISH, no ORGANIZER/ATTENDEE, so replies don't come back to the user; the file just lets people add it to a calendar.
 - Found while building this: an all-day recurring event ending on a date (`UNTIL=20261119`, as Google and Apple write it) used to expand to only its first day; fixed in `ics::date_until_to_datetime` with a regression test.
+
+## Look and one-day edits
+- The default accent follows the macOS accent colour (`get_system_accent`, mapped by `accent_name`; blue, yellow, graphite and non-macOS give the normal default). The applier re-reads it on window focus. The up-next window's capability file allows that one read-only command.
+- Optional time-of-day tint: `appearance.ambient` (off by default) sets `data-ambient` on `<html>` (morning/day/evening/night, re-evaluated every 5 minutes); the CSS is a faint wash from the top (`tokens.css`). Axe-tested in light and dark. PLAN.md says no decorative gradients; this exists because the user asked, and stays opt-in.
+- One day of a repeating own event: `local::skip_occurrence` records the occurrence key in the record's `skipped` list (kept across series edits). "Edit this day" is create-a-one-off then skip (create first, so a failure leaves the series intact). Browser fixture mirrors it.

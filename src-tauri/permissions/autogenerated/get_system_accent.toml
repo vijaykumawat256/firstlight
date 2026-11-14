@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-system-accent"
+description = "Enables the get_system_accent command without any pre-configured scope."
+commands.allow = ["get_system_accent"]
+
+[[permission]]
+identifier = "deny-get-system-accent"
+description = "Denies the get_system_accent command without any pre-configured scope."
+commands.deny = ["get_system_accent"]

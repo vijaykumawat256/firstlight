@@ -174,26 +174,40 @@ export function EventForm({
   onOpenChange,
   initial,
   day,
+  detach,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initial?: OwnEvent | null;
   day?: Date;
+  /** The id of one day of a repeating event: only that day changes (see FormSheet). */
+  detach?: string;
 }) {
   // Mounted only while open, so every opening starts from a fresh draft.
   return open ? (
-    <FormSheet onOpenChange={onOpenChange} initial={initial} day={day} />
+    <FormSheet
+      onOpenChange={onOpenChange}
+      initial={initial}
+      day={day}
+      detach={detach}
+    />
   ) : null;
 }
 
+/**
+ * With `detach` (the id of one day of a repeating event) the form makes a separate one-off event from
+ * these details and removes that day from the series, so only that day changes.
+ */
 function FormSheet({
   onOpenChange,
   initial,
   day,
+  detach,
 }: {
   onOpenChange: (o: boolean) => void;
   initial?: OwnEvent | null;
   day?: Date;
+  detach?: string;
 }) {
   const qc = useQueryClient();
   const push = useToasts((s) => s.push);
@@ -201,11 +215,17 @@ function FormSheet({
     initial ? draftOf(initial.input) : blank(day ?? new Date()),
   );
   const notesId = useId();
-  const editing = !!initial;
+  const editing = !!initial && !detach;
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const input = inputOf(d);
+      if (detach) {
+        // Create the one-off first: if that fails, the series is left exactly as it was.
+        const made = await api.createEvent(input);
+        await api.skipOccurrence(detach);
+        return made;
+      }
       return initial
         ? api.updateEvent(initial.id, input)
         : api.createEvent(input);
@@ -229,14 +249,18 @@ function FormSheet({
     !!d.startDate &&
     !!d.endDate &&
     (d.allDay || (!!d.startTime && !!d.endTime));
-  const repeating = d.repeat !== "none";
+  const repeating = d.repeat !== "none" && !detach;
 
   return (
     <Sheet
       open
       onOpenChange={onOpenChange}
-      title={editing ? "Edit event" : "New event"}
-      description="Saved only on this computer. It isn't added to Google, Outlook or any other calendar."
+      title={detach ? "Edit this day" : editing ? "Edit event" : "New event"}
+      description={
+        detach
+          ? "Only this day changes. The rest of the repeat stays as it is."
+          : "Saved only on this computer. It isn't added to Google, Outlook or any other calendar."
+      }
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -245,7 +269,7 @@ function FormSheet({
             disabled={!ready || save.isPending}
             onClick={() => save.mutate()}
           >
-            {save.isPending ? "Saving…" : editing ? "Save" : "Add event"}
+            {save.isPending ? "Saving…" : editing || detach ? "Save" : "Add event"}
           </Button>
         </>
       }
@@ -313,15 +337,17 @@ function FormSheet({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-headline text-fg">Repeat</span>
-          <Select
-            label="Repeat"
-            value={d.repeat}
-            onValueChange={(v) => set("repeat", v)}
-            options={repeatOptions(d.repeat)}
-          />
-        </div>
+        {!detach && (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-headline text-fg">Repeat</span>
+            <Select
+              label="Repeat"
+              value={d.repeat}
+              onValueChange={(v) => set("repeat", v)}
+              options={repeatOptions(d.repeat)}
+            />
+          </div>
+        )}
         {repeating && (
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">

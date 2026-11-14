@@ -10,6 +10,15 @@ import { useNav } from "@/app/nav";
 /** Remembers the theme so the next launch paints correctly before settings have loaded. */
 const THEME_CACHE = "daybrief.theme";
 
+/** Which part of the day it is, for the optional background tint. */
+export function periodOf(d: Date): "morning" | "day" | "evening" | "night" {
+  const h = d.getHours();
+  if (h >= 5 && h < 11) return "morning";
+  if (h >= 11 && h < 17) return "day";
+  if (h >= 17 && h < 21) return "evening";
+  return "night";
+}
+
 function applyAccent(accent: string) {
   const root = document.documentElement;
   // The stylesheet derives readable text and fill colours from the palette colour (see tokens.css).
@@ -47,10 +56,28 @@ export function SettingsApplier({ children }: { children: ReactNode }) {
     }
   }, [theme]);
 
+  // "Default" follows the system accent colour (read again whenever the window is focused, so changing it
+  // in System Settings shows up without a restart); any other choice is used as it is.
   const accent = settings?.appearance.accent;
+  const system = useQuery({ queryKey: ["system-accent"], queryFn: () => api.getSystemAccent(), refetchOnWindowFocus: true, staleTime: 30_000 });
+  const effectiveAccent = accent === "system" ? (system.data ?? "system") : accent;
   useEffect(() => {
-    if (accent) applyAccent(accent);
-  }, [accent]);
+    if (effectiveAccent) applyAccent(effectiveAccent);
+  }, [effectiveAccent]);
+
+  // Optional time-of-day tint behind the app.
+  const ambient = settings?.appearance.ambient;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!ambient) {
+      root.removeAttribute("data-ambient");
+      return;
+    }
+    const set = () => root.setAttribute("data-ambient", periodOf(new Date()));
+    set();
+    const timer = setInterval(set, 5 * 60_000);
+    return () => clearInterval(timer);
+  }, [ambient]);
 
   // Clock format and week start are read while rendering, so remount the tree when they change.
   const timeFormat = settings?.general.time_format ?? "auto";
@@ -82,7 +109,7 @@ export function SettingsApplier({ children }: { children: ReactNode }) {
 }
 
 function goToDefaultView(qc: ReturnType<typeof useQueryClient>) {
-  const view = qc.getQueryData<{ general: { default_view: "briefing" | "day" | "week" } }>(["settings"])?.general.default_view ?? "briefing";
+  const view = qc.getQueryData<{ general: { default_view: "briefing" | "day" | "week" | "month" } }>(["settings"])?.general.default_view ?? "briefing";
   if (view === "briefing") useNav.getState().go("briefing");
   else useNav.getState().openCalendar(view);
 }

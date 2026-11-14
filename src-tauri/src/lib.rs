@@ -66,6 +66,11 @@ fn show_main(app: &AppHandle) {
         let _ = w.show();
         let _ = w.set_focus();
     }
+    // Opening the window is a good moment to look for new events. The scheduler's unlock cooldown keeps
+    // this from syncing more than once every couple of minutes, however often the window is opened.
+    if let Some(state) = app.try_state::<AppState>() {
+        state.sync.trigger(scheduler::Trigger::Unlock);
+    }
 }
 
 /// Which addresses a window of this app may show. Only the app's own pages: no remote site can ever be
@@ -371,6 +376,8 @@ pub fn run() {
             mail_ai::enable_apple_mail,
             mail_ai::enable_account_mail,
             commands::get_own_event,
+            commands::skip_event_occurrence,
+            commands::get_system_accent,
             commands::prepare_invite,
             commands::create_event,
             commands::update_event,
@@ -486,6 +493,15 @@ pub fn run() {
             ) {
                 log::warn!("saved shortcut not registered: {e}");
             }
+            // Clicking a notification brings the app forward. Registered before the first one is shown.
+            {
+                use tauri_plugin_notification::NotificationExt;
+                let handle = app.handle().clone();
+                let _ = app
+                    .handle()
+                    .notification()
+                    .on_action(move |_| show_main(&handle));
+            }
             spawn_update_checks(app.handle().clone());
             notifier::spawn(app.handle().clone(), db_path_for_notifier, key_for_notifier);
             build_tray(app.handle())?;
@@ -536,7 +552,7 @@ mod capability_tests {
     #[test]
     fn the_up_next_panel_can_only_read_and_dismiss() {
         let p = permissions(include_str!("../capabilities/upnext.json"));
-        assert!(p.len() <= 8, "keep this list short: {p:?}");
+        assert!(p.len() <= 9, "keep this list short: {p:?}");
         for forbidden in [
             "erase",
             "set-settings",

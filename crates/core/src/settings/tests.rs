@@ -30,7 +30,8 @@ fn defaults_are_sensible_and_round_trip() {
         d.appearance,
         AppearanceSettings {
             theme: Theme::System,
-            accent: "system".into()
+            accent: "system".into(),
+            ambient: false,
         }
     );
     assert_eq!(

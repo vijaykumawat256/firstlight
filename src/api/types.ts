@@ -135,7 +135,7 @@ export interface ImapMailbox {
 }
 
 /** Mirrors `daybrief_core::settings::AppSettings`. */
-export type DefaultView = "briefing" | "day" | "week";
+export type DefaultView = "briefing" | "day" | "week" | "month";
 export type WeekStart = "auto" | "monday" | "sunday" | "saturday";
 export type TimeFormat = "auto" | "h12" | "h24";
 export type ThemeChoice = "system" | "light" | "dark";
@@ -164,7 +164,7 @@ export interface AppSettings {
     skip_when_fullscreen: boolean;
   };
   notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; time_24h: boolean; hide_titles: boolean };
-  appearance: { theme: ThemeChoice; accent: string };
+  appearance: { theme: ThemeChoice; accent: string; ambient: boolean };
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; include_email: boolean; consented: AiProvider | null };
   privacy: { crash_reports: boolean };

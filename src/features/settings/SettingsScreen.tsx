@@ -156,6 +156,7 @@ export function SettingsScreen() {
                     { value: "briefing", label: "Briefing" },
                     { value: "day", label: "Day view" },
                     { value: "week", label: "Week view" },
+                    { value: "month", label: "Month view" },
                   ]}
                 />
               </SettingRow>
@@ -205,7 +206,10 @@ export function SettingsScreen() {
                   ]}
                 />
               </SettingRow>
-              <SettingRow title="Accent colour" stack>
+              <SettingRow title="Time-of-day background" description="A soft tint behind the app that changes from morning to night.">
+                <Switch label="Time-of-day background" checked={s.appearance.ambient} onCheckedChange={(v) => update((d) => void (d.appearance.ambient = v))} />
+              </SettingRow>
+              <SettingRow title="Accent colour" description="Default follows your Mac's accent colour." stack>
                 <div role="radiogroup" aria-label="Accent colour" className="flex flex-wrap gap-2.5">
                   {ACCENTS.map((c) => (
                     <button

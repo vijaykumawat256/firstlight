@@ -364,6 +364,54 @@ pub async fn get_own_event(
     daybrief_core::local::get(&store, &id).map_err(user_input_error)
 }
 
+/// Removes one day of a repeating event; the rest of the series stays.
+#[tauri::command]
+pub async fn skip_event_occurrence(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> CmdResult<()> {
+    {
+        let mut store = lock_store(&state)?;
+        daybrief_core::local::skip_occurrence(&mut store, &id, Utc::now())
+            .map_err(user_input_error)?;
+    }
+    let _ = app.emit("events-changed", ());
+    Ok(())
+}
+
+/// The macOS accent colour as one of our palette names, or `None` for the default blue, graphite,
+/// yellow (too pale for text) and every other system.
+#[tauri::command]
+pub async fn get_system_accent() -> Option<String> {
+    system_accent().map(String::from)
+}
+
+fn system_accent() -> Option<&'static str> {
+    #[cfg(target_os = "macos")]
+    {
+        let out = std::process::Command::new("defaults")
+            .args(["read", "-g", "AppleAccentColor"])
+            .output()
+            .ok()?;
+        accent_name(String::from_utf8_lossy(&out.stdout).trim())
+    }
+    #[cfg(not(target_os = "macos"))]
+    None
+}
+
+/// macOS stores the accent as a number; absent means the default multicolour blue.
+pub(crate) fn accent_name(value: &str) -> Option<&'static str> {
+    match value {
+        "0" => Some("red"),
+        "1" => Some("orange"),
+        "3" => Some("green"),
+        "5" => Some("purple"),
+        "6" => Some("pink"),
+        _ => None, // 4 blue, 2 yellow, -1 graphite, anything unknown
+    }
+}
+
 #[derive(serde::Serialize)]
 pub struct InviteResult {
     /// Where the calendar file was saved.
@@ -1022,4 +1070,21 @@ pub async fn clear_crash_reports(app: AppHandle) -> CmdResult<()> {
         crate::crash_reports::clear(&d);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod accent_tests {
+    use super::accent_name;
+
+    #[test]
+    fn macos_accent_numbers_map_to_palette_names() {
+        assert_eq!(accent_name("0"), Some("red"));
+        assert_eq!(accent_name("1"), Some("orange"));
+        assert_eq!(accent_name("3"), Some("green"));
+        assert_eq!(accent_name("5"), Some("purple"));
+        assert_eq!(accent_name("6"), Some("pink"));
+        for none in ["4", "2", "-1", "", "99", "red"] {
+            assert_eq!(accent_name(none), None, "{none}");
+        }
+    }
 }

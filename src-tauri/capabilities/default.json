@@ -50,6 +50,8 @@
     "allow-enable-apple-mail",
     "allow-enable-account-mail",
     "allow-get-own-event",
+    "allow-skip-event-occurrence",
+    "allow-get-system-accent",
     "allow-prepare-invite",
     "allow-create-event",
     "allow-update-event",

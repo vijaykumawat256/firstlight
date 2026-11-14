@@ -67,6 +67,9 @@ struct Stored {
     input: EventInput,
     /// The zone the times were entered in, so a repeating 9:00 stays 9:00 across daylight saving.
     tz: String,
+    /// Occurrences of a repeating event that were removed (or moved to a one-off event), by their key.
+    #[serde(default)]
+    skipped: Vec<String>,
 }
 
 /// An own event as the edit form needs it.
@@ -273,6 +276,9 @@ fn expand(
             When::Timed { start, .. } => start.timestamp().to_string(),
             When::AllDay { start, .. } => start.format("%Y%m%d").to_string(),
         };
+        if stored.skipped.contains(&key) {
+            continue;
+        }
         e.id = format!("{CALENDAR_ID}:{master}:{key}");
         e.remote_id = format!("{master}:{key}");
         e.recurrence_master_id = Some(master.to_string());
@@ -348,9 +354,19 @@ pub fn save(
     };
     let base = build_event(input, master, tz, now)?;
     let (clean_input, _) = check_extras(input, &base, tz)?;
+    // Editing the series keeps the days already removed from it.
+    let skipped = match master {
+        Some(m) => store
+            .get_own_event(m)?
+            .and_then(|j| serde_json::from_str::<Stored>(&j).ok())
+            .map(|s| s.skipped)
+            .unwrap_or_default(),
+        None => vec![],
+    };
     let stored = Stored {
         input: clean_input,
         tz: tz.name().to_string(),
+        skipped,
     };
     let json = serde_json::to_string(&stored)
         .map_err(|_| Error::Invalid("That event couldn't be saved."))?;
@@ -386,6 +402,39 @@ pub fn share_parts(store: &Store, id: &str) -> Result<Option<(Event, Option<Stri
     let base = build_event(&stored.input, Some(master), tz, Utc::now())?;
     let (_, rule) = check_extras(&stored.input, &base, tz)?;
     Ok(Some((base, rule)))
+}
+
+/// Removes one occurrence of a repeating event (`id` is `local-events:<id>:<occurrence>`) and leaves the
+/// rest of the series alone.
+pub fn skip_occurrence(store: &mut Store, id: &str, now: DateTime<Utc>) -> Result<()> {
+    let master = own_master_id(id)?;
+    let key = id
+        .strip_prefix(&format!("{CALENDAR_ID}:{master}:"))
+        .filter(|k| !k.is_empty())
+        .ok_or(Error::Invalid(
+            "Only one day of a repeating event can be removed.",
+        ))?;
+    let mut stored = store
+        .get_own_event(master)?
+        .and_then(|j| serde_json::from_str::<Stored>(&j).ok())
+        .ok_or(Error::Invalid("That event can't be changed here."))?;
+    if stored.input.repeat.is_none() {
+        return Err(Error::Invalid(
+            "Only one day of a repeating event can be removed.",
+        ));
+    }
+    if !stored.skipped.iter().any(|k| k == key) {
+        if stored.skipped.len() >= 2000 {
+            return Err(Error::Invalid(
+                "Too many days have been removed from this event.",
+            ));
+        }
+        stored.skipped.push(key.to_string());
+    }
+    let json = serde_json::to_string(&stored)
+        .map_err(|_| Error::Invalid("That event couldn't be saved."))?;
+    store.put_own_event(master, &json)?;
+    refresh(store, now)
 }
 
 /// Deletes an event, or a whole repeating series.

@@ -17,6 +17,10 @@ export interface Backend {
   /** Add, change or remove an event of your own (stored only on this computer). */
   createEvent(input: EventInput): Promise<CalEvent>;
   getOwnEvent(id: string): Promise<OwnEvent | null>;
+  /** Removes one day of a repeating event of your own; the rest of the series stays. */
+  skipOccurrence(id: string): Promise<void>;
+  /** The macOS accent colour as a palette name, or null (default blue, graphite, other systems). */
+  getSystemAccent(): Promise<string | null>;
   /** Saves a calendar file to Downloads and, if asked, opens your mail app with a draft. Nothing is sent. */
   prepareInvite(id: string, recipients: string, openMail: boolean): Promise<InviteResult>;
   updateEvent(id: string, input: EventInput): Promise<CalEvent>;

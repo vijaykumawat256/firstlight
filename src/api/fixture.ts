@@ -26,12 +26,12 @@ function isoDate(d: Date): string {
 }
 
 /** Events added in the browser fixture: the record the user typed, like the real app keeps. */
-const ownRecords: { id: string; input: EventInput }[] = [];
+const ownRecords: { id: string; input: EventInput; skipped?: string[] }[] = [];
 
 /** The dated events those records produce (repeats run 120 days ahead, like the real app's window). */
 function ownEvents(): CalEvent[] {
   const out: CalEvent[] = [];
-  for (const rec of ownRecords) out.push(...expandOwn(rec.id, rec.input));
+  for (const rec of ownRecords) out.push(...expandOwn(rec.id, rec.input).filter((e) => !rec.skipped?.includes(e.remote_id.split(":")[1] ?? "")));
   return out;
 }
 
@@ -174,13 +174,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sections: { tomorrow: true, free_time: true, attention: true },
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, time_24h: false, hide_titles: false },
-  appearance: { theme: "system", accent: "system" },
+  appearance: { theme: "system", accent: "system", ambient: params.has("ambient") },
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", include_email: false, consented: null },
   privacy: { crash_reports: false },
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
-if (params.get("defaultview") === "week" || params.get("defaultview") === "day") settings.general.default_view = params.get("defaultview") as "day" | "week";
+if (["week", "day", "month"].includes(params.get("defaultview") ?? "")) settings.general.default_view = params.get("defaultview") as "day" | "week" | "month";
 const settingsListeners = new Set<() => void>();
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
@@ -277,7 +277,7 @@ function saveFixtureEvent(id: string | null, input: EventInput): CalEvent {
   if (master && !ownRecords.some((r) => r.id === master)) throw new Error("That event can't be changed here.");
   const recordId = master ?? `${LOCAL_CAL}:own${ownRecords.length + 1}-${Date.now()}`;
   const at = ownRecords.findIndex((r) => r.id === recordId);
-  if (at >= 0) ownRecords[at] = { id: recordId, input: clean };
+  if (at >= 0) ownRecords[at] = { id: recordId, input: clean, skipped: ownRecords[at]!.skipped };
   else ownRecords.push({ id: recordId, input: clean });
   if (!accounts.some((a) => a.id === "local-account")) {
     accounts.push({
@@ -429,6 +429,15 @@ export const fixtureBackend: Backend = {
     const i = ownRecords.findIndex((r) => r.id === master);
     if (i < 0) throw new Error("That event can't be changed here.");
     ownRecords.splice(i, 1);
+  },
+  async skipOccurrence(id) {
+    const [master, key] = [`${LOCAL_CAL}:${id.slice(LOCAL_CAL.length + 1).split(":")[0]}`, id.split(":")[2]];
+    const rec = ownRecords.find((r) => r.id === master);
+    if (!rec || !key || !rec.input.repeat) throw new Error("Only one day of a repeating event can be removed.");
+    rec.skipped = [...new Set([...(rec.skipped ?? []), key])];
+  },
+  async getSystemAccent() {
+    return params.get("sysaccent");
   },
   async getOwnEvent(id) {
     const master = `${LOCAL_CAL}:${id.slice(LOCAL_CAL.length + 1).split(":")[0]}`;

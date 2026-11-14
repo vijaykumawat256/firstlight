@@ -95,14 +95,17 @@ export function EventDetail({
   const [editTarget, setEditTarget] = useState<OwnEvent | null>(null);
   // Captured when you click, because closing this sheet clears `event`.
   const [inviting, setInviting] = useState<{ event: CalEvent; invitees: string[] } | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  // Which delete is being confirmed: this one day of a repeat, or everything.
+  const [confirming, setConfirming] = useState<null | "one" | "all">(null);
+  // One day of a repeat opened for editing on its own (see EventForm `detach`).
+  const [detachTarget, setDetachTarget] = useState<{ id: string; own: OwnEvent } | null>(null);
   const remove = useMutation({
-    mutationFn: (id: string) => api.deleteEvent(id),
-    onSuccess: () => {
-      setConfirming(false);
+    mutationFn: ({ id, one }: { id: string; one: boolean }) => (one ? api.skipOccurrence(id) : api.deleteEvent(id)),
+    onSuccess: (_, { one }) => {
+      setConfirming(null);
       onClose();
       void qc.invalidateQueries();
-      push({ title: "Event deleted" });
+      push({ title: one ? "That day was removed" : "Event deleted" });
     },
     onError: (e) =>
       push({
@@ -120,6 +123,22 @@ export function EventDetail({
   });
   const info = record.data?.input;
   const series = !!event?.recurrence_master_id;
+  /** This one day's details as a separate, non-repeating event for the form. */
+  const editOne = () => {
+    if (!event || !info) return;
+    const w = event.when;
+    const last = w.kind === "all_day" ? new Date(`${w.end}T00:00:00`) : null;
+    last?.setDate(last.getDate() - 1);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const input = {
+      ...info,
+      repeat: null,
+      start: w.start,
+      end: last ? `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}` : w.end,
+    };
+    setDetachTarget({ id: event.id, own: { id: "", input } });
+    onClose();
+  };
   const edit = useMutation({
     mutationFn: (id: string) => api.getOwnEvent(id),
     onSuccess: (o) => {
@@ -135,7 +154,7 @@ export function EventDetail({
         open={event !== null}
         onOpenChange={(o) => {
           if (!o) {
-            setConfirming(false);
+            setConfirming(null);
             onClose();
           }
         }}
@@ -262,6 +281,15 @@ export function EventDetail({
                 >
                   {series ? "Edit all" : "Edit"}
                 </Button>
+                {series && info && (
+                  <Button
+                    variant="secondary"
+                    leading={<Pencil className="size-4" aria-hidden />}
+                    onClick={editOne}
+                  >
+                    Edit this day
+                  </Button>
+                )}
                 <Button
                   variant="secondary"
                   leading={<Mail className="size-4" aria-hidden />}
@@ -277,25 +305,39 @@ export function EventDetail({
                     <Button
                       variant="danger"
                       disabled={remove.isPending}
-                      onClick={() => remove.mutate(event.id)}
+                      onClick={() => remove.mutate({ id: event.id, one: confirming === "one" })}
                     >
-                      {remove.isPending ? "Deleting…" : series ? "Yes, delete all repeats" : "Yes, delete it"}
+                      {remove.isPending
+                        ? "Deleting…"
+                        : confirming === "one"
+                          ? "Yes, remove this day"
+                          : series
+                            ? "Yes, delete all repeats"
+                            : "Yes, delete it"}
                     </Button>
-                    <Button
-                      variant="plain"
-                      onClick={() => setConfirming(false)}
-                    >
+                    <Button variant="plain" onClick={() => setConfirming(null)}>
                       Keep
                     </Button>
                   </>
                 ) : (
-                  <Button
-                    variant="plain"
-                    leading={<Trash2 className="size-4" aria-hidden />}
-                    onClick={() => setConfirming(true)}
-                  >
-                    {series ? "Delete all" : "Delete"}
-                  </Button>
+                  <>
+                    {series && (
+                      <Button
+                        variant="plain"
+                        leading={<Trash2 className="size-4" aria-hidden />}
+                        onClick={() => setConfirming("one")}
+                      >
+                        Delete this day
+                      </Button>
+                    )}
+                    <Button
+                      variant="plain"
+                      leading={<Trash2 className="size-4" aria-hidden />}
+                      onClick={() => setConfirming("all")}
+                    >
+                      {series ? "Delete all" : "Delete"}
+                    </Button>
+                  </>
                 )}
               </div>
             )}
@@ -312,6 +354,12 @@ export function EventDetail({
         open={editTarget !== null}
         onOpenChange={(o) => !o && setEditTarget(null)}
         initial={editTarget}
+      />
+      <EventForm
+        open={detachTarget !== null}
+        onOpenChange={(o) => !o && setDetachTarget(null)}
+        initial={detachTarget?.own}
+        detach={detachTarget?.id}
       />
       <InviteDialog event={inviting?.event ?? null} invitees={inviting?.invitees ?? []} onClose={() => setInviting(null)} />
     </>

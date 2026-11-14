@@ -68,6 +68,8 @@ fn main() {
             "enable_apple_mail",
             "enable_account_mail",
             "get_own_event",
+            "skip_event_occurrence",
+            "get_system_accent",
             "prepare_invite",
             "create_event",
             "update_event",

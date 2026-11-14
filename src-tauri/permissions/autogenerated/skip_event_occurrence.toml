@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-skip-event-occurrence"
+description = "Enables the skip_event_occurrence command without any pre-configured scope."
+commands.allow = ["skip_event_occurrence"]
+
+[[permission]]
+identifier = "deny-skip-event-occurrence"
+description = "Denies the skip_event_occurrence command without any pre-configured scope."
+commands.deny = ["skip_event_occurrence"]

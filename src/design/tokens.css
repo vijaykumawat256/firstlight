@@ -173,6 +173,21 @@
 
 /* A custom accent colour (Settings > Appearance) is derived from the palette so it is readable by construction:
    darkened in light mode and lightened in dark mode for text, and darkened for fills that carry white text. */
+/* Optional time-of-day tint (Settings, Appearance). A quiet wash from the top of the window; off unless chosen.
+   It sits behind everything and stays faint enough that text keeps its contrast in both themes. */
+:root[data-ambient] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ambient) 14%, transparent) 0%, transparent 55%);
+}
+:root[data-ambient="morning"] { --ambient: var(--cal-orange); }
+:root[data-ambient="day"] { --ambient: var(--cal-blue); }
+:root[data-ambient="evening"] { --ambient: var(--cal-pink); }
+:root[data-ambient="night"] { --ambient: var(--cal-indigo); }
+
 :root[data-accent="red"] { --accent-base: var(--cal-red); }
 :root[data-accent="orange"] { --accent-base: var(--cal-orange); }
 :root[data-accent="green"] { --accent-base: var(--cal-green); }

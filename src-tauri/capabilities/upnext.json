@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "upnext",
-  "description": "The small up-next panel: it can read today's briefing and calendars, hide itself, open the main window and open https links. Nothing that changes data.",
+  "description": "The small up-next panel: it can read today's briefing, calendars and the system accent colour, hide itself, open the main window and open https links. Nothing that changes data.",
   "windows": [
     "upnext"
   ],
@@ -11,6 +11,7 @@
     "allow-get-briefing",
     "allow-get-calendars",
     "allow-get-settings",
+    "allow-get-system-accent",
     "allow-dismiss-up-next",
     "allow-open-briefing",
     {

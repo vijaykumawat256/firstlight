@@ -214,3 +214,47 @@ test("the form with repeat, reminder and invitees, and the invitation dialog, ha
   await expect(page.getByRole("dialog", { name: "Send invitation" })).toBeVisible();
   expect(await scan()).toEqual([]);
 });
+
+test("one day of a repeating event can be removed or changed on its own", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/");
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByLabel("Title").fill("Choir");
+  await sheet.getByRole("combobox", { name: "Repeat" }).click();
+  await page.getByRole("option", { name: "Every day" }).click();
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  await page.getByRole("button", { name: "Calendar" }).click();
+  await page.getByRole("radio", { name: "Month" }).click();
+  const grid = page.getByRole("grid", { name: "Month" });
+  const chips = grid.getByRole("button", { name: /Choir/ });
+  await expect(chips.first()).toBeVisible();
+  const total = await chips.count();
+
+  // Remove just one day.
+  await chips.nth(2).click();
+  let detail = page.getByRole("dialog", { name: "Choir" });
+  await detail.getByRole("button", { name: "Delete this day" }).click();
+  await detail.getByRole("button", { name: "Yes, remove this day" }).click();
+  await expect(page.getByText("That day was removed").first()).toBeVisible();
+  await expect(chips).toHaveCount(total - 1);
+
+  // Change just one day: it becomes its own event, the series loses that day.
+  await chips.nth(2).click();
+  detail = page.getByRole("dialog", { name: "Choir" });
+  await detail.getByRole("button", { name: "Edit this day" }).click();
+  const edit = page.getByRole("dialog", { name: "Edit this day" });
+  await expect(edit.getByRole("combobox", { name: "Repeat" })).toHaveCount(0);
+  await edit.getByLabel("Title").fill("Choir (special)");
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(grid.getByRole("button", { name: /Choir \(special\)/ })).toHaveCount(1);
+  await expect(chips).toHaveCount(total - 1); // the plain "Choir" chips lost the changed day; "Choir (special)" matches /Choir/ too
+  await expect(grid.getByRole("button", { name: /^(?!.*special).*Choir/ })).toHaveCount(total - 2);
+
+  // A single event has only the plain Delete.
+  await grid.getByRole("button", { name: /Choir \(special\)/ }).click();
+  const one = page.getByRole("dialog", { name: "Choir (special)" });
+  await expect(one.getByRole("button", { name: "Delete this day" })).toHaveCount(0);
+  await expect(one.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
+});
