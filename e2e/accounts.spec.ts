@@ -208,3 +208,36 @@ test("Reconnect restores an account that needs attention", async ({ page }) => {
   await expect(page.getByText(/Sign in again to keep it up to date/)).toHaveCount(0, { timeout: 10_000 });
   await expect(page.getByRole("button", { name: "Reconnect" })).toHaveCount(0);
 });
+
+test("Calendar app: explains the permission, connects, birthdays start hidden", async ({ page }) => {
+  await page.goto("/?fresh");
+  await openAdd(page);
+  await page.getByRole("button", { name: /Calendar app on this computer/ }).click();
+  await expect(page.getByText("Allow Full Access")).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/system-calendar.png` });
+  await page.getByRole("button", { name: "Allow access" }).click();
+  await expect(page.getByRole("heading", { name: "Your day is clear" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: /Accounts & calendars/ }).click();
+  await expect(page.getByRole("heading", { name: "Calendar app" })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Show Home (iCloud)" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("switch", { name: "Show Birthdays (Other)" })).toHaveAttribute("aria-checked", "false");
+});
+
+test("Calendar app: denied access shows the way to System Settings", async ({ page }) => {
+  await page.goto("/?fresh&denied");
+  await openAdd(page);
+  await page.getByRole("button", { name: /Calendar app on this computer/ }).click();
+  await expect(page.getByRole("button", { name: "Check again" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open System Settings" })).toBeVisible();
+  await page.getByRole("button", { name: "Check again" }).click();
+  await expect(page.getByRole("alert")).toContainText("turned off for Daybrief");
+});
+
+test("Calendar app option is hidden where it is unsupported", async ({ page }) => {
+  await page.goto("/?fresh&nosystem");
+  await openAdd(page);
+  await expect(page.getByRole("button", { name: /Calendar link/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Calendar app on this computer/ })).toHaveCount(0);
+});

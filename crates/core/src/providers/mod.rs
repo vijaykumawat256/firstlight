@@ -12,6 +12,7 @@ pub mod fixture;
 pub mod google;
 pub mod ics;
 pub mod microsoft;
+pub mod system;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Capabilities {

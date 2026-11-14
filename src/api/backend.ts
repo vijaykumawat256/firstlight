@@ -1,4 +1,4 @@
-import type { AccountView, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary } from "./types";
+import type { AccountView, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -21,6 +21,12 @@ export interface Backend {
    */
   addOauthAccount(provider: "google" | "microsoft"): Promise<AccountView>;
   cancelOauth(): Promise<void>;
+  /** Whether this computer has a Calendar app Daybrief can read, and whether the user allowed it. Never prompts. */
+  systemCalendarStatus(): Promise<SystemStatus>;
+  /** Connects the Calendar app; shows the system permission prompt the first time. */
+  addSystemAccount(): Promise<AccountView>;
+  /** Opens the System Settings pane where access can be switched on. */
+  openPrivacySettings(pane: "calendars" | "automation"): Promise<void>;
   addDemoAccount(): Promise<AccountView>;
   /** Deletes the account, its cached events and its saved credentials. */
   removeAccount(id: string): Promise<void>;

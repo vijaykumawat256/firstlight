@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-system-calendar-status"
+description = "Enables the system_calendar_status command without any pre-configured scope."
+commands.allow = ["system_calendar_status"]
+
+[[permission]]
+identifier = "deny-system-calendar-status"
+description = "Denies the system_calendar_status command without any pre-configured scope."
+commands.deny = ["system_calendar_status"]

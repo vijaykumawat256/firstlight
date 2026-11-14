@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-add-system-account"
+description = "Enables the add_system_account command without any pre-configured scope."
+commands.allow = ["add_system_account"]
+
+[[permission]]
+identifier = "deny-add-system-account"
+description = "Denies the add_system_account command without any pre-configured scope."
+commands.deny = ["add_system_account"]

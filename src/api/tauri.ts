@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary } from "./types";
+import type { AccountView, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -13,6 +13,9 @@ export const tauriBackend: Backend = {
   oauthAvailable: () => invoke<OAuthAvailability>("oauth_available"),
   addOauthAccount: (provider) => invoke<AccountView>("add_oauth_account", { provider }),
   cancelOauth: () => invoke<void>("cancel_oauth"),
+  systemCalendarStatus: () => invoke<SystemStatus>("system_calendar_status"),
+  addSystemAccount: () => invoke<AccountView>("add_system_account"),
+  openPrivacySettings: (pane) => invoke<void>("open_privacy_settings", { pane }),
   addDemoAccount: () => invoke<AccountView>("add_demo_account"),
   removeAccount: (id) => invoke<void>("remove_account", { id }),
   renameAccount: (id, name) => invoke<void>("rename_account", { id, name }),

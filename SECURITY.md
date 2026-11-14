@@ -32,6 +32,7 @@ Status: Phase 1. Update this file whenever a phase changes what we store, send o
 | Read-only scopes only (`calendar.readonly`, `Calendars.Read`); tests assert no write scope appears | `providers/google`, `providers/microsoft` |
 | Browser is only ever opened to an allow-listed sign-in host over https | `commands.rs` `SIGN_IN_HOSTS` |
 | XML from servers is parsed with no entity expansion and a depth cap | `crates/core/src/xml.rs` (tested) |
+| Calendar app access is read-only EventKit; permission is the user's per-app macOS grant, and losing it marks the account for attention instead of returning an empty calendar that would wipe the cache | `providers/system`, `eventkit.rs` |
 | A failed first sync rolls back: no half-connected account or stray credential is left | `commands.rs` `connect` |
 
 ## Known gaps and decisions

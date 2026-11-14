@@ -74,7 +74,7 @@ function Status({ a }: { a: AccountView }) {
     return (
       <p className="flex items-start gap-1.5 text-footnote text-danger">
         <AlertCircle className="mt-px size-3.5 shrink-0" aria-hidden />{" "}
-        {a.provider === "google" || a.provider === "microsoft" ? "Needs attention. Sign in again to keep it up to date." : "Needs attention. Add the calendar again with a fresh link or password."}
+        {a.provider === "system" ? "Calendar access was turned off. Allow it in System Settings, then check again." : a.provider === "google" || a.provider === "microsoft" ? "Needs attention. Sign in again to keep it up to date." : "Needs attention. Add the calendar again with a fresh link or password."}
       </p>
     );
   }
@@ -108,6 +108,12 @@ function AccountCard({ account, onChanged }: { account: AccountView; onChanged: 
     onSuccess: onChanged,
     onError: (e) => push({ title: "Couldn't reconnect", description: errorMessage(e), tone: "danger" }),
   });
+  const recheck = useMutation({
+    mutationFn: () => api.addSystemAccount(),
+    onSuccess: onChanged,
+    onError: (e) => push({ title: "Still no access", description: errorMessage(e), tone: "danger" }),
+  });
+  const isSystem = account.provider === "system";
   const isOauth = account.provider === "google" || account.provider === "microsoft";
   const remove = useMutation({
     mutationFn: () => api.removeAccount(account.id),
@@ -128,6 +134,16 @@ function AccountCard({ account, onChanged }: { account: AccountView; onChanged: 
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
+          {isSystem && account.status === "needs_attention" && (
+            <>
+              <Button variant="plain" size="sm" onClick={() => void api.openPrivacySettings("calendars")}>
+                Open Settings
+              </Button>
+              <Button variant="primary" size="sm" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
+                {recheck.isPending ? "Checking…" : "Check again"}
+              </Button>
+            </>
+          )}
           {isOauth && account.status === "needs_attention" && (
             <Button variant="primary" size="sm" disabled={reconnect.isPending} onClick={() => reconnect.mutate()}>
               {reconnect.isPending ? "Waiting…" : "Reconnect"}

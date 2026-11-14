@@ -6,8 +6,15 @@ use daybrief_core::http::HttpClient;
 use daybrief_core::model::ProviderKind;
 use daybrief_core::oauth::OAuthConfig;
 use daybrief_core::providers::{
-    Provider, caldav::CaldavProvider, fixture::FixtureProvider, google, google::GoogleProvider,
-    ics::IcsProvider, microsoft, microsoft::MicrosoftProvider,
+    Provider,
+    caldav::CaldavProvider,
+    fixture::FixtureProvider,
+    google,
+    google::GoogleProvider,
+    ics::IcsProvider,
+    microsoft,
+    microsoft::MicrosoftProvider,
+    system::{SystemProvider, SystemSource},
 };
 use daybrief_core::secrets::SecretStore;
 use std::sync::Arc;
@@ -19,6 +26,8 @@ pub struct Deps {
     pub secrets: Arc<dyn SecretStore>,
     pub tz: Tz,
     pub oauth: OAuthConfigs,
+    /// The operating system's own calendars (macOS Calendar app).
+    pub system: Arc<dyn SystemSource>,
 }
 
 /// Sign-in configuration baked into this build; `None` when the build has no client ID.
@@ -71,6 +80,6 @@ pub fn provider_for(kind: ProviderKind, deps: &Deps) -> Option<Box<dyn Provider>
                 cfg,
             )) as Box<dyn Provider>
         }),
-        ProviderKind::System => None,
+        ProviderKind::System => Some(Box::new(SystemProvider::new(deps.system.clone(), deps.tz))),
     }
 }

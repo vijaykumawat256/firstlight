@@ -234,6 +234,31 @@ export const fixtureBackend: Backend = {
   async cancelOauth() {
     oauthCancelled = true;
   },
+  async systemCalendarStatus() {
+    return { supported: !params.has("nosystem"), access: params.has("denied") ? "denied" : "not_determined" } as const;
+  },
+  async addSystemAccount() {
+    if (params.has("denied")) throw new Error("Calendar access is turned off for Daybrief. Open System Settings, switch Daybrief on under Calendars, then try again.");
+    await new Promise((r) => setTimeout(r, 400));
+    const view: AccountView = {
+      id: "system-account",
+      provider: "system",
+      display_name: "Calendar app",
+      email: null,
+      status: "ok",
+      calendars: [
+        { id: "system-account:a", account_id: "system-account", remote_id: "a", name: "Home (iCloud)", colour: "green", visible: true, read_only: false },
+        { id: "system-account:b", account_id: "system-account", remote_id: "b", name: "Work (Gmail)", colour: "blue", visible: true, read_only: false },
+        { id: "system-account:c", account_id: "system-account", remote_id: "c", name: "Birthdays (Other)", colour: "pink", visible: false, read_only: true },
+      ],
+      last_synced_at: new Date().toISOString(),
+      last_error: null,
+    };
+    accounts = [...accounts.filter((a) => a.id !== view.id), view];
+    notify();
+    return structuredClone(view);
+  },
+  async openPrivacySettings() {},
   async addDemoAccount() {
     accounts = [...accounts.filter((a) => a.id !== DEMO_ID), demoAccount()];
     notify();

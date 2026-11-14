@@ -59,3 +59,10 @@ export interface OAuthAvailability {
   google: boolean;
   microsoft: boolean;
 }
+
+export type SystemAccess = "granted" | "not_determined" | "denied" | "restricted" | "unsupported";
+
+export interface SystemStatus {
+  supported: boolean;
+  access: SystemAccess;
+}

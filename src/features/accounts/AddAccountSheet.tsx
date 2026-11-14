@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, KeyRound, Link2, Mail, Sparkles } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, KeyRound, Laptop, Link2, Mail, Sparkles } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { api, errorMessage } from "@/api";
 import { Badge, Button, ListGroup, Select, Sheet, TextField } from "@/design";
 import { CALDAV_PRESETS, OTHER_SERVER } from "./presets";
 
-type Step = "choose" | "ics" | "caldav" | "oauth";
+type Step = "choose" | "ics" | "caldav" | "oauth" | "system";
 type OAuthProvider = "google" | "microsoft";
 const OAUTH_LABEL: Record<OAuthProvider, string> = { google: "Google", microsoft: "Microsoft" };
 
@@ -62,6 +62,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
         ics.reset();
         dav.reset();
         oauth.reset();
+        sys.reset();
         demo.reset();
       }, 250);
     }
@@ -87,6 +88,12 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
     oauth.reset();
     setStep("choose");
   };
+  const system = useQuery({ queryKey: ["system-status"], queryFn: () => api.systemCalendarStatus(), enabled: open });
+  const sys = useMutation({
+    mutationFn: () => api.addSystemAccount(),
+    onSuccess: done,
+    onSettled: () => void system.refetch(),
+  });
   const demo = useMutation({ mutationFn: () => api.addDemoAccount(), onSuccess: done });
 
   const linkError = touched && !LINK_RE.test(url.trim()) ? "Enter an https:// or webcal:// link." : undefined;
@@ -105,10 +112,19 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
     <Sheet
       open={open}
       onOpenChange={close}
-      title={step === "choose" ? "Add a calendar" : step === "ics" ? "Calendar link" : step === "oauth" ? `Sign in with ${OAUTH_LABEL[oauthProvider]}` : "iCloud, Yahoo and others"}
-      description={step === "choose" ? "Choose how to connect." : step === "ics" ? "Paste the address of a published calendar." : step === "oauth" ? "Daybrief only asks to view your calendar." : "Sign in with an app password."}
+      title={step === "choose" ? "Add a calendar" : step === "system" ? "Calendar app" : step === "ics" ? "Calendar link" : step === "oauth" ? `Sign in with ${OAUTH_LABEL[oauthProvider]}` : "iCloud, Yahoo and others"}
+      description={step === "choose" ? "Choose how to connect." : step === "system" ? "Use the calendars already on this computer." : step === "ics" ? "Paste the address of a published calendar." : step === "oauth" ? "Daybrief only asks to view your calendar." : "Sign in with an app password."}
       footer={
-        step === "oauth" ? (
+        step === "system" ? (
+          <>
+            <Button variant="secondary" leading={<ChevronLeft className="size-4" />} onClick={() => setStep("choose")} disabled={sys.isPending}>
+              Back
+            </Button>
+            <Button variant="primary" onClick={() => sys.mutate()} disabled={sys.isPending}>
+              {sys.isPending ? "Waiting for permission…" : system.data?.access === "denied" ? "Check again" : "Allow access"}
+            </Button>
+          </>
+        ) : step === "oauth" ? (
           oauth.isPending ? (
             <Button variant="secondary" onClick={cancelOauth}>
               Cancel
@@ -137,6 +153,16 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
     >
       {step === "choose" ? (
         <div className="flex flex-col gap-3 pb-4">
+          {system.data?.supported && (
+            <ListGroup>
+              <Choice
+                icon={<Laptop />}
+                title="Calendar app on this computer"
+                subtitle="Everything already in Calendar: iCloud, Gmail, Outlook, Yahoo…"
+                onClick={() => setStep("system")}
+              />
+            </ListGroup>
+          )}
           <ListGroup>
             <Choice icon={<Link2 />} title="Calendar link" subtitle="Any published calendar (ICS or webcal)" onClick={() => setStep("ics")} />
             <Choice
@@ -163,6 +189,27 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
             </ListGroup>
           )}
           {demo.isError && <p role="alert" className="px-1 text-footnote text-danger">{errorMessage(demo.error)}</p>}
+        </div>
+      ) : step === "system" ? (
+        <div className="flex flex-col gap-4 pb-4">
+          {sys.isError && (
+            <p role="alert" className="rounded-card bg-danger-soft px-3 py-2 text-body text-danger">
+              {errorMessage(sys.error)}
+            </p>
+          )}
+          <p className="text-body text-fg">
+            Daybrief will read the calendars in your Calendar app, so any account you've added to this computer shows up here with no extra sign-in.
+          </p>
+          <ul className="flex flex-col gap-1.5 text-body text-fg-2">
+            <li>• macOS will ask you to allow access. Choose <span className="font-medium text-fg">Allow Full Access</span>.</li>
+            <li>• Daybrief only reads. It never changes or deletes events.</li>
+            <li>• Birthdays and subscribed calendars start hidden; you can turn them on.</li>
+          </ul>
+          {(sys.isError || system.data?.access === "denied") && (
+            <button type="button" onClick={() => void api.openPrivacySettings("calendars")} className="flex items-center gap-1.5 self-start text-body text-accent hover:underline">
+              Open System Settings <ExternalLink className="size-3.5" aria-hidden />
+            </button>
+          )}
         </div>
       ) : step === "oauth" ? (
         <div className="flex flex-col items-center gap-4 px-2 pb-8 pt-4 text-center" aria-live="polite">

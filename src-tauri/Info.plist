@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.daybrief.app</string>
+  <key>CFBundleName</key>
+  <string>Daybrief</string>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>Daybrief reads the calendars in your Calendar app to show what is coming up today and tomorrow. It never changes them.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>Daybrief reads the calendars in your Calendar app to show what is coming up today and tomorrow. It never changes them.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Daybrief asks Mail for your unread messages and meeting invitations so it can summarise them. It never changes or sends mail.</string>
+</dict>
+</plist>

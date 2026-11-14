@@ -14,6 +14,7 @@ use daybrief_core::oauth::{
 };
 use daybrief_core::providers::caldav::{CaldavProvider, CaldavSecret, validate_server};
 use daybrief_core::providers::ics::IcsProvider;
+use daybrief_core::providers::system::{Access, SYSTEM_ACCOUNT_ID};
 use daybrief_core::providers::{google, microsoft};
 use daybrief_core::store::Store;
 use daybrief_core::sync::{default_window, sync_account};
@@ -95,6 +96,9 @@ fn explain(kind: ProviderKind, report: &SyncReport) -> &'static str {
         (ProviderKind::Google | ProviderKind::Microsoft, true, _) => {
             "Access was refused. Make sure calendar access is allowed for this app, then sign in again."
         }
+        (ProviderKind::System, true, _) => {
+            "Calendar access is turned off for Daybrief. Allow it in System Settings, then try again."
+        }
         (_, _, true) => "Couldn't reach the server. Check your connection and try again.",
         (ProviderKind::Ics, ..) => {
             "Couldn't read a calendar from that link. Check the address and try again."
@@ -118,8 +122,9 @@ struct NewAccount {
     kind: ProviderKind,
     name: String,
     email: Option<String>,
-    secret_ref: String,
-    secret_value: String,
+    /// Providers that need no credential (the Calendar app) leave both `None`.
+    secret_ref: Option<String>,
+    secret_value: Option<String>,
 }
 
 /// Saves the credential in the keychain, runs a first sync, and rolls everything back if it fails,
@@ -133,23 +138,27 @@ async fn connect(
     let (deps, db, key) = (state.deps.clone(), state.db_path.clone(), state.key.clone());
     let view = tauri::async_runtime::spawn_blocking(move || -> CmdResult<AccountView> {
         // The credential is a secret: keychain only, never the database.
-        deps.secrets
-            .set(&new.secret_ref, &new.secret_value)
-            .map_err(internal("saving the credentials"))?;
+        if let (Some(r), Some(v)) = (&new.secret_ref, &new.secret_value) {
+            deps.secrets
+                .set(r, v)
+                .map_err(internal("saving the credentials"))?;
+        }
         let account = Account {
             id: id.clone(),
             provider: new.kind,
             display_name: new.name,
             email: new.email,
             status: AccountStatus::Ok,
-            secret_ref: Some(new.secret_ref.clone()),
+            secret_ref: new.secret_ref.clone(),
             created_at: Utc::now(),
         };
         let rollback = |store: Option<&Store>| {
             if let Some(s) = store {
                 let _ = s.remove_account(&id);
             }
-            let _ = deps.secrets.delete(&new.secret_ref);
+            if let Some(r) = &new.secret_ref {
+                let _ = deps.secrets.delete(r);
+            }
         };
         let mut store = Store::open(&db, &key)
             .inspect_err(|_| rollback(None))
@@ -210,8 +219,8 @@ pub async fn add_ics_account(
         kind: ProviderKind::Ics,
         name: clean_name(&name, "Subscribed calendar")?,
         email: None,
-        secret_ref: IcsProvider::secret_key(&id),
-        secret_value: url,
+        secret_ref: Some(IcsProvider::secret_key(&id)),
+        secret_value: Some(url),
     };
     connect(&app, &state, id, new).await
 }
@@ -244,8 +253,8 @@ pub async fn add_caldav_account(
         kind: ProviderKind::Caldav,
         name: clean_name(&name, "Calendar")?,
         email: username.contains('@').then_some(username),
-        secret_ref: CaldavProvider::secret_key(&id),
-        secret_value: secret,
+        secret_ref: Some(CaldavProvider::secret_key(&id)),
+        secret_value: Some(secret),
     };
     connect(&app, &state, id, new).await
 }
@@ -569,8 +578,87 @@ pub async fn add_oauth_account(
         kind,
         name: email.clone(),
         email: Some(email),
-        secret_ref: oauth::secret_key(&id),
-        secret_value,
+        secret_ref: Some(oauth::secret_key(&id)),
+        secret_value: Some(secret_value),
     };
     connect(&app, &state, id, new).await
+}
+
+// ---- the Calendar app (macOS) ----------------------------------------------------
+
+#[derive(serde::Serialize)]
+pub struct SystemStatus {
+    supported: bool,
+    /// "granted" | "not_determined" | "denied" | "restricted" | "unsupported"
+    access: &'static str,
+}
+
+fn access_name(a: Access) -> &'static str {
+    match a {
+        Access::Granted => "granted",
+        Access::NotDetermined => "not_determined",
+        Access::Denied => "denied",
+        Access::Restricted => "restricted",
+        Access::Unsupported => "unsupported",
+    }
+}
+
+/// Whether the Calendar app can be used and whether the user has allowed it. Never shows a prompt.
+#[tauri::command]
+pub async fn system_calendar_status(state: State<'_, AppState>) -> CmdResult<SystemStatus> {
+    let access = state.deps.system.access();
+    Ok(SystemStatus {
+        supported: access != Access::Unsupported,
+        access: access_name(access),
+    })
+}
+
+/// Connects the Calendar app. Shows the macOS permission prompt the first time.
+#[tauri::command]
+pub async fn add_system_account(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<AccountView> {
+    let source = state.deps.system.clone();
+    // The prompt blocks until the user answers, so keep it off the UI thread.
+    let access = tauri::async_runtime::spawn_blocking(move || source.request_access())
+        .await
+        .map_err(|_| "permission request failed".to_string())?
+        .map_err(|e| match e {
+            Error::Provider(m) if m.contains("not answered") => {
+                "The permission prompt wasn't answered. Try again.".to_string()
+            }
+            other => internal("requesting calendar access")(other),
+        })?;
+    match access {
+        Access::Granted => {}
+        Access::NotDetermined => return Err("The permission prompt wasn't answered. Try again.".into()),
+        Access::Denied => return Err("Calendar access is turned off for Daybrief. Open System Settings, switch Daybrief on under Calendars, then try again.".into()),
+        Access::Restricted => return Err("This Mac's settings don't allow apps to read calendars.".into()),
+        Access::Unsupported => return Err("The Calendar app can't be used here. It needs macOS 14 or later.".into()),
+    }
+    let new = NewAccount {
+        kind: ProviderKind::System,
+        name: "Calendar app".into(),
+        email: None,
+        secret_ref: None,
+        secret_value: None,
+    };
+    connect(&app, &state, SYSTEM_ACCOUNT_ID.to_string(), new).await
+}
+
+/// Opens the relevant System Settings pane so the user can allow access.
+#[tauri::command]
+pub async fn open_privacy_settings(app: AppHandle, pane: String) -> CmdResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let url = match pane.as_str() {
+        "calendars" => "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars",
+        "automation" => {
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
+        }
+        _ => return Err("unknown settings pane".into()),
+    };
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|_| "Couldn't open System Settings.".to_string())
 }

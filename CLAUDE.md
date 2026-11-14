@@ -5,7 +5,8 @@ The full brief is `PLAN.md`; read it first. This file records what is true *now*
 ## Status
 Phases 1 and 2 built, except what is listed under "Not yet verified". Next: Phase 3 (briefing). Do not build ahead.
 Phase 2 delivered: ICS links, CalDAV (iCloud/Yahoo/Fastmail/other), Google and Microsoft OAuth, sync engine/scheduler, dedupe, accounts UI.
-Phase 2 NOT delivered: macOS EventKit system-calendar provider (see below).
+Calendar app (macOS EventKit) provider: built; its permission prompt has not been clicked through yet.
+Queued, not built: Apple Mail digest (unread, important senders, invitations) via AppleScript; planned with Phase 5.
 
 ## Commands
 - Run app: `npm run tauri dev` (needs Rust: `. "$HOME/.cargo/env"`; each shell call starts without cargo on PATH)
@@ -39,7 +40,7 @@ Phase 2 NOT delivered: macOS EventKit system-calendar provider (see below).
 
 ## Not yet verified (be honest in summaries)
 - Google and Microsoft sign-in against the LIVE services (mock-tested only; needs the user's client IDs).
-- macOS EventKit provider: not built. It needs the calendar permission prompt, which requires an Info.plist usage string that unbundled `tauri dev` binaries lack, and cannot be checked headlessly.
+- macOS Calendar-app provider: mapping logic is unit-tested with a mock source, and the real EventKit permission check runs (state was NotDetermined). The prompt itself, and reading real events, still need a human to click Allow in the running app. `src-tauri/Info.plist` is embedded in the dev binary (verified with otool).
 - Real-window appearance (vibrancy/titlebar overlay): could not screenshot the desktop app.
 - Start-at-login across an actual logout/login; toggling was not exercised.
 - Windows: nothing built or run locally; CI covers it once pushed. Unlock detection is a stub there.

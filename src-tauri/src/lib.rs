@@ -3,6 +3,7 @@
 //! `daybrief-core`.
 
 mod commands;
+mod eventkit;
 mod keychain;
 mod providers;
 mod scheduler;
@@ -136,6 +137,9 @@ pub fn run() {
             commands::add_ics_account,
             commands::add_caldav_account,
             commands::add_oauth_account,
+            commands::system_calendar_status,
+            commands::add_system_account,
+            commands::open_privacy_settings,
             commands::cancel_oauth,
             commands::oauth_available,
             commands::add_demo_account,
@@ -180,6 +184,7 @@ pub fn run() {
                 secrets: Arc::new(keychain),
                 tz,
                 oauth: providers::OAuthConfigs::from_build(),
+                system: Arc::new(eventkit::EventKitSource),
             };
             let sync = scheduler::spawn(
                 app.handle().clone(),
