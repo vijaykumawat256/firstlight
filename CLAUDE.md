@@ -2,7 +2,7 @@
 
 The app's name is **Firstlight** (renamed from the placeholder "Daybrief"). Only the display name changed: the bundle identifier (`com.daybrief.app`), keychain service, database file, crate names, `DAYBRIEF_*` env vars and the `daybrief-settings` export format keep the old word on purpose, so existing data keeps working. Changing the identifier is a separate decision (it orphans the keychain key and database).
 
-The full brief is `PLAN.md`; read it first. This file records what is true *now* and what you'd otherwise rediscover.
+The full brief is `PLAN.md`; read it first. Open decisions and the reasons behind what is not built: `docs/NEXT.md`; the Phase 7 proposal awaiting approval: `docs/PHASE7_DESIGN.md` (no Phase 7 code until the user approves it). This file records what is true *now* and what you'd otherwise rediscover.
 
 ## Status
 Phases 1-5 built; Phase 6 built as far as it can be without the user's accounts (see `docs/RELEASE.md`: signing, notarisation, Windows run, live update test, external review remain). Phase 7 needs an approved design doc first. Do not build ahead.
