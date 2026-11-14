@@ -61,13 +61,21 @@ export function MonthGrid({ anchor, events, now, colourOf, onPickDay, onOpen }: 
                   >
                     {d.getDate()}
                   </button>
+                  {/* Phones have no room for titles: just coloured dots; the day button opens the day. */}
+                  {todays.length > 0 && (
+                    <span aria-hidden className="flex flex-wrap gap-0.5 px-1 sm:hidden">
+                      {todays.slice(0, 6).map((e) => (
+                        <span key={e.id + d.toDateString()} className="size-1.5 rounded-full" style={{ background: calendarColour(colourOf(e.calendar_id)) }} />
+                      ))}
+                    </span>
+                  )}
                   {todays.slice(0, MAX_CHIPS).map((e) => (
                     <button
                       key={e.id + d.toDateString()}
                       type="button"
                       onClick={() => onOpen(e)}
                       title={e.title}
-                      className="flex min-h-6 min-w-0 items-center gap-1 rounded px-1 text-left text-caption text-fg hover:bg-fill"
+                      className="hidden min-h-6 min-w-0 items-center gap-1 rounded px-1 text-left text-caption text-fg hover:bg-fill sm:flex"
                     >
                       <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: calendarColour(colourOf(e.calendar_id)) }} />
                       <span className="truncate">
@@ -77,7 +85,7 @@ export function MonthGrid({ anchor, events, now, colourOf, onPickDay, onOpen }: 
                     </button>
                   ))}
                   {todays.length > MAX_CHIPS && (
-                    <button type="button" onClick={() => onPickDay(d)} className="min-h-6 px-1 text-left text-caption text-fg-2 hover:underline">
+                    <button type="button" onClick={() => onPickDay(d)} className="hidden min-h-6 px-1 text-left text-caption text-fg-2 hover:underline sm:block">
                       +{todays.length - MAX_CHIPS} more
                     </button>
                   )}

@@ -96,6 +96,7 @@ test("the view can be driven with the keyboard", async ({ page }) => {
 });
 
 test("month view shows the month, opens events, and a day opens the day view", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 760 }); // wide enough for event titles
   await page.clock.install({ time: new Date(new Date().setHours(9, 30, 0, 0)) });
   await page.goto("/");
   await page.getByRole("button", { name: "Calendar" }).click();
@@ -120,4 +121,29 @@ test("an empty today and tomorrow shows what is coming up, with the week and mon
   await expect(coming.getByRole("button", { name: /Planning offsite/ })).toBeVisible();
   await page.getByRole("button", { name: "See the month" }).click();
   await expect(page.getByRole("grid", { name: "Month" })).toBeVisible();
+});
+
+test("on a narrow window the month shows coloured dots, and a day opens the day view", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.install({ time: new Date(new Date().setHours(9, 30, 0, 0)) });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Calendar" }).click();
+  await page.getByRole("radio", { name: "Month" }).click();
+  const grid = page.getByRole("grid", { name: "Month" });
+  await expect(grid.getByRole("button", { name: /Team standup/ })).toHaveCount(0); // no room for titles
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  await grid.getByRole("button", { name: new RegExp(`^${today}`) }).click();
+  await expect(page.getByRole("region", { name: "Day", exact: true })).toBeVisible();
+});
+
+test("nothing scrolls sideways on a phone or a large laptop screen", async ({ page }) => {
+  for (const [w, h] of [[390, 844], [1440, 900]] as const) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.clock.install({ time: new Date(new Date().setHours(9, 30, 0, 0)) });
+    await page.goto("/");
+    await expect(page.getByLabel("Up next")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${w}px`).toBe(true);
+    await page.getByRole("button", { name: "Settings" }).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `settings ${w}px`).toBe(true);
+  }
 });

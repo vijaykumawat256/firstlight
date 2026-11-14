@@ -104,3 +104,7 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - When today and tomorrow are empty the briefing shows `ClearWeek` (next 14 days) instead of a bare empty state. Browser fixture flag `?quietdays` removes today's and tomorrow's events.
 - Meeting links: Join and Copy link on the up-next card and event detail (`copyLink.ts`). Detection is `crates/core/src/join.rs` (known hosts, or a provider's own conference field for any https link). The compact up-next window has Join only.
 - Sync cadence: on launch, on unlock (2-minute cooldown), every `general.sync_interval_minutes` (default 10), and the manual refresh button. Nothing is pushed from providers, so a new event appears at the next sync.
+
+## Sizes
+- The real app window is narrow by design (about 420 wide) and resizable; the e2e viewport is 420x680 for that reason. Below 640px the month shows coloured dots instead of titles; the screens' content is capped at `max-w-2xl` and centred so a big laptop screen does not stretch rows. Tested for no sideways scroll at 390 and 1440.
+- This is still a desktop app. A phone version means the Phase 7 web build; nothing native for phones is planned.

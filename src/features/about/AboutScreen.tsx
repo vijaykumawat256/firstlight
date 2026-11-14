@@ -177,7 +177,7 @@ export function AboutScreen() {
           Settings
         </Button>
       </div>
-      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-10">
+      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
         <h1 className="mb-4 text-largetitle font-bold tracking-tight text-fg">About</h1>
         <div className="flex flex-col gap-5">
           <Updates />

@@ -83,7 +83,7 @@ export function BriefingScreen() {
         </Tooltip>
       </div>
 
-      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-8">
+      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
         <header className="mb-6">
           <h1 className="text-display font-bold tracking-tight text-fg">{greeting(now)}</h1>
           <p className="mt-0.5 text-headline font-medium text-fg-2">{formatDate(now)}</p>
