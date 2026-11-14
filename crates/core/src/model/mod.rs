@@ -4,6 +4,23 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+/// Calendar colour names. The actual colours live in the UI's design tokens.
+pub const CALENDAR_COLOURS: [&str; 10] = [
+    "red", "orange", "yellow", "green", "teal", "blue", "indigo", "purple", "pink", "brown",
+];
+
+/// A stable, pleasant default colour for an id (so a new account always gets the same one).
+pub fn default_colour_for(id: &str) -> &'static str {
+    // Skip yellow: poor contrast as a thin bar on white.
+    const PICK: [&str; 9] = [
+        "blue", "green", "orange", "purple", "teal", "pink", "indigo", "red", "brown",
+    ];
+    let h = id
+        .bytes()
+        .fold(5381u32, |h, b| h.wrapping_mul(33) ^ u32::from(b));
+    PICK[(h as usize) % PICK.len()]
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderKind {
@@ -185,6 +202,9 @@ pub struct Event {
     pub organizer: Option<String>,
     pub recurrence_master_id: Option<String>,
     pub updated_at: DateTime<Utc>,
+    /// Other calendars containing the same meeting; filled by `dedupe`, never stored.
+    #[serde(default)]
+    pub also_in: Vec<String>,
 }
 
 // Event content is private. Debug output (and therefore logs) shows IDs only.
@@ -237,6 +257,7 @@ mod tests {
             organizer: Some("boss@example.com".into()),
             recurrence_master_id: None,
             updated_at: Utc::now(),
+            also_in: vec![],
         };
         let out = format!("{ev:?}");
         for secret in ["Secret", "Boardroom", "confidential", "boss@"] {

@@ -131,57 +131,11 @@ impl Store {
     pub fn replace_events(&mut self, calendar_id: &str, events: &[Event]) -> Result<()> {
         let tx = self.conn.transaction()?;
         tx.execute("DELETE FROM events WHERE calendar_id = ?1", [calendar_id])?;
-        {
-            let mut ins = tx.prepare(
-                "INSERT INTO events (id, calendar_id, remote_id, ical_uid, title, all_day,
-                    start_utc, end_utc, start_tzid, start_date, end_date, location, description,
-                    join_url, status, my_response, organizer, recurrence_master_id, updated_at)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)",
-            )?;
-            for e in events {
-                if e.calendar_id != calendar_id {
-                    return Err(Error::Invalid("event belongs to a different calendar"));
-                }
-                let (all_day, s, en, tz, sd, ed) = match &e.when {
-                    When::Timed { start, end, tzid } => (
-                        false,
-                        Some(start.timestamp()),
-                        Some(end.timestamp()),
-                        tzid.clone(),
-                        None,
-                        None,
-                    ),
-                    When::AllDay { start, end } => (
-                        true,
-                        None,
-                        None,
-                        None,
-                        Some(start.to_string()),
-                        Some(end.to_string()),
-                    ),
-                };
-                ins.execute(params![
-                    e.id,
-                    e.calendar_id,
-                    e.remote_id,
-                    e.ical_uid,
-                    e.title,
-                    all_day,
-                    s,
-                    en,
-                    tz,
-                    sd,
-                    ed,
-                    e.location,
-                    e.description,
-                    e.join_url,
-                    e.status.as_str(),
-                    e.my_response.as_str(),
-                    e.organizer,
-                    e.recurrence_master_id,
-                    e.updated_at.timestamp()
-                ])?;
+        for e in events {
+            if e.calendar_id != calendar_id {
+                return Err(Error::Invalid("event belongs to a different calendar"));
             }
+            insert_event(&tx, e)?;
         }
         tx.commit()?;
         Ok(())
@@ -233,6 +187,7 @@ impl Store {
                 organizer: r.get(16)?,
                 recurrence_master_id: r.get(17)?,
                 updated_at: DateTime::from_timestamp(r.get(18)?, 0).unwrap_or_default(),
+                also_in: Vec::new(),
             })
         })?;
         let mut out = Vec::new();
@@ -317,6 +272,198 @@ impl Store {
         Ok(self
             .conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))?)
+    }
+}
+
+/// Cached sync bookkeeping for one calendar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncInfo {
+    pub token: Option<String>,
+    pub last_synced_at: Option<DateTime<Utc>>,
+    pub last_error: Option<String>,
+}
+
+fn insert_event(conn: &Connection, e: &Event) -> Result<()> {
+    let (all_day, s, en, tz, sd, ed) = match &e.when {
+        When::Timed { start, end, tzid } => (
+            false,
+            Some(start.timestamp()),
+            Some(end.timestamp()),
+            tzid.clone(),
+            None,
+            None,
+        ),
+        When::AllDay { start, end } => (
+            true,
+            None,
+            None,
+            None,
+            Some(start.to_string()),
+            Some(end.to_string()),
+        ),
+    };
+    conn.execute(
+        "INSERT OR REPLACE INTO events (id, calendar_id, remote_id, ical_uid, title, all_day,
+            start_utc, end_utc, start_tzid, start_date, end_date, location, description,
+            join_url, status, my_response, organizer, recurrence_master_id, updated_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)",
+        params![
+            e.id,
+            e.calendar_id,
+            e.remote_id,
+            e.ical_uid,
+            e.title,
+            all_day,
+            s,
+            en,
+            tz,
+            sd,
+            ed,
+            e.location,
+            e.description,
+            e.join_url,
+            e.status.as_str(),
+            e.my_response.as_str(),
+            e.organizer,
+            e.recurrence_master_id,
+            e.updated_at.timestamp()
+        ],
+    )?;
+    Ok(())
+}
+
+impl Store {
+    pub fn get_account(&self, id: &str) -> Result<Option<Account>> {
+        Ok(self.list_accounts()?.into_iter().find(|a| a.id == id))
+    }
+
+    pub fn set_account_status(&self, id: &str, status: AccountStatus) -> Result<()> {
+        let s = match status {
+            AccountStatus::Ok => "ok",
+            AccountStatus::NeedsAttention => "needs_attention",
+        };
+        self.conn.execute(
+            "UPDATE accounts SET status = ?2 WHERE id = ?1",
+            params![id, s],
+        )?;
+        Ok(())
+    }
+
+    pub fn rename_account(&self, id: &str, name: &str) -> Result<()> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 80 {
+            return Err(Error::Invalid("name must be 1-80 characters"));
+        }
+        self.conn.execute(
+            "UPDATE accounts SET display_name = ?2 WHERE id = ?1",
+            params![id, name],
+        )?;
+        Ok(())
+    }
+
+    /// Deletes an account and, by cascade, its calendars, cached events and sync state.
+    pub fn remove_account(&self, id: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM accounts WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    pub fn remove_calendar(&self, id: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM calendars WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    pub fn calendars_for_account(&self, account_id: &str) -> Result<Vec<Calendar>> {
+        Ok(self
+            .list_calendars()?
+            .into_iter()
+            .filter(|c| c.account_id == account_id)
+            .collect())
+    }
+
+    pub fn set_calendar_visible(&self, id: &str, visible: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE calendars SET visible = ?2 WHERE id = ?1",
+            params![id, visible],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_calendar_colour(&self, id: &str, colour: &str) -> Result<()> {
+        if !crate::model::CALENDAR_COLOURS.contains(&colour) {
+            return Err(Error::Invalid("unknown colour"));
+        }
+        self.conn.execute(
+            "UPDATE calendars SET colour = ?2 WHERE id = ?1",
+            params![id, colour],
+        )?;
+        Ok(())
+    }
+
+    /// Inserts or updates events without touching the rest of the calendar (incremental sync).
+    pub fn upsert_events(&mut self, calendar_id: &str, events: &[Event]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        for e in events {
+            if e.calendar_id != calendar_id {
+                return Err(Error::Invalid("event belongs to a different calendar"));
+            }
+            insert_event(&tx, e)?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn delete_events_by_remote_id(
+        &mut self,
+        calendar_id: &str,
+        remote_ids: &[String],
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        for r in remote_ids {
+            tx.execute(
+                "DELETE FROM events WHERE calendar_id = ?1 AND remote_id = ?2",
+                params![calendar_id, r],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Records a failed sync without disturbing the stored token (so the next try can resume).
+    pub fn set_sync_error(&self, calendar_id: &str, error: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO sync_state (calendar_id, token, last_synced_at, last_error) VALUES (?1, NULL, NULL, ?2)
+             ON CONFLICT(calendar_id) DO UPDATE SET last_error = ?2",
+            params![calendar_id, error],
+        )?;
+        Ok(())
+    }
+
+    pub fn sync_info(&self, calendar_id: &str) -> Result<Option<SyncInfo>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT token, last_synced_at, last_error FROM sync_state WHERE calendar_id = ?1",
+                [calendar_id],
+                |r| {
+                    Ok(SyncInfo {
+                        token: r.get(0)?,
+                        last_synced_at: r
+                            .get::<_, Option<i64>>(1)?
+                            .and_then(|t| DateTime::from_timestamp(t, 0)),
+                        last_error: r.get(2)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    /// Wipes every account, calendar and event (settings are kept). Used by "Erase all data" in Phase 4.
+    pub fn erase_calendar_data(&self) -> Result<()> {
+        self.conn
+            .execute_batch("DELETE FROM accounts; DELETE FROM briefing_log;")?;
+        Ok(())
     }
 }
 

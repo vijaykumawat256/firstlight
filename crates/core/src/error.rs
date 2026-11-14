@@ -14,6 +14,15 @@ pub enum Error {
     Invalid(&'static str),
     #[error("provider error: {0}")]
     Provider(String),
+    /// Credentials were rejected or revoked; the user must reconnect. Never retried in a loop.
+    #[error("authorisation was revoked or expired")]
+    AuthRevoked,
+    /// The network could not be reached (offline, DNS, timeout). Safe to retry later.
+    #[error("network unavailable")]
+    Offline,
+    /// The remote said our incremental sync token is no longer valid; do a full resync.
+    #[error("sync token expired")]
+    SyncTokenExpired,
 }
 
 impl From<rusqlite::Error> for Error {

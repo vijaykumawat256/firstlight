@@ -88,6 +88,7 @@ impl FixtureProvider {
             organizer: None,
             recurrence_master_id: None,
             updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
+            also_in: vec![],
         }
     }
 

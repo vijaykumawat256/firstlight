@@ -8,6 +8,7 @@ use crate::model::{Account, Calendar, Event, ProviderKind};
 use chrono::{DateTime, Utc};
 
 pub mod fixture;
+pub mod ics;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Capabilities {
