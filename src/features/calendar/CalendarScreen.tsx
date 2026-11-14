@@ -6,14 +6,16 @@ import { useNav } from "@/app/nav";
 import { Button, IconButton, Segmented, Skeleton, useToasts } from "@/design";
 import { EventDetail } from "@/features/briefing/EventDetail";
 import { useNow } from "@/features/briefing/hooks";
+import { MonthGrid, monthWeeks } from "./MonthGrid";
 import { TimeGrid } from "./TimeGrid";
 import { localeFirstDay, sameDay, startOfLocalDay, startOfWeek } from "./layout";
 
-type Mode = "day" | "week";
+type Mode = "day" | "week" | "month";
 
 const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" });
 const rangeFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
 const yearFmt = new Intl.DateTimeFormat(undefined, { year: "numeric" });
+const monthFmt = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
 
 export function CalendarScreen() {
   const go = useNav((s) => s.go);
@@ -24,6 +26,12 @@ export function CalendarScreen() {
   const [detail, setDetail] = useState<CalEvent | null>(null);
 
   const days = useMemo(() => {
+    if (mode === "month") {
+      // The whole grid: from the first week's start to the last week's end, so spill-over days show their events too.
+      const weeks = monthWeeks(anchor, localeFirstDay());
+      const start = weeks[0]![0]!;
+      return Array.from({ length: weeks.length * 7 }, (_, i) => startOfLocalDay(start, i));
+    }
     const first = mode === "week" ? startOfWeek(anchor, localeFirstDay()) : anchor;
     return Array.from({ length: mode === "week" ? 7 : 1 }, (_, i) => startOfLocalDay(first, i));
   }, [mode, anchor]);
@@ -34,9 +42,11 @@ export function CalendarScreen() {
   const calendars = useQuery({ queryKey: ["calendars"], queryFn: () => api.getCalendars() });
   const colours = useMemo(() => new Map((calendars.data ?? []).map((c) => [c.id, c.colour])), [calendars.data]);
 
-  const step = (dir: -1 | 1) => setAnchor((a) => startOfLocalDay(a, dir * (mode === "week" ? 7 : 1)));
-  const isCurrent = days.some((d) => sameDay(d, now));
-  const title = mode === "day" ? dayFmt.format(from) : `${rangeFmt.format(from)} – ${rangeFmt.format(days[6]!)}, ${yearFmt.format(days[6]!)}`;
+  const step = (dir: -1 | 1) =>
+    setAnchor((a) => (mode === "month" ? new Date(a.getFullYear(), a.getMonth() + dir, 1) : startOfLocalDay(a, dir * (mode === "week" ? 7 : 1))));
+  const isCurrent = mode === "month" ? anchor.getFullYear() === now.getFullYear() && anchor.getMonth() === now.getMonth() : days.some((d) => sameDay(d, now));
+  const unit = mode === "day" ? "day" : mode === "week" ? "week" : "month";
+  const title = mode === "month" ? monthFmt.format(anchor) : mode === "day" ? dayFmt.format(from) : `${rangeFmt.format(from)} – ${rangeFmt.format(days[6]!)}, ${yearFmt.format(days[6]!)}`;
   const join = (url: string) => api.openUrl(url).catch(() => push({ title: "Couldn't open the link", tone: "danger" }));
 
   return (
@@ -58,16 +68,17 @@ export function CalendarScreen() {
             options={[
               { value: "day", label: "Day" },
               { value: "week", label: "Week" },
+              { value: "month", label: "Month" },
             ]}
           />
           <div className="flex items-center">
-            <IconButton label={mode === "day" ? "Previous day" : "Previous week"} onClick={() => step(-1)}>
+            <IconButton label={`Previous ${unit}`} onClick={() => step(-1)}>
               <ChevronLeft className="size-[18px]" />
             </IconButton>
             <Button variant="plain" size="sm" disabled={isCurrent} onClick={() => setAnchor(startOfLocalDay(new Date()))}>
               Today
             </Button>
-            <IconButton label={mode === "day" ? "Next day" : "Next week"} onClick={() => step(1)}>
+            <IconButton label={`Next ${unit}`} onClick={() => step(1)}>
               <ChevronRight className="size-[18px]" />
             </IconButton>
           </div>
@@ -81,6 +92,18 @@ export function CalendarScreen() {
         </div>
       ) : events.isError ? (
         <p className="px-5 text-body text-danger">Couldn’t load events. Try again in a moment.</p>
+      ) : mode === "month" ? (
+        <MonthGrid
+          anchor={anchor}
+          events={events.data}
+          now={now}
+          colourOf={(id) => colours.get(id) ?? "blue"}
+          onPickDay={(d) => {
+            setAnchor(startOfLocalDay(d));
+            setMode("day");
+          }}
+          onOpen={setDetail}
+        />
       ) : (
         <TimeGrid days={days} events={events.data} now={now} colourOf={(id) => colours.get(id) ?? "blue"} onOpen={setDetail} />
       )}

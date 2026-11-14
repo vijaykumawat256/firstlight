@@ -9,6 +9,7 @@ import { useNow, useOnline } from "./hooks";
 import { AttentionSection, ClearDay, TodaySection, TomorrowSection, UpNextCard } from "./parts";
 import { useSettings } from "@/features/settings/useSettings";
 import { EventDetail } from "./EventDetail";
+import { ClearWeek } from "./ClearWeek";
 import { InboxSection } from "./InboxSection";
 import { summarise } from "./summary";
 
@@ -111,7 +112,7 @@ export function BriefingScreen() {
             }
           />
         ) : dayIsEmpty ? (
-          <EmptyState icon={<CalendarX />} title="Your day is clear" description="No events today or tomorrow. Enjoy the quiet." />
+          <ClearWeek colourOf={colourOf} onOpen={setDetail} />
         ) : (
           <div className="flex flex-col gap-6">
             {b.next ? <UpNextCard next={b.next} now={now} colourOf={colourOf} onJoin={join} onOpen={setDetail} /> : <ClearDay />}

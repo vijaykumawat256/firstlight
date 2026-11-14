@@ -98,3 +98,9 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Settings is a list of categories (`HOME` in `SettingsScreen.tsx`); each opens its own page. The open page lives in the nav store (`settingsSection`) because changing clock format or week start remounts the tree. `go()` always resets it to the list.
 - Adding a setting: put its row in the right page's `Group`. e2e tests open a page with `getByRole("main").getByRole("button", { name: /^General/ })`; the back button is "Settings" on a page and "Briefing" on the list.
 - Toast text exists twice in the DOM (visible + screen-reader announcement): use `.first()` when asserting on it.
+
+## Views and meeting links
+- Calendar has Day, Week and Month (`MonthGrid.tsx`; a day click opens the Day view). Not yet an "Opens to" choice: that setting is a Rust enum (day/week/briefing) and would need a migration-safe new value.
+- When today and tomorrow are empty the briefing shows `ClearWeek` (next 14 days) instead of a bare empty state. Browser fixture flag `?quietdays` removes today's and tomorrow's events.
+- Meeting links: Join and Copy link on the up-next card and event detail (`copyLink.ts`). Detection is `crates/core/src/join.rs` (known hosts, or a provider's own conference field for any https link). The compact up-next window has Join only.
+- Sync cadence: on launch, on unlock (2-minute cooldown), every `general.sync_interval_minutes` (default 10), and the manual refresh button. Nothing is pushed from providers, so a new event appears at the next sync.

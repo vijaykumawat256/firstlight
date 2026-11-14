@@ -94,3 +94,30 @@ test("the view can be driven with the keyboard", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "Today" })).toBeEnabled();
 });
+
+test("month view shows the month, opens events, and a day opens the day view", async ({ page }) => {
+  await page.clock.install({ time: new Date(new Date().setHours(9, 30, 0, 0)) });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Calendar" }).click();
+  await page.getByRole("radio", { name: "Month" }).click();
+  const grid = page.getByRole("grid", { name: "Month" });
+  await expect(grid).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(String(new Date().getFullYear()));
+  await expect(grid.getByRole("button", { name: /Team standup/ }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Next month" }).click();
+  await page.getByRole("button", { name: "Previous month" }).click();
+  await page.getByRole("button", { name: "Today" }).isDisabled();
+  const today = new Date();
+  await grid.getByRole("button", { name: new RegExp(`^${today.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}`) }).click();
+  await expect(page.getByRole("region", { name: "Day", exact: true })).toBeVisible();
+});
+
+test("an empty today and tomorrow shows what is coming up, with the week and month one click away", async ({ page }) => {
+  await page.clock.install({ time: new Date(new Date().setHours(9, 30, 0, 0)) });
+  await page.goto("/?quietdays");
+  await expect(page.getByText("Nothing today or tomorrow")).toBeVisible();
+  const coming = page.getByRole("region", { name: "Coming up" });
+  await expect(coming.getByRole("button", { name: /Planning offsite/ })).toBeVisible();
+  await page.getByRole("button", { name: "See the month" }).click();
+  await expect(page.getByRole("grid", { name: "Month" })).toBeVisible();
+});

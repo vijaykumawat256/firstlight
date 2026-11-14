@@ -61,7 +61,7 @@ export function fixtureEvents(base: Date = new Date()): CalEvent[] {
   const tomorrow = new Date(base);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  return [
+  const all: CalEvent[] = [
     ev("standup", "fixture-work", "Team standup", 0, [9, 0], [9, 15], {
       recurrence_master_id: "standup-series",
       join_url: "https://meet.example.com/standup",
@@ -94,6 +94,15 @@ export function fixtureEvents(base: Date = new Date()): CalEvent[] {
     ev("gym", "fixture-personal", "Gym", 3, [7, 0], [8, 0]),
     ev("board", "fixture-work", "Board prep", 4, [14, 0], [16, 30], { join_url: "https://meet.google.com/abc-defg-hij" }),
   ];
+  // `?quietdays`: nothing today or tomorrow, to test the empty-day screen.
+  if (typeof location !== "undefined" && new URLSearchParams(location.search).has("quietdays")) {
+    const start = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+    return all.filter((e) => {
+      const d = e.when.kind === "all_day" ? new Date(`${e.when.start}T00:00:00`) : new Date(e.when.start);
+      return Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - start.getTime()) / 86_400_000) >= 2;
+    });
+  }
+  return all;
 }
 
 function overlaps(e: CalEvent, from: Date, to: Date): boolean {

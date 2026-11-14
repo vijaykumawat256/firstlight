@@ -106,6 +106,16 @@ for (const scheme of ["light", "dark"] as const) {
       await scan(page, "add mailbox with error");
     });
 
+    test("month view and the empty-day screen", async ({ page }) => {
+      await page.clock.install({ time: at(9, 30) });
+      await page.goto("/?quietdays");
+      await expect(page.getByRole("region", { name: "Coming up" })).toBeVisible();
+      await scan(page, "empty day");
+      await page.getByRole("button", { name: "See the month" }).click();
+      await expect(page.getByRole("grid", { name: "Month" })).toBeVisible();
+      await scan(page, "month view");
+    });
+
     test("the up-next panel", async ({ page }) => {
       await page.setViewportSize({ width: 360, height: 148 });
       await page.clock.install({ time: at(9, 30) });
