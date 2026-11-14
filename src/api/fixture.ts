@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AppSettings, CalendarInfo, CalEvent, SyncSummary } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppSettings, CalendarInfo, CalEvent, MailResult, SyncSummary } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -155,6 +155,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, time_24h: false },
   appearance: { theme: "system", accent: "system" },
+  email: { enabled: false, apple_mail: false, account_ids: [], important_senders: [], days_back: 3 },
+  ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", include_email: false, consented: null },
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
 if (params.get("defaultview") === "week" || params.get("defaultview") === "day") settings.general.default_view = params.get("defaultview") as "day" | "week";
@@ -167,7 +169,133 @@ const notify = () => listeners.forEach((l) => l({ ok: true, offline: false, need
 const visibleCalendarIds = () =>
   new Set(accounts.flatMap((a) => a.calendars.filter((c) => c.visible).map((c) => c.id)));
 
+const FIXTURE_MAIL = () => {
+  const ago = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString();
+  const msg = (id: string, name: string, subject: string, snippet: string, mins: number) => ({
+    id,
+    sender_name: name,
+    sender_address: `${name.split(" ")[0]!.toLowerCase()}@example.com`,
+    subject,
+    received: ago(mins),
+    snippet,
+    open: { kind: "apple_mail" as const, message_id: `${id}@example.com` },
+  });
+  return {
+    generated_at: new Date().toISOString(),
+    unread_total: 37,
+    important: [
+      msg("m1", "Priya Shah", "Agenda for Tuesday", "Hi all, attached is the agenda for tomorrow's planning session. Please add your items before…", 25),
+      msg("m2", "Maya Singh", "Dinner on Friday?", "Are we still on for Friday? I can book the place on Nopi Street if you like", 95),
+    ],
+    invitations: [
+      {
+        message: msg("m3", "Jordan Lee", "Invitation: Roadmap review", "You have been invited", 40),
+        title: "Roadmap review",
+        when: { kind: "timed" as const, start: new Date(Date.now() + 26 * 3_600_000).toISOString(), end: new Date(Date.now() + 27 * 3_600_000).toISOString(), tzid: null },
+        location: "Room 12",
+        organizer: "Jordan Lee",
+      },
+    ],
+    other_unread: 34,
+  };
+};
+let aiState = { enabled: false, consented: false, hasKey: false, provider: "anthropic" as AiProvider };
+if (params.has("aion")) {
+  aiState = { enabled: true, consented: true, hasKey: true, provider: "anthropic" };
+  settings.ai = { ...settings.ai, enabled: true, consented: "anthropic" };
+}
+if (params.has("mailon")) settings.email = { ...settings.email, enabled: true, apple_mail: true };
+if (params.has("withgoogle")) {
+  accounts.push({
+    id: "google-ok",
+    provider: "google",
+    display_name: "me@gmail.com",
+    email: "me@gmail.com",
+    status: "ok",
+    calendars: [{ id: "google-ok:primary", account_id: "google-ok", remote_id: "primary", name: "me@gmail.com", colour: "teal", visible: true, read_only: false }],
+    last_synced_at: new Date().toISOString(),
+    last_error: null,
+  });
+}
+/** Counts calls so tests can prove that nothing mail- or AI-related runs while those features are off. */
+const bump = (name: string) => {
+  const g = globalThis as unknown as Record<string, number>;
+  g[name] = (g[name] ?? 0) + 1;
+};
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export const fixtureBackend: Backend = {
+  async getMailDigest() {
+    bump("__mailCalls");
+    if (!settings.email.enabled) return { enabled: false, digest: null, problems: [] } satisfies MailResult;
+    const problem = params.get("mailproblem");
+    if (problem === "permission") return { enabled: true, digest: null, problems: [{ source: "apple_mail", kind: "permission" }] };
+    if (problem === "not_running") return { enabled: true, digest: null, problems: [{ source: "apple_mail", kind: "not_running" }] };
+    if (params.has("emptymail")) return { enabled: true, digest: { generated_at: new Date().toISOString(), unread_total: 4, important: [], invitations: [], other_unread: 4 }, problems: [] };
+    return { enabled: true, digest: FIXTURE_MAIL(), problems: [] };
+  },
+  async enableAppleMail() {
+    await sleep(300);
+    if (params.has("macdenied")) throw new Error("Daybrief isn't allowed to control Mail. Open System Settings, go to Automation, switch Mail on under Daybrief, then try again.");
+    settings = { ...settings, email: { ...settings.email, apple_mail: true, enabled: true } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async enableAccountMail(accountId) {
+    await sleep(400);
+    settings = { ...settings, email: { ...settings.email, enabled: true, account_ids: [...new Set([...settings.email.account_ids, accountId])] } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async openMailMessage(target) {
+    if (target.kind === "url" && !target.url.startsWith("https://")) throw new Error("Refusing to open that link.");
+  },
+  async aiStatus() {
+    return { enabled: aiState.enabled, consented: aiState.consented, provider: aiState.provider, has_key: aiState.hasKey } satisfies AiStatus;
+  },
+  async aiPreview() {
+    return [
+      "INSTRUCTIONS FOR THE MODEL",
+      "You write a short, friendly summary of a person's day from the facts below…",
+      "",
+      "YOUR INFORMATION BEING SENT",
+      "Today is Saturday, 14 November. It is 9:30 AM.",
+      "Rest of today:",
+      "- 10:30 AM-11:30 AM Design review (Room 4B)",
+      "- 12:30 PM-1:30 PM Lunch with Alex",
+      "Tomorrow: 3 event(s), first at 6:45 AM (an early start)",
+      ...(settings.ai.include_email ? ["Email: 37 unread", '- Important email from Priya Shah: "Agenda for Tuesday"'] : []),
+    ].join("\n");
+  },
+  async enableAi(provider, key, confirm) {
+    bump("__aiCalls");
+    await sleep(300);
+    if (!confirm) throw new Error("Please confirm what will be shared first.");
+    if (provider === "anthropic" && !aiState.hasKey && !(key && key.length >= 10)) throw new Error("Enter your API key.");
+    if (key === "sk-ant-rejected-key") throw new Error("The service rejected the key. Check it and try again.");
+    aiState = { enabled: true, consented: true, hasKey: provider === "anthropic" ? true : aiState.hasKey, provider };
+    settings = { ...settings, ai: { ...settings.ai, enabled: true, provider, consented: provider } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async disableAi() {
+    aiState = { ...aiState, enabled: false };
+    settings = { ...settings, ai: { ...settings.ai, enabled: false } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async forgetAiKey() {
+    aiState = { enabled: false, consented: false, hasKey: false, provider: aiState.provider };
+    settings = { ...settings, ai: { ...settings.ai, enabled: false, consented: null } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async getAiSummary() {
+    bump("__aiCalls");
+    if (!aiState.enabled || params.has("aifail")) return null;
+    await sleep(params.has("aislow") ? 3000 : 250);
+    return "A busy morning with a design review at 10:30, then a quieter afternoon. Tomorrow starts early with your flight.";
+  },
   async getEvents(startIso, endIso) {
     const from = new Date(startIso);
     const to = new Date(endIso);
@@ -202,6 +330,8 @@ export const fixtureBackend: Backend = {
     if (sc && !/^((cmd|ctrl|alt|shift|cmdorctrl)\+)+[a-z0-9]$/i.test(sc)) throw new Error("That shortcut isn't valid. Use at least one modifier key (such as Cmd or Ctrl) plus a letter, number or function key.");
     if (sc === "Cmd+Q") throw new Error("That shortcut couldn't be used. Another app may already own it.");
     const fixed = structuredClone(next);
+    fixed.ai.consented = settings.ai.consented; // consent is only ever given by the enable action
+    if (fixed.ai.consented !== fixed.ai.provider) fixed.ai.enabled = false;
     fixed.general.sync_interval_minutes = clamp(fixed.general.sync_interval_minutes, 1, 1440);
     settings = fixed;
     settingsListeners.forEach((l) => l());

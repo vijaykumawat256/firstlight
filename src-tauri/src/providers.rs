@@ -28,6 +28,10 @@ pub struct Deps {
     pub oauth: OAuthConfigs,
     /// The operating system's own calendars (macOS Calendar app).
     pub system: Arc<dyn SystemSource>,
+    /// For the AI service: https only, short timeout.
+    pub ai_http: Arc<dyn HttpClient>,
+    /// For a model on this computer: https, or plain http to loopback only.
+    pub local_http: Arc<dyn HttpClient>,
 }
 
 /// Sign-in configuration baked into this build; `None` when the build has no client ID.

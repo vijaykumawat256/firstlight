@@ -20,7 +20,7 @@ const TICK: StdDuration = StdDuration::from_secs(30);
 const KEEP_SENT_DAYS: i64 = 3;
 
 /// Whether the system is set to a 24-hour clock (macOS). Used only for the default; the user can override it.
-fn system_uses_24h() -> bool {
+pub(crate) fn system_uses_24h() -> bool {
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("defaults")

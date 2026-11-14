@@ -35,6 +35,12 @@ Status: Phase 1. Update this file whenever a phase changes what we store, send o
 | Calendar app access is read-only EventKit; permission is the user's per-app macOS grant, and losing it marks the account for attention instead of returning an empty calendar that would wipe the cache | `providers/system`, `eventkit.rs` |
 | Settings are one validated document with no secrets in it (tested); loading never fails and never trusts a value outside its range; imports are size-limited and format-checked | `crates/core/src/settings` |
 | "Erase all data" deletes each account's keychain entry first, then every row, then compacts the file; if the keychain refuses, nothing is deleted so credentials are never orphaned | `crates/core/src/erase.rs` (tested) |
+| Email is off by default and runs no mail code until enabled; only sender, subject and a 160-character plain-text snippet are kept, markup is stripped, nothing is rendered, and messages open in the user's own app via validated https mail hosts or `message://` links | `crates/core/src/mail`, `mail_ai.rs` (tested) |
+| Mail permission is separate from calendar permission and requested only when the user turns email on for that account | `enable_account_mail` |
+| The Apple Mail AppleScript is read-only (a test forbids write verbs), takes only numbers and a path as arguments, runs under a hard time limit, and attachments are read only from a private 0700 folder, size-capped, then deleted | `mail/applemail.rs`, `mail_ai.rs` |
+| AI is off by default; with it off nothing is built or sent (tested). Consent is per provider, recorded only by the explicit enable action, and cannot come from an imported file or a settings save | `crates/core/src/ai`, `settings` |
+| The AI prompt contains only titles, times, places, counts and (optionally) sender names and subjects; never join links, descriptions, attendees, organisers, snippets or addresses. The user sees this exact text before agreeing | `ai::build_prompt` (tested) |
+| AI keys live in the keychain, are never returned to the page, and never appear in errors or request bodies; local models are reachable only on loopback (including redirects) | `mail_ai.rs`, `http.rs` (tested) |
 | A failed first sync rolls back: no half-connected account or stray credential is left | `commands.rs` `connect` |
 
 ## Known gaps and decisions
@@ -44,4 +50,6 @@ Status: Phase 1. Update this file whenever a phase changes what we store, send o
 - **Google sync is not incremental** (full window every sync) and Microsoft does not use delta queries yet; both avoid features that could not be verified without live credentials.
 - **Google 'Testing' status** expires sign-ins after 7 days until the app is verified (Phase 6).
 - **Dependency audits, run locally on 2026-11-14**: `cargo audit` found no vulnerabilities; its 5 warnings (unmaintained `proc-macro-error`, `zbus_names`, `zvariant`, `zvariant_derive`; unsound `glib` 0.18) are Linux-only transitive dependencies of Tauri and are not compiled for macOS or Windows (verified with `cargo tree`). Revisit if Linux is ever supported. `npm audit --omit=dev` found 0; plain `npm audit` reports a moderate `minimatch` issue reachable only through the lint tooling (`typescript-eslint`), not shipped. CI fails only on high severity for npm.
+- **Prompt injection:** event titles and email subjects are untrusted text that goes into the AI prompt. The model is told to treat them as data, has no tools, and its reply is shown as plain text only, so the worst outcome is a misleading summary. Turn AI off if that is unacceptable.
+- **Gmail restricted scope:** reading Gmail needs Google's verification and a third-party security assessment before public release.
 - Phase 6 adds code signing, notarisation, signed updates, and an external security review.

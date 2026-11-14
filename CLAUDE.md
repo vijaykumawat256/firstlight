@@ -3,7 +3,9 @@
 The full brief is `PLAN.md`; read it first. This file records what is true *now* and what you'd otherwise rediscover.
 
 ## Status
-Phases 1-4 built, except what is listed under "Not yet verified". Next: Phase 5 (email digest + optional AI summaries; includes the queued Apple Mail digest). Do not build ahead.
+Phases 1-5 built, except what is listed under "Not yet verified" and the gaps below. Next: Phase 6 (release: signing, Windows parity, security review). Do not build ahead.
+Phase 5 delivered: email digest (`crates/core/src/mail`: Apple Mail via AppleScript, Gmail, Microsoft Graph), optional AI summaries (`crates/core/src/ai`: Anthropic with the user's key, or a local model), shell glue in `src-tauri/src/mail_ai.rs`, Inbox section in the briefing, Email and AI settings with a consent dialog that shows the exact text sent.
+Phase 5 gaps: IMAP (Yahoo/iCloud/other mail) is NOT built; "people in today's meetings" is approximated by meeting organiser names only (attendees are not stored); Gmail and Graph mail never ran against the live services; the Apple Mail AppleScript compiles against Mail's dictionary but has not been run (it needs the user's Automation permission).
 Phase 4 delivered: one typed, versioned settings document (`crates/core/src/settings`), tolerant per-field loading + migration from the old scattered keys, Settings screen with all seven sections, live apply (theme, accent, clock, week start, default view, shortcut, sync interval, notifications, unlock rules), export/import, "Erase all data".
 Phase 3 delivered: briefing engine, unlock rules, notifications, `get_briefing`, event detail, compact up-next window, day/week views.
 Known gaps: full-screen-app detection (rule exists, detection stubbed, so no setting is shown for it); notification click does not open the app; the macOS system accent colour is not read (accent is Default or a palette colour).
@@ -62,3 +64,11 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Erase keeps the empty encrypted database and its key; it removes every account credential from the keychain first, and stops if the keychain refuses.
 - The tree is remounted when the clock format or week start changes (`SettingsApplier`), because they are read while rendering.
 - The browser fixture engine (`fixtureBriefing.ts`) honours the briefing settings; keep it in step when the engine gains options.
+
+## Phase 5 notes
+- Email and AI are OFF by default. `get_mail_digest` returns before doing anything when email is off; `summarise_if_enabled` builds nothing and calls nothing when AI is off or consent is missing (both tested; the browser fixture counts calls as `__mailCalls` / `__aiCalls`).
+- AI consent (`settings.ai.consented`) is set ONLY by `enable_ai` (which requires `confirm`, and test-calls the service first). `set_settings` preserves the stored value; `AppSettings::import` clears it. Never add another path that sets it.
+- The AI prompt is built by `build_prompt` only; the Settings preview shows `Prompt::disclosure()`, the same text. Never put join links, descriptions, attendees, organisers, snippets or email addresses in it (a test checks this).
+- Mail scopes: `gmail.readonly` and `Mail.Read` are requested only by `enable_account_mail`, as an upgrade of the existing account's grant (same keychain entry). Gmail's scope is a Google *restricted* scope: public release needs Google's verification and a security assessment (Phase 6).
+- Apple Mail: `mail/applemail.rs` holds the script and parser; `mail_ai.rs` runs `osascript` with a 40 s limit and a private 0700 scratch directory for calendar attachments. The script receives only numbers and a path, and a test forbids write verbs in it.
+- Mail digest cache is 3 minutes; AI summary cache is 5 minutes, keyed by the facts (not the clock line) so an unchanged day is not re-sent.

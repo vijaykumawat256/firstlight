@@ -1,7 +1,7 @@
 import * as RToggleGroup from "@radix-ui/react-toggle-group";
 import clsx from "clsx";
 import { useEffect, useState, type ReactNode } from "react";
-import { Button, Select } from "@/design";
+import { Button, ListGroup, SectionHeader, Select } from "@/design";
 import { formatHour } from "@/features/briefing/format";
 import { acceleratorFromEvent, prettyAccelerator } from "./accelerator";
 
@@ -119,3 +119,15 @@ export function ShortcutRecorder({ value, onChange }: { value: string | null; on
     </div>
   );
 }
+
+export function Group({ title, footer, children }: { title: string; footer?: string; children: React.ReactNode }) {
+  return (
+    <section aria-label={title}>
+      <SectionHeader title={title} />
+      <ListGroup>{children}</ListGroup>
+      {footer && <p className="mt-2 px-1 text-footnote text-fg-2">{footer}</p>}
+    </section>
+  );
+}
+
+// "system" is the default blue, so the palette's own blue would be a duplicate; yellow and brown lack contrast on buttons.

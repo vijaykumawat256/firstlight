@@ -9,6 +9,7 @@ import { useNow, useOnline } from "./hooks";
 import { AttentionSection, ClearDay, TodaySection, TomorrowSection, UpNextCard } from "./parts";
 import { useSettings } from "@/features/settings/useSettings";
 import { EventDetail } from "./EventDetail";
+import { InboxSection } from "./InboxSection";
 import { summarise } from "./summary";
 
 function LoadingState() {
@@ -35,6 +36,9 @@ export function BriefingScreen() {
   // The engine works out today and tomorrow; refetch each minute so past/next stay accurate while open.
   const briefing = useQuery({ queryKey: ["briefing"], queryFn: () => api.getBriefing(), refetchInterval: 60_000, staleTime: 15_000 });
   const calendars = useQuery({ queryKey: ["calendars"], queryFn: () => api.getCalendars() });
+  // Optional AI summary. Never awaited: the normal summary shows at once and AI replaces it only if it arrives.
+  const aiOn = settings?.ai.enabled === true;
+  const ai = useQuery({ queryKey: ["ai-summary"], queryFn: () => api.getAiSummary(), enabled: aiOn, staleTime: 5 * 60_000, refetchInterval: 5 * 60_000, retry: false });
   const [detail, setDetail] = useState<CalEvent | null>(null);
 
   const colours = useMemo(() => new Map((calendars.data ?? []).map((c) => [c.id, c.colour])), [calendars.data]);
@@ -82,8 +86,9 @@ export function BriefingScreen() {
           <h1 className="text-display font-bold tracking-tight text-fg">{greeting(now)}</h1>
           <p className="mt-0.5 text-headline font-medium text-fg-2">{formatDate(now)}</p>
           {b && !dayIsEmpty && (
-            <p className="mt-3 text-headline text-fg">{summarise(b, now)}</p>
+            <p className="mt-3 text-headline text-fg">{aiOn && ai.data ? ai.data : summarise(b, now)}</p>
           )}
+          {b && !dayIsEmpty && aiOn && ai.data && <p className="mt-1 text-caption text-fg-3">Summary by AI</p>}
           {!online && (
             <p className="mt-3 flex items-center gap-1.5 text-footnote text-fg-2">
               <CloudOff className="size-3.5" aria-hidden /> Offline — showing saved events
@@ -112,6 +117,7 @@ export function BriefingScreen() {
             {sections.attention && <AttentionSection b={b} />}
             <TodaySection b={b} now={now} colourOf={colourOf} onOpen={setDetail} showFreeTime={sections.free_time} />
             {sections.tomorrow && <TomorrowSection b={b} colourOf={colourOf} onOpen={setDetail} />}
+            {settings?.email.enabled && <InboxSection />}
           </div>
         )}
       </main>

@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AppSettings, Briefing, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppSettings, Briefing, CalendarInfo, CalEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -10,6 +10,16 @@ export const tauriBackend: Backend = {
   dismissUpNext: () => invoke<void>("dismiss_up_next"),
   openBriefing: () => invoke<void>("open_briefing"),
   onUpNextShown: async (callback) => listen("up-next-shown", () => callback()),
+  getMailDigest: (force) => invoke<MailResult>("get_mail_digest", { force }),
+  enableAppleMail: () => invoke<AppSettings>("enable_apple_mail"),
+  enableAccountMail: (accountId) => invoke<AppSettings>("enable_account_mail", { accountId }),
+  openMailMessage: (target: OpenTarget) => invoke<void>("open_mail_message", { target }),
+  aiStatus: () => invoke<AiStatus>("ai_status"),
+  aiPreview: () => invoke<string>("ai_preview"),
+  enableAi: (provider: AiProvider, key, confirm) => invoke<AppSettings>("enable_ai", { provider, key, confirm }),
+  disableAi: () => invoke<AppSettings>("disable_ai"),
+  forgetAiKey: () => invoke<AppSettings>("forget_ai_key"),
+  getAiSummary: () => invoke<string | null>("get_ai_summary").catch(() => null),
   getSettings: () => invoke<AppSettings>("get_settings"),
   setSettings: (settings) => invoke<AppSettings>("set_settings", { settings }),
   exportSettings: () => invoke<string>("export_settings"),

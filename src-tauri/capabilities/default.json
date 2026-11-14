@@ -46,6 +46,16 @@
     "allow-export-settings",
     "allow-save-settings-export",
     "allow-import-settings",
-    "allow-erase-all-data"
+    "allow-erase-all-data",
+    "allow-get-mail-digest",
+    "allow-enable-apple-mail",
+    "allow-enable-account-mail",
+    "allow-open-mail-message",
+    "allow-ai-status",
+    "allow-ai-preview",
+    "allow-enable-ai",
+    "allow-disable-ai",
+    "allow-forget-ai-key",
+    "allow-get-ai-summary"
   ]
 }

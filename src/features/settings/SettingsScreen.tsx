@@ -3,21 +3,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage, type DefaultView, type ThemeChoice, type TimeFormat, type WeekStart } from "@/api";
 import { useNav } from "@/app/nav";
-import { Button, CALENDAR_COLOURS, Dialog, ListGroup, SectionHeader, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
-import { DayPicker, HourSelect, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
+import { Button, CALENDAR_COLOURS, Dialog, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
+import { DayPicker, Group, HourSelect, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
+import { AiGroup, EmailGroup } from "./EmailAiSettings";
 import { useSettings } from "./useSettings";
 
-function Group({ title, footer, children }: { title: string; footer?: string; children: React.ReactNode }) {
-  return (
-    <section aria-label={title}>
-      <SectionHeader title={title} />
-      <ListGroup>{children}</ListGroup>
-      {footer && <p className="mt-2 px-1 text-footnote text-fg-2">{footer}</p>}
-    </section>
-  );
-}
-
-// "system" is the default blue, so the palette's own blue would be a duplicate; yellow and brown lack contrast on buttons.
 const ACCENTS = ["system", ...CALENDAR_COLOURS.filter((c) => !["blue", "yellow", "brown"].includes(c))];
 
 export function SettingsScreen() {
@@ -217,6 +207,10 @@ export function SettingsScreen() {
                 </SettingRow>
               )}
             </Group>
+
+            <EmailGroup />
+
+            <AiGroup />
 
             <Group title="Calendars">
               <li>

@@ -22,12 +22,12 @@ use daybrief_core::{Error, SyncReport};
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_autostart::ManagerExt;
 
-type CmdResult<T> = Result<T, String>;
+pub(crate) type CmdResult<T> = Result<T, String>;
 
 /// Longest range the UI may ask for in one call.
 const MAX_RANGE_DAYS: i64 = 62;
 
-fn internal<E: std::fmt::Debug>(what: &'static str) -> impl Fn(E) -> String {
+pub(crate) fn internal<E: std::fmt::Debug>(what: &'static str) -> impl Fn(E) -> String {
     // Log the detail (never content), return a generic message to the UI.
     move |e| {
         log::error!("{what}: {e:?}");
@@ -35,7 +35,7 @@ fn internal<E: std::fmt::Debug>(what: &'static str) -> impl Fn(E) -> String {
     }
 }
 
-fn lock_store(state: &AppState) -> CmdResult<std::sync::MutexGuard<'_, Store>> {
+pub(crate) fn lock_store(state: &AppState) -> CmdResult<std::sync::MutexGuard<'_, Store>> {
     state
         .store
         .lock()
@@ -422,7 +422,7 @@ pub async fn cancel_oauth(state: State<'_, AppState>) -> CmdResult<()> {
 const SIGN_IN_HOSTS: [&str; 2] = ["accounts.google.com", "login.microsoftonline.com"];
 const SIGN_IN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
-fn oauth_error(e: Error) -> String {
+pub(crate) fn oauth_error(e: Error) -> String {
     match e {
         // Messages from the loopback/cancel path are already plain language.
         Error::Provider(m) if m.starts_with("sign-in") => {
@@ -440,7 +440,7 @@ fn oauth_error(e: Error) -> String {
     }
 }
 
-fn config_for(state: &AppState, kind: ProviderKind) -> CmdResult<OAuthConfig> {
+pub(crate) fn config_for(state: &AppState, kind: ProviderKind) -> CmdResult<OAuthConfig> {
     match kind {
         ProviderKind::Google => state.deps.oauth.google.clone(),
         ProviderKind::Microsoft => state.deps.oauth.microsoft.clone(),
@@ -449,93 +449,102 @@ fn config_for(state: &AppState, kind: ProviderKind) -> CmdResult<OAuthConfig> {
     .ok_or_else(|| "Sign-in for this provider isn't set up in this build yet.".to_string())
 }
 
+/// Opens the provider's sign-in page in the system browser and waits for the user to finish.
+/// Used for adding an account and for granting extra permissions (such as mail) later.
+pub(crate) async fn browser_sign_in(
+    app: &AppHandle,
+    state: &AppState,
+    kind: ProviderKind,
+    cfg: OAuthConfig,
+) -> CmdResult<(oauth::TokenSet, String)> {
+    use tauri_plugin_opener::OpenerExt;
+    let (deps, cancel, lock) = (
+        state.deps.clone(),
+        state.oauth_cancel.clone(),
+        state.oauth_lock.clone(),
+    );
+    let opener_app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || -> CmdResult<(oauth::TokenSet, String)> {
+        let _one_at_a_time = lock
+            .try_lock()
+            .map_err(|_| "A sign-in is already in progress.".to_string())?;
+        cancel.store(false, std::sync::atomic::Ordering::Relaxed);
+
+        let listener = Loopback::bind().map_err(oauth_error)?;
+        // Microsoft only registers "localhost"; Google recommends the literal loopback address.
+        let host = if kind == ProviderKind::Microsoft {
+            "localhost"
+        } else {
+            "127.0.0.1"
+        };
+        let redirect = listener.redirect_uri(host);
+        let (state_token, pkce) = (random_state(), Pkce::generate());
+        let extra: &[(&str, &str)] = if kind == ProviderKind::Google {
+            &google::AUTH_EXTRA
+        } else {
+            &[]
+        };
+        let url = authorization_url(&cfg, &redirect, &state_token, &pkce.challenge, extra)
+            .map_err(oauth_error)?;
+
+        let parsed =
+            daybrief_core::http::Url::parse(&url).map_err(|_| "bad sign-in address".to_string())?;
+        if parsed.scheme() != "https"
+            || !parsed
+                .host_str()
+                .is_some_and(|h| SIGN_IN_HOSTS.contains(&h))
+        {
+            return Err("Refusing to open an unexpected sign-in address.".into());
+        }
+        opener_app
+            .opener()
+            .open_url(url, None::<&str>)
+            .map_err(|_| "Couldn't open your browser.".to_string())?;
+
+        let code = listener
+            .wait_for_code(&state_token, SIGN_IN_TIMEOUT, &cancel)
+            .map_err(oauth_error)?;
+        let tokens = exchange_code(
+            deps.http.as_ref(),
+            &cfg,
+            &code,
+            &pkce.verifier,
+            &redirect,
+            Utc::now(),
+        )
+        .map_err(oauth_error)?;
+        let email = match kind {
+            ProviderKind::Google => google::GoogleProvider::fetch_email(
+                deps.http.as_ref(),
+                google::USERINFO_URL,
+                &tokens.access_token,
+            ),
+            _ => microsoft::MicrosoftProvider::fetch_email(
+                deps.http.as_ref(),
+                microsoft::API_BASE,
+                &tokens.access_token,
+            ),
+        }
+        .map_err(oauth_error)?;
+        Ok((tokens, email))
+    })
+    .await
+    .map_err(|_| "sign-in failed".to_string())?
+}
+
 #[tauri::command]
 pub async fn add_oauth_account(
     app: AppHandle,
     state: State<'_, AppState>,
     provider: String,
 ) -> CmdResult<AccountView> {
-    use tauri_plugin_opener::OpenerExt;
     let kind = match provider.as_str() {
         "google" => ProviderKind::Google,
         "microsoft" => ProviderKind::Microsoft,
         _ => return Err("unknown provider".into()),
     };
     let cfg = config_for(&state, kind)?;
-    let (deps, cancel, lock) = (
-        state.deps.clone(),
-        state.oauth_cancel.clone(),
-        state.oauth_lock.clone(),
-    );
-
-    let opener_app = app.clone();
-    let (tokens, email) =
-        tauri::async_runtime::spawn_blocking(move || -> CmdResult<(oauth::TokenSet, String)> {
-            let _one_at_a_time = lock
-                .try_lock()
-                .map_err(|_| "A sign-in is already in progress.".to_string())?;
-            cancel.store(false, std::sync::atomic::Ordering::Relaxed);
-
-            let listener = Loopback::bind().map_err(oauth_error)?;
-            // Microsoft only registers "localhost"; Google recommends the literal loopback address.
-            let host = if kind == ProviderKind::Microsoft {
-                "localhost"
-            } else {
-                "127.0.0.1"
-            };
-            let redirect = listener.redirect_uri(host);
-            let (state_token, pkce) = (random_state(), Pkce::generate());
-            let extra: &[(&str, &str)] = if kind == ProviderKind::Google {
-                &google::AUTH_EXTRA
-            } else {
-                &[]
-            };
-            let url = authorization_url(&cfg, &redirect, &state_token, &pkce.challenge, extra)
-                .map_err(oauth_error)?;
-
-            let parsed = daybrief_core::http::Url::parse(&url)
-                .map_err(|_| "bad sign-in address".to_string())?;
-            if parsed.scheme() != "https"
-                || !parsed
-                    .host_str()
-                    .is_some_and(|h| SIGN_IN_HOSTS.contains(&h))
-            {
-                return Err("Refusing to open an unexpected sign-in address.".into());
-            }
-            opener_app
-                .opener()
-                .open_url(url, None::<&str>)
-                .map_err(|_| "Couldn't open your browser.".to_string())?;
-
-            let code = listener
-                .wait_for_code(&state_token, SIGN_IN_TIMEOUT, &cancel)
-                .map_err(oauth_error)?;
-            let tokens = exchange_code(
-                deps.http.as_ref(),
-                &cfg,
-                &code,
-                &pkce.verifier,
-                &redirect,
-                Utc::now(),
-            )
-            .map_err(oauth_error)?;
-            let email = match kind {
-                ProviderKind::Google => google::GoogleProvider::fetch_email(
-                    deps.http.as_ref(),
-                    google::USERINFO_URL,
-                    &tokens.access_token,
-                ),
-                _ => microsoft::MicrosoftProvider::fetch_email(
-                    deps.http.as_ref(),
-                    microsoft::API_BASE,
-                    &tokens.access_token,
-                ),
-            }
-            .map_err(oauth_error)?;
-            Ok((tokens, email))
-        })
-        .await
-        .map_err(|_| "sign-in failed".to_string())??;
+    let (tokens, email) = browser_sign_in(&app, &state, kind, cfg).await?;
 
     let secret_value = serde_json::to_string(&tokens).map_err(internal("saving the sign-in"))?;
 
@@ -713,6 +722,8 @@ pub async fn get_settings(state: State<'_, AppState>) -> CmdResult<AppSettings> 
 /// Checks, applies and saves new settings, and returns them as stored (out-of-range values are corrected).
 fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdResult<AppSettings> {
     s.validate()?;
+    // Consent to send data to an AI service is recorded only by the explicit enable action, never by a save.
+    s.ai.consented = lock_store(state)?.load_settings().ai.consented;
     s.sanitize();
     // Try the shortcut first: if the system refuses it, nothing is saved and the user is told why.
     crate::apply_shortcut(app, s.general.global_shortcut.as_deref())?;

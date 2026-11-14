@@ -5,6 +5,7 @@
 mod commands;
 mod eventkit;
 mod keychain;
+mod mail_ai;
 mod notifier;
 mod providers;
 mod scheduler;
@@ -12,7 +13,7 @@ mod unlock;
 
 use chrono::Utc;
 use chrono_tz::Tz;
-use daybrief_core::http::ReqwestClient;
+use daybrief_core::http::{ReqwestClient, Transport};
 use daybrief_core::secrets::{Redacted, load_or_create_db_key};
 use daybrief_core::store::Store;
 use providers::Deps;
@@ -42,6 +43,9 @@ pub(crate) struct AppState {
     pub oauth_cancel: Arc<std::sync::atomic::AtomicBool>,
     /// Held for the duration of a sign-in so only one runs at a time.
     pub oauth_lock: Arc<Mutex<()>>,
+    pub mail_cache: Mutex<Option<(std::time::Instant, mail_ai::MailResult)>>,
+    /// (when, what was summarised, the summary) so an unchanged day isn't re-sent.
+    pub ai_cache: Mutex<Option<(std::time::Instant, String, Option<String>)>>,
 }
 
 // ---- helpers --------------------------------------------------------------
@@ -295,6 +299,16 @@ pub fn run() {
             commands::set_autostart,
             commands::get_unlock_count_today,
             commands::get_briefing,
+            mail_ai::get_mail_digest,
+            mail_ai::enable_apple_mail,
+            mail_ai::enable_account_mail,
+            mail_ai::open_mail_message,
+            mail_ai::ai_status,
+            mail_ai::ai_preview,
+            mail_ai::enable_ai,
+            mail_ai::disable_ai,
+            mail_ai::forget_ai_key,
+            mail_ai::get_ai_summary,
             commands::get_settings,
             commands::set_settings,
             commands::export_settings,
@@ -338,6 +352,20 @@ pub fn run() {
                 tz,
                 oauth: providers::OAuthConfigs::from_build(),
                 system: Arc::new(eventkit::EventKitSource),
+                ai_http: Arc::new(
+                    ReqwestClient::with_options(
+                        std::time::Duration::from_secs(12),
+                        Transport::HttpsOnly,
+                    )
+                    .map_err(|e| e.to_string())?,
+                ),
+                local_http: Arc::new(
+                    ReqwestClient::with_options(
+                        std::time::Duration::from_secs(12),
+                        Transport::HttpsOrLoopback,
+                    )
+                    .map_err(|e| e.to_string())?,
+                ),
             };
             let sync = scheduler::spawn(
                 app.handle().clone(),
@@ -356,6 +384,8 @@ pub fn run() {
                 sync,
                 oauth_cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 oauth_lock: Arc::new(Mutex::new(())),
+                mail_cache: Mutex::new(None),
+                ai_cache: Mutex::new(None),
             });
 
             let startup = app

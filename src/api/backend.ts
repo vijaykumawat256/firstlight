@@ -1,4 +1,4 @@
-import type { AccountView, AppSettings, Briefing, CalendarInfo, CalEvent, OAuthAvailability, SyncSummary, SystemStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppSettings, Briefing, CalendarInfo, CalEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -8,6 +8,23 @@ export interface Backend {
   /** Events touching `[startIso, endIso)`. */
   getEvents(startIso: string, endIso: string): Promise<CalEvent[]>;
   getCalendars(): Promise<CalendarInfo[]>;
+  /** The email digest. Resolves to `{ enabled: false }` without doing anything when email is off. */
+  getMailDigest(force: boolean): Promise<MailResult>;
+  /** Asks macOS for permission to read the Mail app (one-time prompt) and turns it on. */
+  enableAppleMail(): Promise<AppSettings>;
+  /** Asks Google/Microsoft for permission to read this account's mail, then turns it on. */
+  enableAccountMail(accountId: string): Promise<AppSettings>;
+  openMailMessage(target: OpenTarget): Promise<void>;
+  aiStatus(): Promise<AiStatus>;
+  /** The exact text that would be sent to the AI service. */
+  aiPreview(): Promise<string>;
+  /** `confirm` must be true: the user has read the preview and agreed. Tests the key first. */
+  enableAi(provider: AiProvider, key: string | null, confirm: boolean): Promise<AppSettings>;
+  disableAi(): Promise<AppSettings>;
+  /** Deletes the saved API key and withdraws consent. */
+  forgetAiKey(): Promise<AppSettings>;
+  /** A short AI summary, or null (AI off or anything failed). Never rejects. */
+  getAiSummary(): Promise<string | null>;
   getSettings(): Promise<AppSettings>;
   /** Validates, applies and saves. Resolves to the settings as stored (out-of-range values corrected). */
   setSettings(settings: AppSettings): Promise<AppSettings>;

@@ -127,4 +127,56 @@ export interface AppSettings {
   };
   notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; time_24h: boolean };
   appearance: { theme: ThemeChoice; accent: string };
+  email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; important_senders: string[]; days_back: number };
+  ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; include_email: boolean; consented: AiProvider | null };
+}
+
+export type AiProvider = "anthropic" | "local";
+
+export interface AiStatus {
+  enabled: boolean;
+  consented: boolean;
+  provider: AiProvider;
+  has_key: boolean;
+}
+
+/** Mirrors `daybrief_core::mail`. */
+export type OpenTarget = { kind: "url"; url: string } | { kind: "apple_mail"; message_id: string };
+
+export interface MailMessage {
+  id: string;
+  sender_name: string;
+  sender_address: string;
+  subject: string;
+  received: string;
+  snippet: string;
+  open: OpenTarget;
+}
+
+export interface InvitationItem {
+  message: MailMessage;
+  title: string | null;
+  when: When | null;
+  location: string | null;
+  organizer: string | null;
+}
+
+export interface MailDigest {
+  generated_at: string;
+  unread_total: number;
+  important: MailMessage[];
+  invitations: InvitationItem[];
+  other_unread: number;
+}
+
+export interface MailProblem {
+  /** "apple_mail" or the account's name. */
+  source: string;
+  kind: "permission" | "not_running" | "offline" | "reconnect" | "failed";
+}
+
+export interface MailResult {
+  enabled: boolean;
+  digest: MailDigest | null;
+  problems: MailProblem[];
 }
