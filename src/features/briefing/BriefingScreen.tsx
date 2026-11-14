@@ -14,7 +14,8 @@ import { summarise } from "./summary";
 
 function LoadingState() {
   return (
-    <div className="flex flex-col gap-6" aria-busy aria-label="Loading your day">
+    <div className="flex flex-col gap-6" role="status" aria-busy>
+      <span className="sr-only">Loading your day…</span>
       <Skeleton className="h-[108px] rounded-card" />
       <div className="flex flex-col gap-2">
         <Skeleton className="h-5 w-16" />

@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppSettings, CalendarInfo, CalEvent, MailResult, SyncSummary } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -149,7 +149,7 @@ if (params.has("attention")) {
 let oauthCancelled = false;
 export const DEFAULT_SETTINGS: AppSettings = {
   version: 1,
-  general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null },
+  general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null, check_for_updates: true, update_channel: "stable" },
   briefing: { show_declined: false, min_gap_minutes: 30, work_start_hour: 9, work_end_hour: 18, early_hour: 8 },
   sections: { tomorrow: true, free_time: true, attention: true },
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },
@@ -157,6 +157,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   appearance: { theme: "system", accent: "system" },
   email: { enabled: false, apple_mail: false, account_ids: [], important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", include_email: false, consented: null },
+  privacy: { crash_reports: false },
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
 if (params.get("defaultview") === "week" || params.get("defaultview") === "day") settings.general.default_view = params.get("defaultview") as "day" | "week";
@@ -224,7 +225,32 @@ const bump = (name: string) => {
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+let crashReport: string | null = params.has("crashreport")
+  ? "Daybrief crash report\nTime: 2026-11-14 09:30:00 UTC\nVersion: 0.1.0\nSystem: macos aarch64\nThread: sync\nStopped at: crates/core/src/ics/mod.rs:123\n\nThis report contains no calendar, email or account information.\n"
+  : null;
+
 export const fixtureBackend: Backend = {
+  async getAppInfo() {
+    return { name: "Daybrief", version: "0.1.0", os: "macos", arch: "aarch64", updates_configured: params.has("updates") } satisfies AppInfo;
+  },
+  async checkForUpdate() {
+    await sleep(300);
+    if (!params.has("updates")) return { state: "not_configured" } satisfies UpdateStatus;
+    if (params.has("updatefail")) return { state: "failed" } satisfies UpdateStatus;
+    return params.has("newversion") ? ({ state: "available", version: "0.2.0" } satisfies UpdateStatus) : ({ state: "up_to_date" } satisfies UpdateStatus);
+  },
+  async installUpdate() {
+    await sleep(500);
+  },
+  async onUpdateAvailable() {
+    return () => {};
+  },
+  async getLastCrashReport() {
+    return crashReport;
+  },
+  async clearCrashReports() {
+    crashReport = null;
+  },
   async getMailDigest() {
     bump("__mailCalls");
     if (!settings.email.enabled) return { enabled: false, digest: null, problems: [] } satisfies MailResult;

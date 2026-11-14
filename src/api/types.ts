@@ -112,6 +112,8 @@ export interface AppSettings {
     week_start: WeekStart;
     time_format: TimeFormat;
     global_shortcut: string | null;
+    check_for_updates: boolean;
+    update_channel: "stable" | "beta";
   };
   briefing: { show_declined: boolean; min_gap_minutes: number; work_start_hour: number; work_end_hour: number; early_hour: number };
   sections: { tomorrow: boolean; free_time: boolean; attention: boolean };
@@ -129,6 +131,7 @@ export interface AppSettings {
   appearance: { theme: ThemeChoice; accent: string };
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; include_email: boolean; consented: AiProvider | null };
+  privacy: { crash_reports: boolean };
 }
 
 export type AiProvider = "anthropic" | "local";
@@ -180,3 +183,14 @@ export interface MailResult {
   digest: MailDigest | null;
   problems: MailProblem[];
 }
+
+export interface AppInfo {
+  name: string;
+  version: string;
+  os: string;
+  arch: string;
+  /** Whether this package can update itself. */
+  updates_configured: boolean;
+}
+
+export type UpdateStatus = { state: "not_configured" } | { state: "up_to_date" } | { state: "available"; version: string } | { state: "failed" };

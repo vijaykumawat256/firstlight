@@ -46,6 +46,15 @@ export function SettingsScreen() {
     onError: () => push({ title: "Couldn't copy to the clipboard", tone: "danger" }),
   });
 
+  const crash = useQuery({ queryKey: ["crash-report"], queryFn: () => api.getLastCrashReport() });
+  const [reportOpen, setReportOpen] = useState(false);
+  const clearReports = useMutation({
+    mutationFn: () => api.clearCrashReports(),
+    onSuccess: () => {
+      setReportOpen(false);
+      void crash.refetch();
+    },
+  });
   const [erasing, setErasing] = useState(false);
   const erase = useMutation({
     mutationFn: () => api.eraseAllData(),
@@ -118,6 +127,22 @@ export function SettingsScreen() {
                   ]}
                 />
               </SettingRow>
+              <SettingRow title="Check for updates" description="About once a day. Sends only the app's version and your operating system.">
+                <Switch label="Check for updates automatically" checked={s.general.check_for_updates} onCheckedChange={(v) => update((d) => void (d.general.check_for_updates = v))} />
+              </SettingRow>
+              {s.general.check_for_updates && (
+                <SettingRow title="Update channel" description="Beta gets new things sooner, with more rough edges.">
+                  <Segmented
+                    label="Update channel"
+                    value={s.general.update_channel}
+                    onValueChange={(v) => update((d) => void (d.general.update_channel = v as "stable" | "beta"))}
+                    options={[
+                      { value: "stable", label: "Stable" },
+                      { value: "beta", label: "Beta" },
+                    ]}
+                  />
+                </SettingRow>
+              )}
               <SettingRow title="Show or hide the briefing" description="A shortcut that works from any app.">
                 <ShortcutRecorder value={s.general.global_shortcut} onChange={(v) => update((d) => void (d.general.global_shortcut = v))} />
               </SettingRow>
@@ -231,6 +256,18 @@ export function SettingsScreen() {
               </li>
             </Group>
 
+            <Group title="About">
+              <li>
+                <button type="button" onClick={() => go("about")} className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong">
+                  <span>
+                    <span className="block text-headline font-medium text-fg">About Daybrief</span>
+                    <span className="block text-footnote text-fg-2">Version, updates, help, privacy policy and open-source licences.</span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-fg-3" aria-hidden />
+                </button>
+              </li>
+            </Group>
+
             <Group title="Appearance">
               <SettingRow title="Theme">
                 <Segmented
@@ -278,6 +315,16 @@ export function SettingsScreen() {
                   Import…
                 </Button>
               </SettingRow>
+              <SettingRow title="Crash reports" description="If Daybrief stops unexpectedly, save a short report on this computer. It contains no calendar or email information and is never sent anywhere.">
+                <Switch label="Save crash reports" checked={s.privacy.crash_reports} onCheckedChange={(v) => update((d) => void (d.privacy.crash_reports = v))} />
+              </SettingRow>
+              {crash.data && (
+                <SettingRow title="Last crash report">
+                  <Button size="sm" variant="secondary" onClick={() => setReportOpen(true)}>
+                    View…
+                  </Button>
+                </SettingRow>
+              )}
               <SettingRow title="Erase all data" description="Removes every account, saved password and link, event and setting from this computer.">
                 <Button size="sm" variant="danger" onClick={() => setErasing(true)}>
                   Erase…
@@ -322,6 +369,23 @@ export function SettingsScreen() {
             {errorMessage(importMutation.error)}
           </p>
         )}
+      </Dialog>
+
+      <Dialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        title="Last crash report"
+        description="This is everything in the report. You can share it when asking for help."
+        footer={
+          <>
+            <Button variant="danger" disabled={clearReports.isPending} onClick={() => clearReports.mutate()}>
+              Delete
+            </Button>
+            <Button onClick={() => void navigator.clipboard.writeText(crash.data ?? "").then(() => push({ title: "Copied" }))}>Copy</Button>
+          </>
+        }
+      >
+        <pre aria-label="Crash report" className="max-h-56 select-text overflow-auto whitespace-pre-wrap break-words rounded-card bg-fill p-3 font-mono text-footnote text-fg">{crash.data}</pre>
       </Dialog>
 
       <Dialog

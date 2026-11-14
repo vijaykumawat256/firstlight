@@ -59,6 +59,23 @@ pub enum Theme {
     Dark,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateChannel {
+    #[default]
+    Stable,
+    /// Earlier builds, for people who want new things sooner and can tolerate rough edges.
+    Beta,
+}
+
+/// Choices about what Daybrief does on its own and what it keeps.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct PrivacySettings {
+    /// Save a content-free crash report on this computer if the app stops unexpectedly. Nothing is ever sent.
+    pub crash_reports: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GeneralSettings {
@@ -68,6 +85,9 @@ pub struct GeneralSettings {
     pub time_format: TimeFormat,
     /// A global shortcut that shows or hides the briefing, e.g. `CmdOrCtrl+Shift+Space`.
     pub global_shortcut: Option<String>,
+    /// Look for a new version about once a day. Sends only the app's version and operating system.
+    pub check_for_updates: bool,
+    pub update_channel: UpdateChannel,
 }
 
 impl Default for GeneralSettings {
@@ -78,6 +98,8 @@ impl Default for GeneralSettings {
             week_start: WeekStart::Auto,
             time_format: TimeFormat::Auto,
             global_shortcut: None,
+            check_for_updates: true,
+            update_channel: UpdateChannel::Stable,
         }
     }
 }
@@ -213,6 +235,7 @@ pub struct AppSettings {
     pub appearance: AppearanceSettings,
     pub email: EmailSettings,
     pub ai: AiSettings,
+    pub privacy: PrivacySettings,
 }
 
 impl Default for AppSettings {
@@ -227,6 +250,7 @@ impl Default for AppSettings {
             appearance: Default::default(),
             email: Default::default(),
             ai: Default::default(),
+            privacy: Default::default(),
         }
     }
 }
@@ -325,6 +349,7 @@ impl AppSettings {
             appearance: merge_valid(&d.appearance, &section("appearance")),
             email: merge_valid(&d.email, &section("email")),
             ai: merge_valid(&d.ai, &section("ai")),
+            privacy: merge_valid(&d.privacy, &section("privacy")),
         };
         s.sanitize();
         s

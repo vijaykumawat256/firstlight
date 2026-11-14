@@ -3,6 +3,7 @@
 //! `daybrief-core`.
 
 mod commands;
+mod crash_reports;
 mod eventkit;
 mod keychain;
 mod mail_ai;
@@ -10,6 +11,7 @@ mod notifier;
 mod providers;
 mod scheduler;
 mod unlock;
+mod updates;
 
 use chrono::Utc;
 use chrono_tz::Tz;
@@ -277,8 +279,39 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Looks for a new version about once a day, if the user allows it and this build can update. Only the app's
+/// version and operating system reach the update server. If one is found the page is told; nothing installs
+/// without the user choosing to.
+fn spawn_update_checks(app: AppHandle) {
+    if updates::configured_base().is_none() || !cfg!(feature = "updater") {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        tokio_sleep(std::time::Duration::from_secs(90)).await;
+        loop {
+            let channel = app
+                .try_state::<AppState>()
+                .and_then(|s| s.store.lock().ok().map(|st| st.load_settings()))
+                .filter(|s| s.general.check_for_updates)
+                .map(|s| s.general.update_channel);
+            if let Some(channel) = channel
+                && let updates::UpdateStatus::Available { version } =
+                    updates::check(&app, channel).await
+            {
+                let _ = app.emit("update-available", version);
+            }
+            tokio_sleep(std::time::Duration::from_secs(24 * 3600)).await;
+        }
+    });
+}
+
+async fn tokio_sleep(d: std::time::Duration) {
+    // A plain thread sleep on the blocking pool keeps this free of an extra async-runtime dependency.
+    let _ = tauri::async_runtime::spawn_blocking(move || std::thread::sleep(d)).await;
+}
+
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -293,7 +326,13 @@ pub fn run() {
                 .on_navigation(|_webview, url| navigation_allowed(url))
                 .build(),
         )
-        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_opener::init());
+
+    // The signed-update plugin exists only in packages built for release (see docs/RELEASE.md).
+    #[cfg(feature = "updater")]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
@@ -322,6 +361,11 @@ pub fn run() {
             commands::set_autostart,
             commands::get_unlock_count_today,
             commands::get_briefing,
+            commands::get_app_info,
+            commands::check_for_update,
+            commands::install_update,
+            commands::get_last_crash_report,
+            commands::clear_crash_reports,
             mail_ai::get_mail_digest,
             mail_ai::enable_apple_mail,
             mail_ai::enable_account_mail,
@@ -350,11 +394,24 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // First thing: if anything below panics, a content-free report is saved (when the user allows it).
+            if let Ok(dir) = app.path().app_log_dir() {
+                crash_reports::install_hook(dir, env!("CARGO_PKG_VERSION"));
+            }
+
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             // Database key lives only in the OS keychain.
-            let keychain = keychain::KeychainStore::new(KEYCHAIN_SERVICE);
+            // An optional profile gives a second, separate copy of the data (own keychain entries and database),
+            // so a release build can be tried without touching a real installation.
+            let profile = std::env::var("DAYBRIEF_PROFILE")
+                .ok()
+                .and_then(|p| daybrief_core::profile::validate(&p));
+            let keychain = keychain::KeychainStore::new(daybrief_core::profile::keychain_service(
+                KEYCHAIN_SERVICE,
+                profile.as_deref(),
+            ));
             let key = load_or_create_db_key(&keychain).map_err(|e| {
                 log::error!("keychain unavailable: {e}");
                 e.to_string()
@@ -362,7 +419,7 @@ pub fn run() {
 
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
-            let db_path = dir.join("daybrief.db");
+            let db_path = dir.join(daybrief_core::profile::db_file_name(profile.as_deref()));
             let store = Store::open(&db_path, &key).map_err(|e| {
                 log::error!("cannot open database: {e}");
                 e.to_string()
@@ -411,16 +468,20 @@ pub fn run() {
                 ai_cache: Mutex::new(None),
             });
 
-            let startup = app
+            let startup_settings = app
                 .state::<AppState>()
                 .store
                 .lock()
-                .map(|st| st.load_settings().general.global_shortcut)
-                .ok()
-                .flatten();
-            if let Err(e) = apply_shortcut(app.handle(), startup.as_deref()) {
+                .map(|st| st.load_settings())
+                .unwrap_or_default();
+            crash_reports::set_enabled(startup_settings.privacy.crash_reports);
+            if let Err(e) = apply_shortcut(
+                app.handle(),
+                startup_settings.general.global_shortcut.as_deref(),
+            ) {
                 log::warn!("saved shortcut not registered: {e}");
             }
+            spawn_update_checks(app.handle().clone());
             notifier::spawn(
                 app.handle().clone(),
                 db_path_for_notifier,

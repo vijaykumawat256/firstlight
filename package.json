@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "licences": "node scripts/gen-licences.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.3.1",

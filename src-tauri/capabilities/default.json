@@ -55,6 +55,11 @@
     "allow-enable-ai",
     "allow-disable-ai",
     "allow-forget-ai-key",
-    "allow-get-ai-summary"
+    "allow-get-ai-summary",
+    "allow-get-app-info",
+    "allow-check-for-update",
+    "allow-install-update",
+    "allow-get-last-crash-report",
+    "allow-clear-crash-reports"
   ]
 }

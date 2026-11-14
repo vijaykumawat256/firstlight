@@ -65,7 +65,7 @@ test("accounts screen: hide a calendar, rename, remove", async ({ page }) => {
   await expect(page.getByRole("switch", { name: "Show Personal" })).toHaveAttribute("aria-checked", "false");
   await page.getByRole("button", { name: "Briefing" }).click();
   await expect(page.getByText("Lunch with Alex")).toHaveCount(0);
-  await expect(page.getByText("Team standup")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Team standup", exact: true })).toBeVisible();
 
   // Rename
   await page.getByRole("button", { name: "Settings" }).click();

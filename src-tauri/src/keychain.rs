@@ -6,16 +6,16 @@ use daybrief_core::{Error, Result};
 use keyring::Entry;
 
 pub struct KeychainStore {
-    service: &'static str,
+    service: String,
 }
 
 impl KeychainStore {
-    pub fn new(service: &'static str) -> Self {
+    pub fn new(service: String) -> Self {
         Self { service }
     }
 
     fn entry(&self, key: &str) -> Result<Entry> {
-        Entry::new(self.service, key).map_err(map_err)
+        Entry::new(&self.service, key).map_err(map_err)
     }
 }
 

@@ -730,6 +730,7 @@ fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdR
     lock_store(state)?
         .save_settings(&s)
         .map_err(internal("saving settings"))?;
+    crate::crash_reports::set_enabled(s.privacy.crash_reports);
     let _ = app.emit("settings-changed", ());
     Ok(s)
 }
@@ -806,5 +807,63 @@ pub async fn erase_all_data(app: AppHandle, state: State<'_, AppState>) -> CmdRe
             needs_attention: false,
         },
     );
+    Ok(())
+}
+
+// ---- about, updates, crash reports ------------------------------------------------------
+
+#[derive(serde::Serialize)]
+pub struct AppInfo {
+    name: &'static str,
+    version: &'static str,
+    os: &'static str,
+    arch: &'static str,
+    /// Whether this package can update itself.
+    updates_configured: bool,
+}
+
+#[tauri::command]
+pub async fn get_app_info() -> CmdResult<AppInfo> {
+    Ok(AppInfo {
+        name: "Daybrief",
+        version: env!("CARGO_PKG_VERSION"),
+        os: std::env::consts::OS,
+        arch: std::env::consts::ARCH,
+        updates_configured: cfg!(feature = "updater")
+            && crate::updates::configured_base().is_some(),
+    })
+}
+
+#[tauri::command]
+pub async fn check_for_update(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<crate::updates::UpdateStatus> {
+    let channel = lock_store(&state)?.load_settings().general.update_channel;
+    Ok(crate::updates::check(&app, channel).await)
+}
+
+#[tauri::command]
+pub async fn install_update(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+    let channel = lock_store(&state)?.load_settings().general.update_channel;
+    crate::updates::install(&app, channel).await
+}
+
+#[tauri::command]
+pub async fn get_last_crash_report(app: AppHandle) -> CmdResult<Option<String>> {
+    use tauri::Manager;
+    Ok(app
+        .path()
+        .app_log_dir()
+        .ok()
+        .and_then(|d| crate::crash_reports::latest(&d)))
+}
+
+#[tauri::command]
+pub async fn clear_crash_reports(app: AppHandle) -> CmdResult<()> {
+    use tauri::Manager;
+    if let Ok(d) = app.path().app_log_dir() {
+        crate::crash_reports::clear(&d);
+    }
     Ok(())
 }

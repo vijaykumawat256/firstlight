@@ -74,7 +74,8 @@ export function CalendarScreen() {
         </div>
       </header>
       {events.isPending ? (
-        <div className="flex flex-col gap-2 px-5" aria-busy aria-label="Loading">
+        <div className="flex flex-col gap-2 px-5" role="status" aria-busy>
+          <span className="sr-only">Loading…</span>
           <Skeleton className="h-10" />
           <Skeleton className="h-64" />
         </div>

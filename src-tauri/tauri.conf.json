@@ -25,7 +25,13 @@
         "transparent": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "windowEffects": { "effects": ["sidebar"], "state": "active" }
+        "windowEffects": {
+          "effects": [
+            "sidebar",
+            "mica"
+          ],
+          "state": "active"
+        }
       }
     ],
     "security": {
@@ -43,6 +49,23 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "shortDescription": "Your day at a glance, every time you unlock.",
+    "longDescription": "Daybrief shows what is left today and what is coming tomorrow from all your calendars, every time you unlock your computer. Everything stays on your computer.",
+    "copyright": "Copyright \u00a9 Daybrief",
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.plist"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
   }
 }

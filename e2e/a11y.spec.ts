@@ -54,8 +54,10 @@ for (const scheme of ["light", "dark"] as const) {
       await page.clock.install({ time: new Date(2026, 2, 11, 9, 30) });
       await page.goto("/");
       await page.getByRole("button", { name: "Calendar" }).click();
+      await expect(page.getByRole("region", { name: "Day", exact: true })).toBeVisible(); // lazy screen has arrived
       await scan(page, "day view");
       await page.getByRole("radio", { name: "Week" }).click();
+      await expect(page.getByRole("region", { name: "Week", exact: true })).toBeVisible();
       await scan(page, "week view");
     });
 

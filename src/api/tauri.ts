@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppSettings, Briefing, CalendarInfo, CalEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -20,6 +20,12 @@ export const tauriBackend: Backend = {
   disableAi: () => invoke<AppSettings>("disable_ai"),
   forgetAiKey: () => invoke<AppSettings>("forget_ai_key"),
   getAiSummary: () => invoke<string | null>("get_ai_summary").catch(() => null),
+  getAppInfo: () => invoke<AppInfo>("get_app_info"),
+  checkForUpdate: () => invoke<UpdateStatus>("check_for_update"),
+  installUpdate: () => invoke<void>("install_update"),
+  onUpdateAvailable: async (callback) => listen<string>("update-available", (e) => callback(e.payload)),
+  getLastCrashReport: () => invoke<string | null>("get_last_crash_report"),
+  clearCrashReports: () => invoke<void>("clear_crash_reports"),
   getSettings: () => invoke<AppSettings>("get_settings"),
   setSettings: (settings) => invoke<AppSettings>("set_settings", { settings }),
   exportSettings: () => invoke<string>("export_settings"),

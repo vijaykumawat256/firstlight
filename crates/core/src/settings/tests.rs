@@ -403,3 +403,29 @@ fn email_account_ids_and_days_are_sanitised() {
         1
     );
 }
+
+#[test]
+fn updates_are_checked_by_default_on_the_stable_channel_and_crash_reports_are_off() {
+    let d = AppSettings::default();
+    assert!(d.general.check_for_updates);
+    assert_eq!(d.general.update_channel, UpdateChannel::Stable);
+    assert!(!d.privacy.crash_reports, "crash reports are opt-in");
+    let s = parse(
+        r#"{"general":{"update_channel":"beta","check_for_updates":false},"privacy":{"crash_reports":true}}"#,
+    );
+    assert_eq!(
+        (
+            s.general.update_channel,
+            s.general.check_for_updates,
+            s.privacy.crash_reports
+        ),
+        (UpdateChannel::Beta, false, true)
+    );
+    assert_eq!(
+        parse(r#"{"general":{"update_channel":"nightly-with-bugs"}}"#)
+            .general
+            .update_channel,
+        UpdateChannel::Stable,
+        "unknown channel falls back"
+    );
+}

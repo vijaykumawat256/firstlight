@@ -3,7 +3,7 @@
 The full brief is `PLAN.md`; read it first. This file records what is true *now* and what you'd otherwise rediscover.
 
 ## Status
-Phases 1-5 built, except what is listed under "Not yet verified" and the gaps below. Next: Phase 6 (release: signing, Windows parity, security review). Do not build ahead.
+Phases 1-5 built; Phase 6 built as far as it can be without the user's accounts (see `docs/RELEASE.md`: signing, notarisation, Windows run, live update test, external review remain). Phase 7 needs an approved design doc first. Do not build ahead.
 Phase 5 delivered: email digest (`crates/core/src/mail`: Apple Mail via AppleScript, Gmail, Microsoft Graph), optional AI summaries (`crates/core/src/ai`: Anthropic with the user's key, or a local model), shell glue in `src-tauri/src/mail_ai.rs`, Inbox section in the briefing, Email and AI settings with a consent dialog that shows the exact text sent.
 Phase 5 gaps: IMAP (Yahoo/iCloud/other mail) is NOT built; "people in today's meetings" is approximated by meeting organiser names only (attendees are not stored); Gmail and Graph mail never ran against the live services; the Apple Mail AppleScript compiles against Mail's dictionary but has not been run (it needs the user's Automation permission).
 Phase 4 delivered: one typed, versioned settings document (`crates/core/src/settings`), tolerant per-field loading + migration from the old scattered keys, Settings screen with all seven sections, live apply (theme, accent, clock, week start, default view, shortcut, sync interval, notifications, unlock rules), export/import, "Erase all data".
@@ -72,3 +72,11 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Mail scopes: `gmail.readonly` and `Mail.Read` are requested only by `enable_account_mail`, as an upgrade of the existing account's grant (same keychain entry). Gmail's scope is a Google *restricted* scope: public release needs Google's verification and a security assessment (Phase 6).
 - Apple Mail: `mail/applemail.rs` holds the script and parser; `mail_ai.rs` runs `osascript` with a 40 s limit and a private 0700 scratch directory for calendar attachments. The script receives only numbers and a path, and a test forbids write verbs in it.
 - Mail digest cache is 3 minutes; AI summary cache is 5 minutes, keyed by the facts (not the clock line) so an unchanged day is not re-sent.
+
+## Phase 6 notes
+- `DAYBRIEF_PROFILE=<name>` gives a separate keychain service and DB file: use it for any release-build experiment, then delete the leftovers (commands in `docs/RELEASE.md`).
+- Updater is behind `--features updater`; config in `src-tauri/tauri.release.conf.json` (placeholder pubkey/endpoint). Build signing needs `TAURI_SIGNING_PRIVATE_KEY` as key *contents*. Never commit keys.
+- Windows code (`unlock.rs` `#[cfg(windows)]`) is type-checked only, never run. The `windows` crate needs `Win32_Graphics_Gdi` for `RegisterClassW`.
+- Screens are lazy-loaded; e2e must wait for the region/heading before asserting.
+- Crash reports are local, opt-in, content-free (`crash.rs`, `crash_reports.rs`). Licences page data: `npm run licences`.
+- Measured (release, hidden): idle RSS about 100 MB, CPU 0%.

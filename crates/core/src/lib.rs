@@ -7,6 +7,7 @@
 pub mod ai;
 pub mod briefing;
 pub mod contain;
+pub mod crash;
 pub mod dedupe;
 pub mod erase;
 pub mod error;
@@ -18,12 +19,14 @@ pub mod join;
 pub mod mail;
 pub mod model;
 pub mod oauth;
+pub mod profile;
 pub mod providers;
 pub mod secrets;
 pub mod settings;
 pub mod store;
 pub mod sync;
 pub mod tz;
+pub mod updates;
 pub mod xml;
 
 pub use error::{Error, Result};

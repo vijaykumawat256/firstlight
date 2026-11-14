@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppSettings, Briefing, CalendarInfo, CalEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -25,6 +25,15 @@ export interface Backend {
   forgetAiKey(): Promise<AppSettings>;
   /** A short AI summary, or null (AI off or anything failed). Never rejects. */
   getAiSummary(): Promise<string | null>;
+  getAppInfo(): Promise<AppInfo>;
+  checkForUpdate(): Promise<UpdateStatus>;
+  /** Downloads, verifies the signature, installs and restarts. */
+  installUpdate(): Promise<void>;
+  /** Fires when the daily background check finds a new version. */
+  onUpdateAvailable(callback: (version: string) => void): Promise<() => void>;
+  /** The saved content-free crash report, if any. */
+  getLastCrashReport(): Promise<string | null>;
+  clearCrashReports(): Promise<void>;
   getSettings(): Promise<AppSettings>;
   /** Validates, applies and saves. Resolves to the settings as stored (out-of-range values corrected). */
   setSettings(settings: AppSettings): Promise<AppSettings>;
