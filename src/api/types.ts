@@ -201,7 +201,7 @@ export interface AppSettings {
     up_next_lead_minutes: number;
     skip_when_fullscreen: boolean;
   };
-  notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; time_24h: boolean; hide_titles: boolean };
+  notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; week_preview: boolean; time_24h: boolean; hide_titles: boolean };
   appearance: { theme: ThemeChoice; accent: string; ambient: boolean };
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null };
@@ -268,6 +268,33 @@ export interface AppInfo {
 }
 
 export type UpdateStatus = { state: "not_configured" } | { state: "up_to_date" } | { state: "available"; version: string } | { state: "failed" };
+
+/** Mirrors `firstlight_core::weekahead`. */
+export interface WeekDay {
+  date: string;
+  weekend: boolean;
+  meetings: number;
+  minutes: number;
+  first_start: string | null;
+  last_end: string | null;
+  early_start: boolean;
+  back_to_back_runs: number;
+  conflicts: number;
+  heavy: boolean;
+  all_day: string[];
+}
+
+export interface WeekAhead {
+  days: WeekDay[];
+  meetings: number;
+  minutes: number;
+  busiest: string | null;
+  lightest: string | null;
+  focus: { date: string; start: string; end: string; minutes: number } | null;
+  needs_response: number;
+  conflicts: number;
+  early_starts: string[];
+}
 
 export type ConflictReason = "yours" | "not_answered" | "tentative" | "shorter" | "later" | "your_choice";
 

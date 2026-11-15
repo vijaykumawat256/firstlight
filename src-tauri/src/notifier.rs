@@ -122,7 +122,9 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                         let _ = firstlight_core::local::refresh(&mut store, now);
                     }
                     let (from, _) = day_bounds(today, tz);
-                    let (_, to) = day_bounds(today + Duration::days(1), tz);
+                    // Eight days, so the Sunday week preview can see all of the week ahead; everything else only looks at
+                    // today and tomorrow.
+                    let (_, to) = day_bounds(today + Duration::days(8), tz);
 
                     if let (Ok(events), Ok(sent)) =
                         (store.events_between(from, to), store.sent_notifications())

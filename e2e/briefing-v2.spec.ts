@@ -163,3 +163,36 @@ test.describe("conflict help", () => {
     expect(r.violations).toEqual([]);
   });
 });
+
+// ---- week ahead ---------------------------------------------------------------------------
+
+test.describe("week ahead", () => {
+  test.use({ reducedMotion: "reduce" });
+
+  test("the briefing shows the next seven days with a bar per day and notes, accessibly", async ({ page }) => {
+    const { default: AxeBuilder } = await import("@axe-core/playwright");
+    await page.clock.install({ time: todayAt(9, 30) });
+    await page.goto("/");
+    const week = page.getByRole("region", { name: "Week ahead" });
+    await expect(week).toBeVisible();
+    await expect(week.getByRole("list", { name: "Meeting time per day" }).getByRole("listitem")).toHaveCount(7);
+    await expect(week.getByText(/Early start:/)).toBeVisible(); // tomorrow's 06:45 flight
+    await expect(week.getByText(/\d+ meetings? · /)).toBeVisible();
+    await week.scrollIntoViewIfNeeded();
+    const r = await new AxeBuilder({ page }).analyze();
+    expect(r.violations).toEqual([]);
+  });
+
+  test("the Sunday week preview can be turned off in Settings", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("main").getByRole("button", { name: /^Notifications/ }).click();
+    const sw = page.getByRole("switch", { name: "Week preview on Sundays" });
+    await expect(sw).toBeChecked();
+    await sw.click();
+    await expect(sw).not.toBeChecked();
+    // It belongs to the evening look-ahead: without that, there is nothing to replace.
+    await page.getByRole("switch", { name: "Evening look-ahead" }).click();
+    await expect(page.getByRole("switch", { name: "Week preview on Sundays" })).toHaveCount(0);
+  });
+});

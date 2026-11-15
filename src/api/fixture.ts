@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, FreeSlot, MeetingPrep, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingPrep, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -185,7 +185,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   briefing: { show_declined: false, min_gap_minutes: 30, work_start_hour: 9, work_end_hour: 18, early_hour: 8 },
   sections: { tomorrow: true, free_time: true, attention: true },
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },
-  notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, time_24h: false, hide_titles: false },
+  notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, week_preview: true, time_24h: false, hide_titles: false },
   appearance: { theme: "system", accent: "system", ambient: params.has("ambient") },
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null },
@@ -652,6 +652,63 @@ export const fixtureBackend: Backend = {
     const keywords = q.replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((x) => x.length > 2 && !stop.has(x));
     const events = fixtureEvents().filter((e) => overlaps(e, day, to) && keywords.every((k) => `${e.title} ${e.location ?? ""}`.toLowerCase().includes(k)));
     return { enabled: true, understood: true, problem: null, answer: { kind: "events", from: iso(day), to: iso(to), keywords, minutes: 30, count: events.length, events: events.slice(0, 50), slots: [] } } satisfies AskReply;
+  },
+  async getWeekAhead() {
+    // A stand-in for crates/logic/src/weekahead.rs (simpler: no back-to-back or focus search).
+    const ids = visibleCalendarIds();
+    const evs = fixtureEvents().filter((e) => ids.has(e.calendar_id) && e.status !== "cancelled" && e.my_response !== "declined");
+    const first = new Date();
+    first.setHours(0, 0, 0, 0);
+    first.setDate(first.getDate() + 1);
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const early = settings.briefing.early_hour;
+    const days: WeekDay[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(first);
+      d.setDate(d.getDate() + i);
+      const [lo, hi] = [d.getTime(), d.getTime() + 86_400_000];
+      const timed = evs
+        .filter((e): e is typeof e & { when: { kind: "timed"; start: string; end: string; tzid: string | null } } => e.when.kind === "timed")
+        .map((e) => [Date.parse(e.when.start), Date.parse(e.when.end)] as const)
+        .filter(([s]) => s >= lo && s < hi)
+        .sort((x, y) => x[0] - y[0]);
+      let minutes = 0;
+      let cursor = 0;
+      for (const [s, e] of timed) {
+        const from = Math.max(s, cursor);
+        if (e > from) minutes += (Math.min(e, hi) - from) / 60_000;
+        cursor = Math.max(cursor, e);
+      }
+      const allDay = evs.filter((e) => e.when.kind === "all_day" && e.when.start <= iso(d) && iso(d) < e.when.end).map((e) => e.title).slice(0, 3);
+      days.push({
+        date: iso(d),
+        weekend: d.getDay() === 0 || d.getDay() === 6,
+        meetings: timed.length,
+        minutes: Math.round(minutes),
+        first_start: timed[0] ? new Date(timed[0][0]).toISOString() : null,
+        last_end: timed.length ? new Date(Math.max(...timed.map((t) => t[1]))).toISOString() : null,
+        early_start: !!timed[0] && new Date(timed[0][0]).getHours() < early,
+        back_to_back_runs: 0,
+        conflicts: 0,
+        heavy: minutes >= 300,
+        all_day: allDay,
+      });
+    }
+    const busiestDay = days.filter((d) => d.minutes > 0).sort((x, y) => y.minutes - x.minutes)[0];
+    const working = days.filter((d) => !d.weekend);
+    const lightestDay = [...working].sort((x, y) => x.minutes - y.minutes)[0];
+    const spread = new Set(working.map((d) => d.minutes)).size > 1;
+    return {
+      days,
+      meetings: days.reduce((n, d) => n + d.meetings, 0),
+      minutes: days.reduce((n, d) => n + d.minutes, 0),
+      busiest: busiestDay?.date ?? null,
+      lightest: spread && lightestDay && lightestDay.date !== busiestDay?.date ? lightestDay.date : null,
+      focus: null,
+      needs_response: evs.filter((e) => e.my_response === "needs_action" && e.when.kind === "timed" && Date.parse(e.when.start) >= first.getTime() && Date.parse(e.when.start) < first.getTime() + 7 * 86_400_000).length,
+      conflicts: 0,
+      early_starts: days.filter((d) => d.early_start).map((d) => d.date),
+    } satisfies WeekAhead;
   },
   async getConflictHelp(a, b, moveId) {
     // A small stand-in for crates/logic/src/conflict.rs.

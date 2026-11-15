@@ -18,6 +18,7 @@
       ]
     },
     "allow-get-events",
+    "allow-get-week-ahead",
     "allow-get-conflict-help",
     "allow-open-mail-draft",
     "allow-find-free-times",

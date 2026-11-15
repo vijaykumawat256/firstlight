@@ -377,6 +377,11 @@ export function SettingsScreen() {
                   <HourSelect label="Evening look-ahead time" from={12} to={22} value={s.notify.evening_hour} onChange={(h) => update((d) => void (d.notify.evening_hour = h))} />
                 </SettingRow>
               )}
+              {s.notify.evening && (
+                <SettingRow title="Week preview on Sundays" description="On Sunday evening, a look at the whole week ahead in place of the note about tomorrow: how many meetings, the busiest day, early starts.">
+                  <Switch label="Week preview on Sundays" checked={s.notify.week_preview} onCheckedChange={(v) => update((d) => void (d.notify.week_preview = v))} />
+                </SettingRow>
+              )}
             </Group>
           </div>
         )}

@@ -7,6 +7,7 @@
 use super::rules::{UnlockRules, in_quiet_hours, weekday_index};
 use super::{BriefingSettings, build};
 use crate::model::Event;
+use crate::weekahead::{self, WeekAhead};
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,8 @@ pub struct NotifySettings {
     pub evening: bool,
     /// Local hour at which the evening look-ahead becomes due (it stays due until 23:00).
     pub evening_hour: u32,
+    /// On Sunday evening, show a look at the whole week instead of the usual "tomorrow" note (needs the evening look-ahead).
+    pub week_preview: bool,
     /// Show times as 13:00 instead of 1:00 PM.
     pub time_24h: bool,
     /// Leave event names (and places) out of notifications. They appear on the lock screen and in screen shares.
@@ -38,6 +41,7 @@ impl Default for NotifySettings {
             morning_hour: 8,
             evening: true,
             evening_hour: 18,
+            week_preview: true,
             time_24h: false,
             hide_titles: false,
         }
@@ -50,6 +54,8 @@ pub enum Kind {
     Before,
     Morning,
     Evening,
+    /// Sunday evening: the week ahead.
+    Week,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -69,6 +75,52 @@ pub fn fmt_time(t: DateTime<Utc>, tz: Tz, use_24h: bool) -> String {
 
 fn plural(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
+}
+
+fn hours_phrase(minutes: i64) -> String {
+    match minutes {
+        m if m < 60 => format!("{m} min"),
+        m if m < 150 => format!("{} min", (m + 2) / 5 * 5),
+        m => format!("about {} hours", (m + 30) / 60),
+    }
+}
+
+/// "Wednesday", or "Tuesday and Thursday".
+fn day_names(dates: &[chrono::NaiveDate]) -> String {
+    let names: Vec<String> = dates
+        .iter()
+        .take(2)
+        .map(|d| d.format("%A").to_string())
+        .collect();
+    names.join(" and ")
+}
+
+/// The Sunday-evening note: how big the week is, the heaviest day, early starts, invitations waiting.
+fn week_body(w: &WeekAhead) -> String {
+    let mut body = format!(
+        "{}, {}.",
+        plural(w.meetings, "meeting", "meetings"),
+        hours_phrase(w.minutes)
+    );
+    if let Some(d) = w.busiest.filter(|_| w.meetings > 1) {
+        body += &format!(" Busiest: {}.", d.format("%A"));
+    }
+    if !w.early_starts.is_empty() {
+        body += &format!(" Early start: {}.", day_names(&w.early_starts));
+    }
+    if w.conflicts > 0 {
+        body += &format!(
+            " {} to sort out.",
+            plural(w.conflicts, "overlap", "overlaps")
+        );
+    }
+    if w.needs_response > 0 {
+        body += &format!(
+            " {} waiting.",
+            plural(w.needs_response, "invitation", "invitations")
+        );
+    }
+    body
 }
 
 /// Notifications that should be shown now and have not been shown yet.
@@ -179,8 +231,30 @@ pub fn due(
         }
     }
 
+    // Sunday evening shows the whole week in place of the usual note about tomorrow.
+    let evening_ok =
+        ns.evening && allowed_today && local.hour() >= ns.evening_hour && local.hour() < 23;
+    let mut week_shown = false;
+    if ns.week_preview && evening_ok && local.weekday() == chrono::Weekday::Sun {
+        let tomorrow = local.date_naive() + Duration::days(1);
+        let week = weekahead::build(events, tomorrow, 7, tz, bs);
+        if week.meetings > 0 {
+            week_shown = true;
+            let id = format!("week:{}", local.date_naive());
+            if !sent.contains(&id) {
+                out.push(Notification {
+                    id,
+                    kind: Kind::Week,
+                    title: "Your week".into(),
+                    body: week_body(&week),
+                });
+            }
+        }
+    }
+
     let tomorrow_has_something = !b.tomorrow.timed.is_empty() || !b.tomorrow.all_day.is_empty();
     if ns.evening
+        && !week_shown
         && allowed_today
         && local.hour() >= ns.evening_hour
         && local.hour() < 23
@@ -587,5 +661,101 @@ mod tests {
         );
         assert_eq!(n[0].id, "morning:2026-03-10");
         assert_eq!(n[0].body, "1 event left today. First: e at 10:30 AM.");
+    }
+
+    // ---- the Sunday week preview ----------------------------------------------------------
+
+    // Sunday 2026-03-08; the week ahead is Monday 9th to Sunday 15th.
+    fn sun(h: u32, m: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 3, 8, h, m, 0).unwrap()
+    }
+    fn mon(h: u32, m: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 3, 9, h, m, 0).unwrap()
+    }
+    fn wed(h: u32, m: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 3, 11, h, m, 0).unwrap()
+    }
+
+    fn the_week() -> Vec<Event> {
+        let mut invite = ev("invite", wed(15, 0), 60);
+        invite.my_response = Response::NeedsAction;
+        vec![
+            ev("early", mon(6, 45), 30),
+            ev("big", wed(9, 0), 5 * 60),
+            invite,
+            ev("other", wed(14, 0), 30),
+        ]
+    }
+
+    #[test]
+    fn sunday_evening_shows_the_week_instead_of_the_tomorrow_note() {
+        let n = go(&the_week(), sun(18, 0), &HashSet::new());
+        assert_eq!(kinds(&n), [Kind::Week]);
+        assert_eq!(n[0].id, "week:2026-03-08");
+        assert_eq!(n[0].title, "Your week");
+        assert_eq!(
+            n[0].body,
+            "4 meetings, about 7 hours. Busiest: Wednesday. Early start: Monday. 1 invitation waiting."
+        );
+    }
+
+    #[test]
+    fn it_is_not_shown_before_the_evening_hour_twice_or_on_other_days() {
+        assert!(go(&the_week(), sun(17, 59), &HashSet::new()).is_empty());
+        let n = go(&the_week(), sun(18, 5), &HashSet::new());
+        let sent: HashSet<String> = n.iter().map(|x| x.id.clone()).collect();
+        assert!(
+            go(&the_week(), sun(20, 0), &sent).is_empty(),
+            "never repeats"
+        );
+        // On a Saturday evening, with Monday not tomorrow, it is the ordinary look-ahead (or nothing).
+        let sat = Utc.with_ymd_and_hms(2026, 3, 7, 18, 30, 0).unwrap();
+        assert!(!kinds(&go(&the_week(), sat, &HashSet::new())).contains(&Kind::Week));
+    }
+
+    #[test]
+    fn it_can_be_turned_off_and_then_the_usual_note_returns() {
+        let ns = NotifySettings {
+            week_preview: false,
+            ..Default::default()
+        };
+        let events = [ev("m", mon(9, 0), 30)];
+        let n = due(
+            &events,
+            sun(18, 0),
+            LONDON,
+            &ns,
+            &BriefingSettings::default(),
+            &UnlockRules::default(),
+            &HashSet::new(),
+        );
+        assert_eq!(kinds(&n), [Kind::Evening]);
+    }
+
+    #[test]
+    fn an_empty_week_says_nothing_and_quiet_hours_and_excluded_days_are_respected() {
+        assert!(go(&[], sun(18, 0), &HashSet::new()).is_empty());
+        let rules = UnlockRules {
+            days: [true, true, true, true, true, true, false],
+            ..Default::default()
+        };
+        let n = due(
+            &the_week(),
+            sun(18, 0),
+            LONDON,
+            &NotifySettings::default(),
+            &BriefingSettings::default(),
+            &rules,
+            &HashSet::new(),
+        );
+        assert!(n.is_empty(), "Sunday is switched off in the rules");
+    }
+
+    #[test]
+    fn the_week_note_contains_no_event_titles() {
+        let mut e = ev("Secret merger talks", mon(9, 0), 60);
+        e.title = "Secret merger talks".into();
+        let n = go(&[e], sun(18, 0), &HashSet::new());
+        assert!(!n[0].body.contains("Secret") && !n[0].title.contains("Secret"));
     }
 }

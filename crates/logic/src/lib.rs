@@ -13,6 +13,7 @@ pub mod join;
 pub mod model;
 pub mod prep;
 pub mod tz;
+pub mod weekahead;
 pub mod window;
 pub mod xml;
 

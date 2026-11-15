@@ -1512,6 +1512,27 @@ pub async fn open_mail_draft(
         .map_err(|_| "Couldn't open your mail app.".to_string())
 }
 
+/// The next seven days (from tomorrow): how heavy each is, the busiest and lightest, early starts, the best block for focus.
+#[tauri::command]
+pub async fn get_week_ahead(
+    state: State<'_, AppState>,
+) -> CmdResult<firstlight_core::weekahead::WeekAhead> {
+    let (now, tz) = (Utc::now(), crate::local_tz());
+    let store = lock_store(&state)?;
+    let settings = store.load_settings().briefing;
+    let first = now.with_timezone(&tz).date_naive() + Duration::days(1);
+    let (from, _) = firstlight_core::briefing::day_bounds(first, tz);
+    let (_, to) = firstlight_core::briefing::day_bounds(first + Duration::days(6), tz);
+    let events = dedupe(
+        store
+            .events_between(from, to)
+            .map_err(internal("loading events"))?,
+    );
+    Ok(firstlight_core::weekahead::build(
+        &events, first, 7, tz, &settings,
+    ))
+}
+
 /// Hides the small "up next" panel.
 #[tauri::command]
 pub async fn dismiss_up_next(app: AppHandle) -> CmdResult<()> {

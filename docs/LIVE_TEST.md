@@ -21,6 +21,8 @@ For every step: note **what you did, what you expected, what happened**, and a s
 
 10. **Conflict help**: find two overlapping meetings in your real calendar and press Sort out. Check the suggested one is sensible and the reasons are true; the free times really are free in your calendar; for a meeting someone else organised, "Write the message" opens your mail app with the times and no mention of the other meeting; for one you created in Firstlight, "Move here" changes it (in the Calendar app or CalDAV too, if you saved it there).
 
+11. **Week ahead**: the briefing's "The week ahead" card: bars match your real week, the busiest/lightest/early-start notes are right, "Best time to focus" is really free. On a Sunday at your evening hour (or temporarily set the hour to now) the "Your week" notification replaces "Tomorrow"; check the numbers.
+
 ## B. Needs you at the machine (about 30 minutes)
 1. Notifications show as "Firstlight". Click one: the app comes forward. Press Snooze 10 min: it returns.
 2. Menu-bar text (Settings → General): shows the next meeting; "Meeting" when titles are hidden.
