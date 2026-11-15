@@ -4,6 +4,7 @@
 
 pub mod ask;
 pub mod briefing;
+pub mod conflict;
 pub mod contain;
 pub mod dedupe;
 pub mod error;

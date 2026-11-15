@@ -160,7 +160,7 @@ test("invite people: the invitation opens in your own mail app, nothing is sent 
   await sheet.getByRole("button", { name: "Add event" }).click();
   await expect(page.getByText("Event added").first()).toBeVisible();
 
-  await page.getByRole("button", { name: /Team lunch/ }).click();
+  await page.getByRole("button", { name: /^(?!Sort out).*Team lunch/ }).click();
   const detail = page.getByRole("dialog", { name: "Team lunch" });
   await expect(detail).toContainText("Invited: sam@example.com, kim@example.org");
   await detail.getByRole("button", { name: "Send invitation…" }).click();
@@ -333,7 +333,7 @@ test("a CalDAV account is read-only until the user lets Firstlight add events to
   await sheet.getByLabel("Start time").fill("18:00");
   await sheet.getByLabel("End time").fill("19:00");
   await sheet.getByRole("button", { name: "Add event" }).click();
-  await expect(page.getByRole("button", { name: /^(?!Join|Copy).*Piano lesson/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^(?!Join|Copy|Sort out).*Piano lesson/ })).toBeVisible();
 });
 
 test("turning the account switch off again stops the offer", async ({ page }) => {
@@ -356,7 +356,7 @@ async function inviteDialog(page: import("@playwright/test").Page, url: string) 
   await sheet.getByLabel("End time").fill("19:00");
   await sheet.getByLabel("Invite people").fill("sam@example.com");
   await sheet.getByRole("button", { name: "Add event" }).click();
-  await page.getByRole("button", { name: /Team lunch/ }).click();
+  await page.getByRole("button", { name: /^(?!Sort out).*Team lunch/ }).click();
   await page.getByRole("dialog", { name: "Team lunch" }).getByRole("button", { name: "Send invitation…" }).click();
   return page.getByRole("dialog", { name: "Send invitation" });
 }

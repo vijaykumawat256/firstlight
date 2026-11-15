@@ -18,6 +18,8 @@
       ]
     },
     "allow-get-events",
+    "allow-get-conflict-help",
+    "allow-open-mail-draft",
     "allow-find-free-times",
     "allow-get-calendars",
     "allow-list-accounts",

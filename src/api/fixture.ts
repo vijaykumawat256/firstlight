@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, EventInput, FreeSlot, MeetingPrep, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, FreeSlot, MeetingPrep, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -652,6 +652,45 @@ export const fixtureBackend: Backend = {
     const keywords = q.replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((x) => x.length > 2 && !stop.has(x));
     const events = fixtureEvents().filter((e) => overlaps(e, day, to) && keywords.every((k) => `${e.title} ${e.location ?? ""}`.toLowerCase().includes(k)));
     return { enabled: true, understood: true, problem: null, answer: { kind: "events", from: iso(day), to: iso(to), keywords, minutes: 30, count: events.length, events: events.slice(0, 50), slots: [] } } satisfies AskReply;
+  },
+  async getConflictHelp(a, b, moveId) {
+    // A small stand-in for crates/logic/src/conflict.rs.
+    const all = fixtureEvents();
+    const ea = all.find((e) => e.id === a);
+    const eb = all.find((e) => e.id === b);
+    if (!ea || !eb || ea.when.kind !== "timed" || eb.when.kind !== "timed") return null;
+    const mins = (e: CalEvent) => (e.when.kind === "timed" ? (Date.parse(e.when.end) - Date.parse(e.when.start)) / 60_000 : 0);
+    const mine = (e: CalEvent) => e.id.startsWith("local-events:");
+    const score = (e: CalEvent, o: CalEvent) =>
+      (mine(e) ? 3 : 0) + (e.my_response === "needs_action" && o.my_response !== "needs_action" ? 2 : 0) + (e.status === "tentative" && o.status !== "tentative" ? 2 : 0) + (mins(e) < mins(o) ? 1 : 0);
+    const moveA = moveId ? moveId === ea.id : score(ea, eb) > score(eb, ea) || (score(ea, eb) === score(eb, ea) && Date.parse(ea.when.start) >= Date.parse(eb.when.start));
+    const [moved, kept] = moveA ? [ea, eb] : [eb, ea];
+    const reasons: ConflictHelp["reasons"] = moveId ? ["your_choice"] : [];
+    if (!moveId) {
+      if (mine(moved)) reasons.push("yours");
+      if (moved.my_response === "needs_action" && kept.my_response !== "needs_action") reasons.push("not_answered");
+      if (moved.status === "tentative" && kept.status !== "tentative") reasons.push("tentative");
+      if (mins(moved) < mins(kept)) reasons.push("shorter");
+      if (reasons.length === 0) reasons.push("later");
+    }
+    const [s1, e1, s2, e2] = [Date.parse(ea.when.start), Date.parse(ea.when.end), Date.parse(eb.when.start), Date.parse(eb.when.end)];
+    const need = Math.max(5, Math.round(mins(moved)));
+    const slots = await this.findFreeTimes(need, 14);
+    const seen = new Set<string>();
+    const options = slots
+      .filter((s) => {
+        const day = new Date(s.start).toDateString();
+        if (seen.has(day)) return false;
+        seen.add(day);
+        return true;
+      })
+      .slice(0, 3)
+      .map((s) => ({ start: s.start, end: new Date(Date.parse(s.start) + need * 60_000).toISOString() }));
+    return { moved, kept, reasons, overlap_minutes: Math.round((Math.min(e1, e2) - Math.max(s1, s2)) / 60_000), options, yours: mine(moved) } satisfies ConflictHelp;
+  },
+  async openMailDraft(to, subject, body) {
+    const w = window as unknown as { __drafts?: Array<{ to: string | null; subject: string; body: string }> };
+    (w.__drafts ??= []).push({ to, subject, body });
   },
   async getMeetingPrep(id) {
     // A small stand-in for crates/logic/src/prep.rs.

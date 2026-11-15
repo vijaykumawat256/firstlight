@@ -19,6 +19,8 @@ For every step: note **what you did, what you expected, what happened**, and a s
 
 9. **Meeting prep**: open a meeting that repeats (a weekly one). Expect a Prepare section with last time's date and what was written in it, the next time, what is right before and after, and a warning if it overlaps another meeting. With email on, an unread mail from the organiser or naming the meeting should appear (open the Inbox once first so it is fetched). Check it stays quiet (no section) for a one-off with nothing around it, and that no link or password from the notes shows.
 
+10. **Conflict help**: find two overlapping meetings in your real calendar and press Sort out. Check the suggested one is sensible and the reasons are true; the free times really are free in your calendar; for a meeting someone else organised, "Write the message" opens your mail app with the times and no mention of the other meeting; for one you created in Firstlight, "Move here" changes it (in the Calendar app or CalDAV too, if you saved it there).
+
 ## B. Needs you at the machine (about 30 minutes)
 1. Notifications show as "Firstlight". Click one: the app comes forward. Press Snooze 10 min: it returns.
 2. Menu-bar text (Settings → General): shows the next meeting; "Meeting" when titles are hidden.

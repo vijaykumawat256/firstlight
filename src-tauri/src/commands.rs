@@ -1447,6 +1447,71 @@ pub async fn find_free_times(
     ))
 }
 
+/// Which of two overlapping meetings is easier to move, why, and where it could go instead. Suggests only: nothing
+/// is changed. `move_id` lets the person choose the other one.
+#[tauri::command]
+pub async fn get_conflict_help(
+    state: State<'_, AppState>,
+    a: String,
+    b: String,
+    move_id: Option<String>,
+) -> CmdResult<Option<firstlight_core::conflict::Help>> {
+    let (now, tz) = (Utc::now(), crate::local_tz());
+    let store = lock_store(&state)?;
+    let settings = store.load_settings().briefing;
+    let events = dedupe(
+        store
+            .events_between(now - Duration::days(1), now + Duration::days(21))
+            .map_err(internal("loading events"))?,
+    );
+    let (Some(ea), Some(eb)) = (
+        events.iter().find(|e| e.id == a),
+        events.iter().find(|e| e.id == b),
+    ) else {
+        return Ok(None);
+    };
+    // Only events Firstlight created can be moved by Firstlight: ones kept here, and ones it saved into the
+    // Calendar app or a CalDAV account (the same lookup the edit form uses).
+    let mine = |e: &Event| matches!(firstlight_core::local::resolve(&store, &e.id), Ok(Some(_)));
+    Ok(firstlight_core::conflict::help(
+        ea,
+        eb,
+        &events,
+        &mine,
+        move_id.as_deref(),
+        now,
+        tz,
+        &settings,
+    ))
+}
+
+/// Opens a new message in the person's own mail app (a `mailto:` link) so they can read it, add a recipient and
+/// send it themselves. Nothing is sent by Firstlight.
+#[tauri::command]
+pub async fn open_mail_draft(
+    app: AppHandle,
+    to: Option<String>,
+    subject: String,
+    body: String,
+) -> CmdResult<()> {
+    use firstlight_core::invite;
+    use tauri_plugin_opener::OpenerExt;
+    let recipients: Vec<String> = match to.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(t) => vec![invite::parse_address(t).ok_or("That isn't a valid email address.")?],
+        None => vec![],
+    };
+    let clip = |s: &str, max: usize| {
+        s.chars()
+            .filter(|c| !c.is_control() || *c == '\n')
+            .take(max)
+            .collect::<String>()
+    };
+    let (subject, body) = (clip(&subject, 200).replace('\n', " "), clip(&body, 1500));
+    app.opener()
+        .open_url(invite::mailto(&recipients, &subject, &body), None::<&str>)
+        .map_err(|_| "Couldn't open your mail app.".to_string())
+}
+
 /// Hides the small "up next" panel.
 #[tauri::command]
 pub async fn dismiss_up_next(app: AppHandle) -> CmdResult<()> {

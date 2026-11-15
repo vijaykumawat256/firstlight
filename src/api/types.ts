@@ -269,6 +269,20 @@ export interface AppInfo {
 
 export type UpdateStatus = { state: "not_configured" } | { state: "up_to_date" } | { state: "available"; version: string } | { state: "failed" };
 
+export type ConflictReason = "yours" | "not_answered" | "tentative" | "shorter" | "later" | "your_choice";
+
+/** Mirrors `firstlight_core::conflict::Help`. */
+export interface ConflictHelp {
+  moved: CalEvent;
+  kept: CalEvent;
+  reasons: ConflictReason[];
+  overlap_minutes: number;
+  /** Free times for the one to move: one per day, nearest days first. */
+  options: Array<{ start: string; end: string }>;
+  /** Whether Firstlight can move it for you (you created it). */
+  yours: boolean;
+}
+
 /** Mirrors `firstlight_core::prep`. */
 export interface MeetingPrep {
   earlier: Array<{ id: string; title: string; when: When; notes: string | null }>;

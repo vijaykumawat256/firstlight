@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, EventInput, ExportResult, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteResult, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteResult, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -76,6 +76,10 @@ export interface Backend {
   onSettingsChanged(callback: () => void): Promise<() => void>;
   /** Today and tomorrow, worked out by the briefing engine. */
   getBriefing(): Promise<Briefing>;
+  /** Which of two overlapping meetings is easier to move, why, and where it could go. Suggests only. `moveId` picks the one to move. */
+  getConflictHelp(a: string, b: string, moveId: string | null): Promise<ConflictHelp | null>;
+  /** Opens a new message in your own mail app; Firstlight sends nothing. */
+  openMailDraft(to: string | null, subject: string, body: string): Promise<void>;
   /** What is worth knowing before a meeting, worked out locally (no AI, no network). */
   getMeetingPrep(id: string): Promise<MeetingPrep>;
   /** Answers a question about the calendar. Only the question (with today's date and time zone) is sent to the AI; the answer is built here from the stored events. */

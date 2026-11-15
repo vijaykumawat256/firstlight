@@ -1,7 +1,9 @@
 import { AlertTriangle, CalendarCheck, Clock, Link2, MapPin, Video } from "lucide-react";
 import clsx from "clsx";
+import { useState } from "react";
 import type { Briefing, BriefingItem, CalEvent, NextUp } from "@/api";
 import { Badge, Button, Card, ListGroup, SectionHeader, calendarColour } from "@/design";
+import { ConflictSheet } from "./ConflictHelp";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { eventLink, isLinkOnly, linkLabel } from "./links";
 import { formatCountdown, formatDuration, formatTime } from "./format";
@@ -67,6 +69,7 @@ export function UpNextCard({ next, now, colourOf, onJoin, onOpen }: { next: Next
 /* ------------------------------------------------------ Needs attention */
 
 export function AttentionSection({ b }: { b: Briefing }) {
+  const [sorting, setSorting] = useState<{ a: string; b: string } | null>(null);
   const title = new Map(b.remaining.map((i) => [i.event.id, i.event.title]));
   const start = new Map(b.remaining.map((i) => [i.event.id, i.start]));
   const runs = b.back_to_back_runs;
@@ -82,6 +85,9 @@ export function AttentionSection({ b }: { b: Briefing }) {
               <span className="font-medium">{title.get(c.a)}</span> overlaps <span className="font-medium">{title.get(c.b)}</span>
               <span className="text-fg-2"> · {start.get(c.b) ? formatTime(at(start.get(c.b)!)) : ""} · {formatDuration(c.overlap_minutes)}</span>
             </p>
+            <Button className="ml-auto shrink-0" variant="secondary" onClick={() => setSorting({ a: c.a, b: c.b })} aria-label={`Sort out: ${title.get(c.a)} and ${title.get(c.b)}`}>
+              Sort out
+            </Button>
           </li>
         ))}
         {runs.map((run) => (
@@ -102,6 +108,7 @@ export function AttentionSection({ b }: { b: Briefing }) {
           </li>
         ))}
       </ListGroup>
+      {sorting && <ConflictSheet a={sorting.a} b={sorting.b} onClose={() => setSorting(null)} />}
     </section>
   );
 }

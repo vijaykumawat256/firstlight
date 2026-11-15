@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-conflict-help"
+description = "Enables the get_conflict_help command without any pre-configured scope."
+commands.allow = ["get_conflict_help"]
+
+[[permission]]
+identifier = "deny-get-conflict-help"
+description = "Denies the get_conflict_help command without any pre-configured scope."
+commands.deny = ["get_conflict_help"]

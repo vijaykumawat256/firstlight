@@ -101,3 +101,65 @@ test.describe("meeting prep", () => {
     await expect(page.getByRole("region", { name: "Prepare" })).toHaveCount(0);
   });
 });
+
+// ---- conflict help -----------------------------------------------------------------------
+
+test.describe("conflict help", () => {
+  test.use({ reducedMotion: "reduce" });
+  const at = (h: number, m: number) => new Date(new Date().setHours(h, m, 0, 0));
+
+  async function start(page: import("@playwright/test").Page, flags = "") {
+    await page.clock.install({ time: at(9, 30) });
+    await page.goto(`/?${flags}`);
+    await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
+  }
+  const drafts = (page: import("@playwright/test").Page) =>
+    page.evaluate(() => (window as unknown as { __drafts?: Array<{ to: string | null; subject: string; body: string }> }).__drafts ?? []);
+
+  test("suggests the unanswered shorter meeting, says why, lists free times, and drafts a message that names no other meeting", async ({ page }) => {
+    await start(page);
+    await page.getByRole("button", { name: /^Sort out: .*1:1 with Sam/ }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Sort out an overlap" });
+    await expect(dialog.getByRole("status")).toContainText("Move 1:1 with Sam");
+    await expect(dialog.getByText("You haven't answered the invitation yet")).toBeVisible();
+    await expect(dialog.getByText("It's the shorter of the two")).toBeVisible();
+    await expect(dialog.getByRole("list", { name: "Free times" }).getByRole("listitem").first()).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /^Move here/ })).toHaveCount(0); // not yours to move
+    await dialog.getByRole("button", { name: "Write the message" }).click();
+    await expect.poll(async () => (await drafts(page)).length).toBe(1);
+    const [d] = await drafts(page);
+    expect(d!.subject).toBe("Can we move “1:1 with Sam”?");
+    expect(d!.body).not.toContain("Design review");
+    expect(d!.body).toContain("Could we move it to one of these instead?");
+    // Overrule the suggestion.
+    await dialog.getByRole("button", { name: "Move Design review instead" }).click();
+    await expect(dialog.getByRole("status")).toContainText("Move Design review");
+    await expect(dialog.getByText("You chose this one")).toBeVisible();
+  });
+
+  test("an event you created can be moved to a free time in one click", async ({ page }) => {
+    await start(page);
+    await page.getByRole("button", { name: "New event" }).click();
+    const sheet = page.getByRole("dialog", { name: "New event" });
+    await sheet.getByLabel("Title").fill("Eye test");
+    await sheet.getByLabel("Start time").fill("10:45");
+    await sheet.getByLabel("End time").fill("11:15");
+    await sheet.getByRole("button", { name: "Add event" }).click();
+    await page.getByRole("button", { name: /^Sort out: .*Eye test/ }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Sort out an overlap" });
+    await expect(dialog.getByRole("status")).toContainText("Move Eye test");
+    await expect(dialog.getByText("You created it, so you can change it yourself")).toBeVisible();
+    await dialog.getByRole("button", { name: /^Move here/ }).first().click();
+    await expect(page.getByText("Moved").first()).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Sort out an overlap" })).toHaveCount(0);
+  });
+
+  test("the sheet has no accessibility problems", async ({ page }) => {
+    const { default: AxeBuilder } = await import("@axe-core/playwright");
+    await start(page);
+    await page.getByRole("button", { name: /^Sort out: .*1:1 with Sam/ }).first().click();
+    await expect(page.getByRole("dialog", { name: "Sort out an overlap" }).getByRole("status")).toBeVisible();
+    const r = await new AxeBuilder({ page }).analyze();
+    expect(r.violations).toEqual([]);
+  });
+});
