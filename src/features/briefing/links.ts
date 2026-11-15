@@ -31,6 +31,17 @@ export function videoServiceName(url: string): string | null {
   return known ? known[1] : host.replace(/^www\./, "");
 }
 
+/** "Zoom link", "Google Meet link"…: what to call a link when its address would be noise. */
+export function linkLabel(url: string): string {
+  const name = videoServiceName(url);
+  return name ? `${name} link` : "Link";
+}
+
+/** True when the whole text is one web address. */
+export function isLinkOnly(text: string | null | undefined): boolean {
+  return !!text && /^https?:\/\/\S+$/i.test(text.trim());
+}
+
 /** What a row should say for an event's place: a link becomes "Zoom call" instead of the address. */
 export function placeLabel(location: string | null): string | null {
   if (!location) return null;

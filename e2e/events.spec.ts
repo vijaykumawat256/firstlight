@@ -32,7 +32,7 @@ test("add an event of your own: it shows in the briefing, can be edited, and del
   await edit.getByLabel("Title").fill("Pick up the car (moved)");
   await edit.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("button", { name: /^(?!Join|Copy).*Pick up the car \(moved\)/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Pick up the car,? / })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Pick up the car", exact: true })).toHaveCount(0);
 
   // Delete asks first
   await page.getByRole("button", { name: /^(?!Join|Copy).*Pick up the car \(moved\)/ }).click();

@@ -157,7 +157,7 @@ test("copy is an icon, and any link on an event can be copied; only a meeting li
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://example.com/spec");
 
   // The detail view has the same icon.
-  await today.getByRole("button", { name: /^4:00 PM Review the spec/ }).click();
+  await today.getByRole("button", { name: "Review the spec", exact: true }).click();
   const detail = page.getByRole("dialog", { name: "Review the spec" });
   await expect(detail.getByRole("button", { name: "Copy link" })).toBeVisible();
   await expect(detail.getByRole("button", { name: "Join" })).toHaveCount(0);

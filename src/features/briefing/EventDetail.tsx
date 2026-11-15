@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   Calendar as CalendarIcon,
-  Copy,
+  Link2,
   Mail,
   MapPin,
   Pencil,
@@ -16,9 +16,9 @@ import { useState } from "react";
 import { api, errorMessage, type CalEvent, type CalendarInfo, type OwnEvent } from "@/api";
 import { EventForm, OWN_CALENDAR_ID } from "@/features/events/EventForm";
 import { InviteDialog } from "@/features/events/InviteDialog";
-import { Badge, Button, IconButton, Sheet, calendarColour, useToasts } from "@/design";
-import { copyLink } from "./copyLink";
-import { eventLink } from "./links";
+import { Badge, Button, Sheet, calendarColour, useToasts } from "@/design";
+import { CopyLinkButton } from "./CopyLinkButton";
+import { eventLink, isLinkOnly } from "./links";
 import { formatDate, formatTime } from "./format";
 
 const RESPONSE: Record<CalEvent["my_response"], string | null> = {
@@ -180,27 +180,30 @@ export function EventDetail({
               )}
               {event.recurrence_master_id && <Badge>Repeats</Badge>}
             </div>
-            {eventLink(event) && (
-              <div className="flex flex-wrap items-center gap-2">
-                {event.join_url && (
-                  <Button
-                    variant="primary"
-                    leading={<Video className="size-4" aria-hidden />}
-                    onClick={() => onJoin(event.join_url!)}
-                  >
-                    Join
-                  </Button>
-                )}
-                <IconButton
-                  label="Copy link"
-                  onClick={() => void copyLink(eventLink(event)!, push)}
+            {event.join_url && (
+              <div>
+                <Button
+                  variant="primary"
+                  leading={<Video className="size-4" aria-hidden />}
+                  onClick={() => onJoin(event.join_url!)}
                 >
-                  <Copy className="size-4" />
-                </IconButton>
+                  Join
+                </Button>
               </div>
             )}
             <dl className="flex flex-col gap-3 text-body">
-              {event.location && (
+              {eventLink(event) && (
+                // The link itself, with its copy icon right after it.
+                <div className="flex gap-3">
+                  <Link2 className="mt-1 size-4 shrink-0 text-fg-2" aria-hidden />
+                  <dt className="sr-only">Link</dt>
+                  <dd className="flex min-w-0 items-center gap-1 text-fg">
+                    <span className="min-w-0 select-text truncate">{eventLink(event)}</span>
+                    <CopyLinkButton url={eventLink(event)!} />
+                  </dd>
+                </div>
+              )}
+              {event.location && !isLinkOnly(event.location) && (
                 <div className="flex gap-3">
                   <MapPin
                     className="mt-0.5 size-4 shrink-0 text-fg-2"

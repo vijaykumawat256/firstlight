@@ -1,9 +1,9 @@
-import { AlertTriangle, CalendarCheck, Clock, Copy, MapPin, Video } from "lucide-react";
+import { AlertTriangle, CalendarCheck, Clock, Link2, MapPin, Video } from "lucide-react";
 import clsx from "clsx";
 import type { Briefing, BriefingItem, CalEvent, NextUp } from "@/api";
-import { Badge, Button, Card, IconButton, ListGroup, SectionHeader, Tooltip, calendarColour, useToasts } from "@/design";
-import { copyLink } from "./copyLink";
-import { eventLink, placeLabel } from "./links";
+import { Badge, Button, Card, ListGroup, SectionHeader, calendarColour } from "@/design";
+import { CopyLinkButton } from "./CopyLinkButton";
+import { eventLink, isLinkOnly, linkLabel } from "./links";
 import { formatCountdown, formatDuration, formatTime } from "./format";
 import { timeRange } from "./summary";
 
@@ -18,12 +18,12 @@ function Bar({ colour, dim }: { colour: string; dim?: boolean }) {
   return <span aria-hidden className={clsx("w-[3px] self-stretch rounded-full", dim && "opacity-60")} style={{ background: calendarColour(colour) }} />;
 }
 
-const subtitleOf = (i: BriefingItem) => [placeLabel(i.event.location), formatDuration(minutesBetween(i.start, i.end))].filter(Boolean).join(" · ");
+// A place that is just a link is shown as the link (with its copy icon), not as a place.
+const subtitleOf = (i: BriefingItem) => [isLinkOnly(i.event.location) ? null : i.event.location, formatDuration(minutesBetween(i.start, i.end))].filter(Boolean).join(" · ");
 
 /* -------------------------------------------------------------- Up next */
 
 export function UpNextCard({ next, now, colourOf, onJoin, onOpen }: { next: NextUp; now: Date; colourOf: ColourOf; onJoin: (url: string) => void; onOpen: Open }) {
-  const push = useToasts((t) => t.push);
   const label = next.in_progress
     ? `Happening now · ends ${formatCountdown(at(next.end).getTime() - now.getTime())}`
     : `Up next · ${formatCountdown(at(next.start).getTime() - now.getTime())}`;
@@ -37,24 +37,25 @@ export function UpNextCard({ next, now, colourOf, onJoin, onOpen }: { next: Next
             {next.event.title}
           </button>
           <p className="mt-0.5 text-body text-fg-2 tabular-nums">{timeRange(next.start, next.end)}</p>
-          {next.event.location && (
+          {next.event.location && !isLinkOnly(next.event.location) && (
             <p className="mt-1 flex items-center gap-1 text-body text-fg-2">
               <MapPin className="size-3.5 shrink-0" aria-hidden />
               <span className="truncate">{next.event.location}</span>
             </p>
           )}
-          {(next.event.join_url || eventLink(next.event)) && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {next.event.join_url && (
-                <Button variant="primary" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(next.event.join_url!)}>
-                  Join
-                </Button>
-              )}
-              <Tooltip content="Copy link">
-                <IconButton label="Copy link" onClick={() => void copyLink(eventLink(next.event)!, push)}>
-                  <Copy className="size-4" />
-                </IconButton>
-              </Tooltip>
+          {eventLink(next.event) && (
+            // The copy icon follows the link it copies.
+            <p className="mt-1 flex items-center gap-1 text-body text-fg-2">
+              <Link2 className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{linkLabel(eventLink(next.event)!)}</span>
+              <CopyLinkButton url={eventLink(next.event)!} />
+            </p>
+          )}
+          {next.event.join_url && (
+            <div className="mt-3">
+              <Button variant="primary" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(next.event.join_url!)}>
+                Join
+              </Button>
             </div>
           )}
         </div>
@@ -108,40 +109,45 @@ export function AttentionSection({ b }: { b: Briefing }) {
 /* ------------------------------------------------------------- Timeline */
 
 export function TimelineRow({ item, colourOf, dim, conflicted, onOpen, onJoin }: { item: BriefingItem; colourOf: ColourOf; dim?: boolean; conflicted?: boolean; onOpen: Open; onJoin?: (url: string) => void }) {
-  const push = useToasts((t) => t.push);
   const link = eventLink(item.event);
   const joinUrl = item.event.join_url;
   // Past events are quieter through colour, not opacity: fading text would drop it below readable contrast.
+  const sub = subtitleOf(item);
+  // The whole row opens the event: the title is the real button and stretches over the row, while the copy
+  // icon and Join sit above it. (A button cannot nest inside a button, so the row itself is not one.)
   return (
-    <li className="flex items-stretch">
-      <button
-        type="button"
-        onClick={() => onOpen(item.event)}
-        className="flex min-h-12 min-w-0 flex-1 items-stretch gap-3 px-4 py-2 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong"
-      >
+    <li className="relative flex items-stretch transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong">
+      <div className="flex min-h-12 min-w-0 flex-1 items-stretch gap-3 px-4 py-2">
         <span className={clsx("w-[68px] shrink-0 whitespace-nowrap pt-0.5 text-body font-medium tabular-nums", dim ? "text-fg-3" : "text-fg-2")}>{formatTime(at(item.start))}</span>
         <Bar colour={colourOf(item.event.calendar_id)} dim={dim} />
         <div className="min-w-0 flex-1">
-          <p className={clsx("truncate text-headline font-medium", dim ? "text-fg-2" : "text-fg")}>{item.event.title}</p>
-          <p className={clsx("truncate text-footnote", dim ? "text-fg-3" : "text-fg-2")}>{subtitleOf(item)}</p>
+          <button
+            type="button"
+            onClick={() => onOpen(item.event)}
+            className={clsx("block max-w-full truncate text-left text-headline font-medium after:absolute after:inset-0 after:content-['']", dim ? "text-fg-2" : "text-fg")}
+          >
+            {item.event.title}
+          </button>
+          <p className={clsx("truncate text-footnote", dim ? "text-fg-3" : "text-fg-2")}>{sub}</p>
+          {link && !dim && (
+            // The link on its own line, with the copy icon right after it.
+            <p className="flex min-w-0 items-center gap-1 text-footnote text-fg-2">
+              <Link2 className="size-3 shrink-0" aria-hidden />
+              <span className="truncate">{linkLabel(link)}</span>
+              <CopyLinkButton url={link} label={`Copy link for ${item.event.title}`} className="relative z-10 -my-1" />
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {conflicted && <AlertTriangle className="size-3.5 text-warning" aria-label="Conflict" />}
           {item.event.status === "tentative" && <Badge tone="neutral">Tentative</Badge>}
         </div>
-      </button>
-      {link && !dim && (
-        // Beside the row, not inside it: a button cannot sit inside a button. Join only for a recognised
-        // meeting link; any link can be copied.
-        <div className="flex shrink-0 items-center gap-1 pr-3">
-          {joinUrl && onJoin && (
-            <Button size="sm" variant="secondary" aria-label={`Join ${item.event.title}`} leading={<Video className="size-3.5" aria-hidden />} onClick={() => onJoin(joinUrl)}>
-              Join
-            </Button>
-          )}
-          <IconButton label={`Copy link for ${item.event.title}`} onClick={() => void copyLink(link, push)}>
-            <Copy className="size-4" />
-          </IconButton>
+      </div>
+      {joinUrl && onJoin && !dim && (
+        <div className="relative z-10 flex shrink-0 items-center pr-3">
+          <Button size="sm" variant="secondary" aria-label={`Join ${item.event.title}`} leading={<Video className="size-3.5" aria-hidden />} onClick={() => onJoin(joinUrl)}>
+            Join
+          </Button>
         </div>
       )}
     </li>

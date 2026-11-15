@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventLink, firstLink, placeLabel, videoServiceName } from "./links";
+import { eventLink, firstLink, isLinkOnly, linkLabel, placeLabel, videoServiceName } from "./links";
 
 describe("videoServiceName", () => {
   it("names the common services, including company sub-domains", () => {
@@ -45,5 +45,19 @@ describe("eventLink", () => {
     expect(eventLink({ ...base, location: "https://a.test/room", description: "https://b.test" })).toBe("https://a.test/room");
     expect(eventLink({ ...base, description: "Agenda: https://b.test/agenda" })).toBe("https://b.test/agenda");
     expect(eventLink(base)).toBeNull();
+  });
+});
+
+describe("linkLabel and isLinkOnly", () => {
+  it("names a link, and tells a bare address from a sentence that contains one", () => {
+    expect(linkLabel("https://us02web.zoom.us/j/123")).toBe("Zoom link");
+    expect(linkLabel("https://meet.google.com/abc-defg-hij")).toBe("Google Meet link");
+    expect(linkLabel("https://example.org/spec")).toBe("example.org link");
+    expect(linkLabel("not a link")).toBe("Link");
+    expect(isLinkOnly("https://zoom.us/j/1")).toBe(true);
+    expect(isLinkOnly("  http://a.test/x  ")).toBe(true);
+    expect(isLinkOnly("Room 4B")).toBe(false);
+    expect(isLinkOnly("Visit https://example.com today")).toBe(false);
+    expect(isLinkOnly(null)).toBe(false);
   });
 });
