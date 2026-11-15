@@ -1,8 +1,9 @@
 import { AlertTriangle, CalendarCheck, Clock, Copy, MapPin, Video } from "lucide-react";
 import clsx from "clsx";
 import type { Briefing, BriefingItem, CalEvent, NextUp } from "@/api";
-import { Badge, Button, Card, ListGroup, SectionHeader, calendarColour, useToasts } from "@/design";
+import { Badge, Button, Card, IconButton, ListGroup, SectionHeader, calendarColour, useToasts } from "@/design";
 import { copyLink } from "./copyLink";
+import { placeLabel } from "./links";
 import { formatCountdown, formatDuration, formatTime } from "./format";
 import { timeRange } from "./summary";
 
@@ -17,7 +18,7 @@ function Bar({ colour, dim }: { colour: string; dim?: boolean }) {
   return <span aria-hidden className={clsx("w-[3px] self-stretch rounded-full", dim && "opacity-60")} style={{ background: calendarColour(colour) }} />;
 }
 
-const subtitleOf = (i: BriefingItem) => [i.event.location, formatDuration(minutesBetween(i.start, i.end))].filter(Boolean).join(" · ");
+const subtitleOf = (i: BriefingItem) => [placeLabel(i.event.location), formatDuration(minutesBetween(i.start, i.end))].filter(Boolean).join(" · ");
 
 /* -------------------------------------------------------------- Up next */
 
@@ -102,14 +103,16 @@ export function AttentionSection({ b }: { b: Briefing }) {
 
 /* ------------------------------------------------------------- Timeline */
 
-function TimelineRow({ item, colourOf, dim, conflicted, onOpen }: { item: BriefingItem; colourOf: ColourOf; dim?: boolean; conflicted?: boolean; onOpen: Open }) {
+function TimelineRow({ item, colourOf, dim, conflicted, onOpen, onJoin }: { item: BriefingItem; colourOf: ColourOf; dim?: boolean; conflicted?: boolean; onOpen: Open; onJoin?: (url: string) => void }) {
+  const push = useToasts((t) => t.push);
+  const link = item.event.join_url;
   // Past events are quieter through colour, not opacity: fading text would drop it below readable contrast.
   return (
-    <li>
+    <li className="flex items-stretch">
       <button
         type="button"
         onClick={() => onOpen(item.event)}
-        className="flex min-h-12 w-full items-stretch gap-3 px-4 py-2 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong"
+        className="flex min-h-12 min-w-0 flex-1 items-stretch gap-3 px-4 py-2 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong"
       >
         <span className={clsx("w-[68px] shrink-0 whitespace-nowrap pt-0.5 text-body font-medium tabular-nums", dim ? "text-fg-3" : "text-fg-2")}>{formatTime(at(item.start))}</span>
         <Bar colour={colourOf(item.event.calendar_id)} dim={dim} />
@@ -122,6 +125,17 @@ function TimelineRow({ item, colourOf, dim, conflicted, onOpen }: { item: Briefi
           {item.event.status === "tentative" && <Badge tone="neutral">Tentative</Badge>}
         </div>
       </button>
+      {link && onJoin && !dim && (
+        // Beside the row, not inside it: a button cannot sit inside a button.
+        <div className="flex shrink-0 items-center gap-1 pr-3">
+          <Button size="sm" variant="secondary" aria-label={`Join ${item.event.title}`} leading={<Video className="size-3.5" aria-hidden />} onClick={() => onJoin(link)}>
+            Join
+          </Button>
+          <IconButton label={`Copy meeting link for ${item.event.title}`} onClick={() => void copyLink(link, push)}>
+            <Copy className="size-4" />
+          </IconButton>
+        </div>
+      )}
     </li>
   );
 }
@@ -136,7 +150,7 @@ function NowMarker({ now }: { now: Date }) {
   );
 }
 
-export function TodaySection({ b, now, colourOf, onOpen, showFreeTime = true }: { b: Briefing; now: Date; colourOf: ColourOf; onOpen: Open; showFreeTime?: boolean }) {
+export function TodaySection({ b, now, colourOf, onOpen, onJoin, showFreeTime = true }: { b: Briefing; now: Date; colourOf: ColourOf; onOpen: Open; onJoin?: (url: string) => void; showFreeTime?: boolean }) {
   const conflicted = new Set(b.conflicts.flatMap((c) => [c.a, c.b]));
   const hasTimed = b.past.length + b.remaining.length > 0;
   if (!hasTimed && b.all_day_today.length === 0) return null;
@@ -151,7 +165,7 @@ export function TodaySection({ b, now, colourOf, onOpen, showFreeTime = true }: 
           ))}
           <NowMarker now={now} />
           {b.remaining.map((i) => (
-            <TimelineRow key={i.event.id} item={i} colourOf={colourOf} conflicted={conflicted.has(i.event.id)} onOpen={onOpen} />
+            <TimelineRow key={i.event.id} item={i} colourOf={colourOf} conflicted={conflicted.has(i.event.id)} onOpen={onOpen} onJoin={onJoin} />
           ))}
         </ListGroup>
       )}

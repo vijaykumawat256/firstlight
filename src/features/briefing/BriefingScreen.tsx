@@ -130,7 +130,7 @@ export function BriefingScreen() {
           <div className="flex flex-col gap-6">
             {b.next ? <UpNextCard next={b.next} now={now} colourOf={colourOf} onJoin={join} onOpen={setDetail} /> : <ClearDay />}
             {sections.attention && <AttentionSection b={b} />}
-            <TodaySection b={b} now={now} colourOf={colourOf} onOpen={setDetail} showFreeTime={sections.free_time} />
+            <TodaySection b={b} now={now} colourOf={colourOf} onOpen={setDetail} onJoin={join} showFreeTime={sections.free_time} />
             {sections.tomorrow && <TomorrowSection b={b} colourOf={colourOf} onOpen={setDetail} />}
             {settings?.email.enabled && <InboxSection />}
           </div>

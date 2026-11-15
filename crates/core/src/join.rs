@@ -13,6 +13,23 @@ const KNOWN_HOSTS: &[&str] = &[
     "whereby.com",
     "gotomeeting.com",
     "meet.jit.si",
+    "zoomgov.com",
+    "teams.microsoft.us",
+    "bluejeans.com",
+    "chime.aws",
+    "join.skype.com",
+    "meet.goto.com",
+    "gotomeet.me",
+    "meeting.zoho.com",
+    "meeting.zoho.eu",
+    "meeting.zoho.in",
+    "meetings.ringcentral.com",
+    "8x8.vc",
+    "lifesize.com",
+    "join.me",
+    "livestorm.co",
+    "around.co",
+    "gather.town",
 ];
 
 fn url_re() -> &'static Regex {
@@ -75,6 +92,14 @@ mod tests {
             "https://meet.google.com/abc-defg-hij",
             "https://teams.microsoft.com/l/meetup-join/19%3ameeting_x",
             "https://acme.webex.com/meet/jo",
+            "https://acme.zoomgov.com/j/1",
+            "https://acme.bluejeans.com/123",
+            "https://chime.aws/1234567890",
+            "https://join.skype.com/AbCdEf",
+            "https://meet.goto.com/123456789",
+            "https://meeting.zoho.com/join?key=1",
+            "https://8x8.vc/acme/room",
+            "https://join.me/acme",
         ] {
             assert_eq!(
                 find_in_text(&format!("Join here: {u}.")),

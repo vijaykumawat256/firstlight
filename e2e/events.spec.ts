@@ -20,7 +20,7 @@ test("add an event of your own: it shows in the briefing, can be edited, and del
   await sheet.getByRole("button", { name: "Add event" }).click();
 
   await expect(page.getByText("Event added").first()).toBeVisible();
-  const row = page.getByRole("button", { name: /Pick up the car/ });
+  const row = page.getByRole("button", { name: /^(?!Join|Copy).*Pick up the car/ });
   await expect(row).toBeVisible();
 
   // Edit
@@ -31,11 +31,11 @@ test("add an event of your own: it shows in the briefing, can be edited, and del
   const edit = page.getByRole("dialog", { name: "Edit event" });
   await edit.getByLabel("Title").fill("Pick up the car (moved)");
   await edit.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("button", { name: /Pick up the car \(moved\)/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^(?!Join|Copy).*Pick up the car \(moved\)/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Pick up the car,? / })).toHaveCount(0);
 
   // Delete asks first
-  await page.getByRole("button", { name: /Pick up the car \(moved\)/ }).click();
+  await page.getByRole("button", { name: /^(?!Join|Copy).*Pick up the car \(moved\)/ }).click();
   const d2 = page.getByRole("dialog", { name: "Pick up the car (moved)" });
   await d2.getByRole("button", { name: "Delete" }).click();
   await expect(d2.getByRole("button", { name: "Yes, delete it" })).toBeVisible();
@@ -43,7 +43,7 @@ test("add an event of your own: it shows in the briefing, can be edited, and del
   await expect(d2.getByRole("button", { name: "Delete" })).toBeVisible();
   await d2.getByRole("button", { name: "Delete" }).click();
   await d2.getByRole("button", { name: "Yes, delete it" }).click();
-  await expect(page.getByRole("button", { name: /Pick up the car/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(?!Join|Copy).*Pick up the car/ })).toHaveCount(0);
 });
 
 test("bad input is explained, not saved", async ({ page }) => {
