@@ -29,6 +29,8 @@ export const tauriBackend: Backend = {
   enableAi: (provider: AiProvider, key, confirm) => invoke<AppSettings>("enable_ai", { provider, key, confirm }),
   disableAi: () => invoke<AppSettings>("disable_ai"),
   forgetAiKey: () => invoke<AppSettings>("forget_ai_key"),
+  aiKeys: () => invoke<AiProvider[]>("ai_keys"),
+  signInOpenrouter: () => invoke("sign_in_openrouter"),
   getAiSummary: () => invoke<string | null>("get_ai_summary").catch(() => null),
   getAppInfo: () => invoke<AppInfo>("get_app_info"),
   checkForUpdate: () => invoke<UpdateStatus>("check_for_update"),

@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage, type AiProvider, type AppSettings, type ImapPreset } from "@/api";
-import { Button, Dialog, Segmented, Switch, TextField, useToasts } from "@/design";
+import { Button, Dialog, Segmented, Select, Switch, TextField, useToasts } from "@/design";
+import { AI_PROVIDERS, aiProvider, hostOf } from "./aiProviders";
 import { Group, NumberSelect, SettingRow } from "./controls";
 import { useSettings } from "./useSettings";
 
@@ -237,7 +238,7 @@ export function AiGroup() {
 
   if (!s) return null;
   const ai = s.ai;
-  const label = ai.provider === "anthropic" ? "Anthropic (Claude)" : "A model on this computer";
+  const label = aiProvider(ai.provider).label;
 
   return (
     <Group title="AI summaries" footer="Off by default. When on, a short summary of your day is written by an AI service you choose, using only the information you are shown before you agree. If it ever fails, the normal summary is used.">
@@ -261,8 +262,8 @@ export function AiGroup() {
               <Switch label="Include important email in AI summaries" checked={ai.include_email} onCheckedChange={(v) => update((d) => void (d.ai.include_email = v))} />
             </SettingRow>
           )}
-          {ai.provider === "anthropic" && status.data?.has_key && (
-            <SettingRow title="API key" description="Saved in the system keychain.">
+          {status.data?.has_key && (
+            <SettingRow title="API key" description={`Saved in the system keychain, for ${label}.`}>
               <Button size="sm" variant="danger" disabled={forget.isPending} onClick={() => forget.mutate()}>
                 Remove key and turn off
               </Button>
@@ -271,7 +272,7 @@ export function AiGroup() {
         </>
       )}
 
-      <ConsentDialog open={consent} onOpenChange={setConsent} onDone={(v) => (put(v), refresh())} hasKey={status.data?.has_key ?? false} />
+      <ConsentDialog open={consent} onOpenChange={setConsent} onDone={(v) => (put(v), refresh())} />
       <PreviewDialog open={preview} onOpenChange={setPreview} />
     </Group>
   );
@@ -294,90 +295,159 @@ function PreviewDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   );
 }
 
-function ConsentDialog({ open, onOpenChange, onDone, hasKey }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: (s: AppSettings) => void; hasKey: boolean }) {
+function ConsentDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: (s: AppSettings) => void }) {
+  // Mounted only while open, so each opening starts from what is saved.
+  return open ? <ConsentBody onOpenChange={onOpenChange} onDone={onDone} /> : null;
+}
+
+function ConsentBody({ onOpenChange, onDone }: { onOpenChange: (o: boolean) => void; onDone: (s: AppSettings) => void }) {
   const qc = useQueryClient();
+  const push = useToasts((t) => t.push);
   const { settings: s, update } = useSettings();
-  const [provider, setProvider] = useState<AiProvider>("anthropic");
+  const [provider, setProvider] = useState<AiProvider>(() => qc.getQueryData<AppSettings>(["settings"])?.ai.provider ?? "anthropic");
   const [key, setKey] = useState("");
   // Typed values stay drafts until "Turn on": saving half-typed addresses would have them "corrected" mid-keystroke.
   const [endpoint, setEndpoint] = useState<string | null>(null);
+  const [customEndpoint, setCustomEndpoint] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
+  const saved = useQuery({ queryKey: ["ai-keys"], queryFn: () => api.aiKeys(), staleTime: 0 });
+  const info = aiProvider(provider);
+  const hasKey = (saved.data ?? []).includes(provider);
+
   const enable = useMutation({
     mutationFn: async () => {
       const current = qc.getQueryData<AppSettings>(["settings"]);
       if (current) {
         const next = structuredClone(current);
+        next.ai.provider = provider;
         if (endpoint !== null) next.ai.endpoint = endpoint;
+        if (customEndpoint !== null) next.ai.custom_endpoint = customEndpoint.trim();
+        // Each service has its own model names: start from this one's default unless the user typed one.
         if (model !== null) next.ai.model = model;
+        else if (current.ai.provider !== provider) next.ai.model = info.defaultModel;
         // Saved first so the test request uses what the user typed.
         qc.setQueryData(["settings"], await api.setSettings(next));
       }
-      return api.enableAi(provider, provider === "anthropic" ? key.trim() || null : null, true);
+      return api.enableAi(provider, info.keyLabel ? key.trim() || null : null, true);
     },
-    onSuccess: (saved) => {
-      onDone(saved);
-      setKey("");
-      setEndpoint(null);
-      setModel(null);
+    onSuccess: (done) => {
+      onDone(done);
+      void qc.invalidateQueries({ queryKey: ["ai-keys"] });
       onOpenChange(false);
+    },
+  });
+  const orSignIn = useMutation({
+    mutationFn: () => api.signInOpenrouter(),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ai-keys"] });
+      push({ title: "Signed in to OpenRouter", description: "Now check what is sent and turn AI on." });
     },
   });
 
   if (!s) return null;
   const shownEndpoint = endpoint ?? s.ai.endpoint;
-  const where = provider === "anthropic" ? "Anthropic's servers (api.anthropic.com)" : `the model at ${shownEndpoint}, which runs on this computer`;
-  const needsKey = provider === "anthropic" && !hasKey && key.trim().length < 10;
+  const shownCustom = customEndpoint ?? s.ai.custom_endpoint;
+  const shownModel = model ?? (s.ai.provider === provider ? s.ai.model : info.defaultModel);
+  const destinationHost = provider === "custom" ? hostOf(shownCustom) : info.host;
+  const where =
+    provider === "local"
+      ? `the model at ${shownEndpoint}, which runs on this computer`
+      : destinationHost
+        ? `${info.company}'s servers (${destinationHost})`
+        : "the service whose address you enter below";
+  const customOk = provider !== "custom" || !!hostOf(shownCustom);
+  const needsKey = !!info.keyLabel && !hasKey && key.trim().length < 10;
+  const close = (o: boolean) => {
+    if (!o && orSignIn.isPending) void api.cancelOauth();
+    onOpenChange(o);
+  };
 
   return (
     <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        onOpenChange(o);
-        if (!o) enable.reset();
-      }}
+      open
+      onOpenChange={close}
       title="Turn on AI summaries?"
       description="Read exactly what will be shared, then decide."
       footer={
         <>
-          <Button onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button variant="primary" disabled={enable.isPending || needsKey} onClick={() => enable.mutate()}>
+          <Button onClick={() => close(false)}>Cancel</Button>
+          <Button variant="primary" disabled={enable.isPending || orSignIn.isPending || needsKey || !customOk} onClick={() => enable.mutate()}>
             {enable.isPending ? "Checking…" : "Turn on"}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4 pb-2">
-        <Segmented
-          label="Provider"
-          value={provider}
-          onValueChange={(v) => setProvider(v as AiProvider)}
-          options={[
-            { value: "anthropic", label: "Claude (your key)" },
-            { value: "local", label: "On this computer" },
-          ]}
-        />
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-headline text-fg">Provider</span>
+          <Select
+            label="Provider"
+            value={provider}
+            onValueChange={(v) => {
+              setProvider(v as AiProvider);
+              setKey("");
+              setModel(null);
+              enable.reset();
+              orSignIn.reset();
+            }}
+            options={AI_PROVIDERS.map((p) => ({ value: p.id, label: p.label }))}
+          />
+        </div>
 
         {/* Where the data goes comes first, so it is the first thing read before agreeing. */}
         <p className="text-body text-fg">
           Your calendar summary will be sent to <span className="font-semibold">{where}</span> about every five minutes while the briefing is open. Meeting links, descriptions, attendees and message text are never included.
         </p>
 
-        {enable.isError && (
+        {(enable.isError || orSignIn.isError) && (
           <p role="alert" className="rounded-card bg-danger-soft px-3 py-2 text-body text-danger">
-            {errorMessage(enable.error)}
+            {errorMessage(enable.error ?? orSignIn.error)}
           </p>
         )}
 
-        {provider === "anthropic" ? (
+        {provider === "custom" && (
           <TextField
-            label="Anthropic API key"
-            type="password"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            placeholder={hasKey ? "A key is already saved (leave blank to use it)" : "sk-ant-…"}
-            hint="Stored in the system keychain. It is sent only to Anthropic, and never shown again."
+            label="Service address"
+            value={shownCustom}
+            onChange={(e) => setCustomEndpoint(e.target.value)}
+            placeholder="https://api.example.com/v1"
+            hint="Any service that speaks the OpenAI chat protocol. It must start with https://. Your key and the summary go to this address only."
+            spellCheck={false}
             autoComplete="off"
           />
+        )}
+
+        {info.keyLabel ? (
+          <div className="flex flex-col gap-2">
+            <TextField
+              label={info.keyLabel}
+              type="password"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder={hasKey ? "A key is already saved (leave blank to use it)" : info.keyPlaceholder}
+              hint={`Stored in the system keychain. It is sent only to ${destinationHost ?? "that service"}, and never shown again.`}
+              autoComplete="off"
+            />
+            {info.keyUrl && (
+              <Button size="sm" variant="plain" className="self-start" onClick={() => void api.openUrl(info.keyUrl!)}>
+                Get a key
+              </Button>
+            )}
+            {provider === "openrouter" && (
+              <div className="flex flex-col gap-1.5 rounded-card bg-fill p-3">
+                <p className="text-footnote text-fg-2">Or skip the key: sign in to OpenRouter in your browser and allow Firstlight. It receives a key for your own account and nothing else.</p>
+                {orSignIn.isPending ? (
+                  <Button size="sm" variant="secondary" className="self-start" onClick={() => void api.cancelOauth()}>
+                    Waiting for your browser… Cancel
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="secondary" className="self-start" onClick={() => orSignIn.mutate()}>
+                    Sign in with OpenRouter
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         ) : (
           <TextField
             label="Model address"
@@ -391,10 +461,10 @@ function ConsentDialog({ open, onOpenChange, onDone, hasKey }: { open: boolean; 
 
         <div>
           <p className="mb-1.5 text-footnote font-medium text-fg-2">Exactly what will be sent</p>
-          <PreviewBox enabled={open} />
+          <PreviewBox enabled />
         </div>
 
-        <TextField label="Model" value={model ?? s.ai.model} onChange={(e) => setModel(e.target.value)} spellCheck={false} autoComplete="off" />
+        <TextField label="Model" value={shownModel} onChange={(e) => setModel(e.target.value)} hint={provider === "local" ? undefined : "Model names change over time. If this one is no longer offered, the check below says so."} spellCheck={false} autoComplete="off" />
 
         {s.email.enabled && (
           <div className="flex items-center justify-between gap-3">

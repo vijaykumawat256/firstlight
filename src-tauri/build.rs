@@ -67,6 +67,8 @@ fn main() {
             "get_mail_digest",
             "enable_apple_mail",
             "enable_account_mail",
+            "ai_keys",
+            "sign_in_openrouter",
             "get_own_event",
             "export_own_events",
             "skip_event_occurrence",

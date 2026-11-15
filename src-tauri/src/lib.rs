@@ -436,6 +436,8 @@ pub fn run() {
             mail_ai::get_mail_digest,
             mail_ai::enable_apple_mail,
             mail_ai::enable_account_mail,
+            mail_ai::ai_keys,
+            mail_ai::sign_in_openrouter,
             commands::get_own_event,
             commands::export_own_events,
             commands::skip_event_occurrence,

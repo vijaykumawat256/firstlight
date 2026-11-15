@@ -968,6 +968,7 @@ fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdR
     // Consent to send data to an AI service is recorded only by the explicit enable action, never by a save.
     let stored = lock_store(state)?.load_settings();
     s.ai.consented = stored.ai.consented;
+    s.ai.consented_host = stored.ai.consented_host.clone();
     // Mailboxes change only through add/remove, which keep their keychain passwords in step.
     s.email.imap = stored.email.imap;
     s.sanitize();

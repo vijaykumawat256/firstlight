@@ -36,6 +36,14 @@ Today each sync re-reads the whole window (30 days back, 90 forward) every 10 mi
 
 Plan once Google and Microsoft sign-in work for you: build it behind a switch, run **both** methods side by side for a few days with a built-in comparison that reports any difference, and make a full re-read the automatic fallback on any doubt (and daily). Until then the current approach stands.
 
+## 2b. AI: sign in with an account instead of an API key
+Built: API keys for Anthropic, OpenAI, xAI (Grok), Google Gemini, Mistral, Groq, OpenRouter and any OpenAI-compatible https address; and a real browser sign-in for **OpenRouter** (it issues a key for the user's own account and gives access to models from many companies).
+Not built, and why (checked 2026-11-14, from press coverage; the official docs were not read):
+- **OpenAI "Sign in with ChatGPT" (plan usage).** It exists (scope `chatgpt.tokens.use.direct`, Plus and Pro only, usage drawn from the user's plan with weekly caps). But it launched with 16 partners, the official docs describe it for open-source and local apps with an interest form for hosted products, it calls the Responses API with strict rules (`store: false`, streaming required, no system messages, no `max_output_tokens`), and I could not confirm how a desktop app registers a client or redirects. Building on guesses would break. To do: read OpenAI's official page, submit the interest form (needs you), then add a provider that uses it.
+- **xAI/Grok sign-in:** only community tools; no official sign-in for third-party apps found, so API key only.
+- **Google Gemini sign-in:** not researched; the API key path works today.
+- **Anthropic:** account sign-in for third-party apps is not offered; API key only.
+
 ## 3. Decided: attaching files is not being built
 You said no files, so it stays out.
 

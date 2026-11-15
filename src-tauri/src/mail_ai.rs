@@ -4,10 +4,11 @@
 //! AI sends only the text that `ai_preview` shows, to the provider the user agreed to.
 
 use crate::AppState;
-use crate::commands::{CmdResult, browser_sign_in, config_for, internal, lock_store};
+use crate::commands::{CmdResult, browser_sign_in, config_for, internal, lock_store, oauth_error};
 use chrono::{Duration, Utc};
 use daybrief_core::ai::{
-    AnthropicSummariser, LocalSummariser, Prompt, Summariser, build_prompt, summarise_if_enabled,
+    AnthropicSummariser, LocalSummariser, OpenAiStyleSummariser, Prompt, Summariser, build_prompt,
+    summarise_if_enabled,
 };
 use daybrief_core::briefing::{Briefing, build, day_bounds};
 use daybrief_core::dedupe::dedupe;
@@ -17,7 +18,7 @@ use daybrief_core::mail::imap::{self, ImapMailbox, ImapPreset, ImapSource, TlsCo
 use daybrief_core::mail::microsoft::MicrosoftMailSource;
 use daybrief_core::mail::{MailDigest, OpenTarget, SourceBatch, build_digest, gmail, microsoft};
 use daybrief_core::model::{Account, ProviderKind};
-use daybrief_core::oauth::TokenManager;
+use daybrief_core::oauth::{Pkce, TokenManager, loopback::Loopback, random_state};
 use daybrief_core::secrets::Redacted;
 use daybrief_core::settings::{AiProvider, AppSettings};
 use daybrief_core::{Error, oauth};
@@ -34,7 +35,6 @@ const OSASCRIPT_TIMEOUT: StdDuration = StdDuration::from_secs(40);
 /// The first permission prompt can sit on screen a while.
 const PROBE_TIMEOUT: StdDuration = StdDuration::from_secs(90);
 const MAX_ICS_BYTES: u64 = 256 * 1024;
-const ANTHROPIC_KEY: &str = "ai-key-anthropic";
 
 // ---- results the UI receives ----------------------------------------------------------
 
@@ -574,14 +574,29 @@ pub struct AiStatus {
     has_key: bool,
 }
 
-fn has_key(state: &AppState) -> bool {
+/// The saved API key of a provider, if it has one and one is saved.
+fn saved_key(state: &AppState, provider: AiProvider) -> Option<String> {
+    let name = provider.key_name()?;
     state
         .deps
         .secrets
-        .get(ANTHROPIC_KEY)
+        .get(name)
         .ok()
         .flatten()
-        .is_some_and(|k| !k.is_empty())
+        .filter(|k| !k.is_empty())
+}
+
+fn has_key(state: &AppState, provider: AiProvider) -> bool {
+    saved_key(state, provider).is_some()
+}
+
+/// Which providers have a key saved, so the page can say "a key is already saved" for the one being chosen.
+#[tauri::command]
+pub async fn ai_keys(state: State<'_, AppState>) -> CmdResult<Vec<AiProvider>> {
+    Ok(AiProvider::ALL
+        .into_iter()
+        .filter(|p| has_key(&state, *p))
+        .collect())
 }
 
 #[tauri::command]
@@ -591,7 +606,7 @@ pub async fn ai_status(state: State<'_, AppState>) -> CmdResult<AiStatus> {
         enabled: ai.enabled,
         consented: ai.consented == Some(ai.provider),
         provider: ai.provider,
-        has_key: has_key(&state),
+        has_key: has_key(&state, ai.provider),
     })
 }
 
@@ -599,13 +614,7 @@ fn make_summariser(state: &AppState, settings: &AppSettings) -> Option<Box<dyn S
     let ai = &settings.ai;
     match ai.provider {
         AiProvider::Anthropic => {
-            let key = state
-                .deps
-                .secrets
-                .get(ANTHROPIC_KEY)
-                .ok()
-                .flatten()
-                .filter(|k| !k.is_empty())?;
+            let key = saved_key(state, AiProvider::Anthropic)?;
             Some(Box::new(AnthropicSummariser::new(
                 state.deps.ai_http.clone(),
                 Redacted::new(key),
@@ -617,6 +626,20 @@ fn make_summariser(state: &AppState, settings: &AppSettings) -> Option<Box<dyn S
             &ai.endpoint,
             &ai.model,
         ))),
+        // Every other service with a key speaks the same protocol; only the address and key differ.
+        p => {
+            let key = saved_key(state, p)?;
+            let base = match p.base_url() {
+                Some(fixed) => fixed.to_string(),
+                None => daybrief_core::settings::valid_custom_endpoint(&ai.custom_endpoint)?,
+            };
+            Some(Box::new(OpenAiStyleSummariser::new(
+                state.deps.ai_http.clone(),
+                &base,
+                Redacted::new(key),
+                &ai.model,
+            )))
+        }
     }
 }
 
@@ -685,12 +708,8 @@ pub async fn enable_ai(
     if !confirm {
         return Err("Please confirm what will be shared first.".into());
     }
-    let provider = match provider.as_str() {
-        "anthropic" => AiProvider::Anthropic,
-        "local" => AiProvider::Local,
-        _ => return Err("unknown provider".into()),
-    };
-    if provider == AiProvider::Anthropic {
+    let provider = AiProvider::parse(&provider).ok_or("unknown provider")?;
+    if let Some(name) = provider.key_name() {
         if let Some(k) = key.as_deref().map(str::trim).filter(|k| !k.is_empty()) {
             if !valid_key(k) {
                 return Err("That doesn't look like an API key.".into());
@@ -698,15 +717,22 @@ pub async fn enable_ai(
             state
                 .deps
                 .secrets
-                .set(ANTHROPIC_KEY, k)
+                .set(name, k)
                 .map_err(internal("saving the key"))?;
-        } else if !has_key(&state) {
+        } else if !has_key(&state, provider) {
             return Err("Enter your API key.".into());
         }
     }
     let mut settings = lock_store(&state)?.load_settings();
     settings.ai.provider = provider;
     settings.sanitize(); // a bad model or endpoint becomes the default before we use it
+    if provider == AiProvider::Custom && settings.ai.custom_endpoint.is_empty() {
+        return Err("Enter the service's address, starting with https://".into());
+    }
+    // The host the user is agreeing to send data to (only meaningful for a custom service).
+    let agreed_host = (provider == AiProvider::Custom)
+        .then(|| daybrief_core::settings::endpoint_host(&settings.ai.custom_endpoint))
+        .flatten();
     let summariser = make_summariser(&state, &settings).ok_or("Enter your API key.")?;
     let probe = Prompt {
         system: "Reply with the single word OK.".into(),
@@ -719,6 +745,13 @@ pub async fn enable_ai(
             Error::AuthRevoked => {
                 "The service rejected the key. Check it and try again.".to_string()
             }
+            Error::Provider(m) if m.contains("credit") => {
+                "The service says the account has no credit left. Add credit and try again."
+                    .to_string()
+            }
+            Error::Provider(m) if m.contains("model") => {
+                "That model name wasn't found. Check the name and try again.".to_string()
+            }
             Error::Offline => {
                 "Couldn't reach the service. Check your connection and try again.".to_string()
             }
@@ -727,8 +760,75 @@ pub async fn enable_ai(
     save_settings(&app, &state, |s| {
         s.ai.provider = provider;
         s.ai.consented = Some(provider);
+        s.ai.consented_host = agreed_host.clone();
         s.ai.enabled = true;
     })
+}
+
+/// How long to wait for the browser sign-in before giving up.
+const OPENROUTER_WAIT: StdDuration = StdDuration::from_secs(300);
+
+/// Signs in to OpenRouter in the browser and keeps the API key it issues for the user's own account. This
+/// only gets the key; turning AI on is still the separate step that shows exactly what would be sent.
+#[tauri::command]
+pub async fn sign_in_openrouter(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+    use daybrief_core::ai::openrouter;
+    use tauri_plugin_opener::OpenerExt;
+    let (deps, cancel, lock) = (
+        state.deps.clone(),
+        state.oauth_cancel.clone(),
+        state.oauth_lock.clone(),
+    );
+    let opener_app = app.clone();
+    let key = tauri::async_runtime::spawn_blocking(move || -> CmdResult<Redacted> {
+        let _one_at_a_time = lock
+            .try_lock()
+            .map_err(|_| "A sign-in is already in progress.".to_string())?;
+        cancel.store(false, std::sync::atomic::Ordering::Relaxed);
+        let listener = Loopback::bind().map_err(oauth_error)?;
+        // OpenRouter documents "localhost" callbacks on any port.
+        let redirect = listener.redirect_uri("localhost");
+        let (state_token, pkce) = (random_state(), Pkce::generate());
+        let url = openrouter::authorization_url(&redirect, &pkce.challenge, &state_token);
+        let parsed =
+            daybrief_core::http::Url::parse(&url).map_err(|_| "bad sign-in address".to_string())?;
+        if parsed.scheme() != "https" || parsed.host_str() != Some(openrouter::HOST) {
+            return Err("Refusing to open an unexpected sign-in address.".into());
+        }
+        opener_app
+            .opener()
+            .open_url(url, None::<&str>)
+            .map_err(|_| "Couldn't open your browser.".to_string())?;
+        let code = listener
+            .wait_for_code(&state_token, OPENROUTER_WAIT, &cancel)
+            .map_err(oauth_error)?;
+        openrouter::exchange(
+            deps.ai_http.as_ref(),
+            openrouter::KEY_URL,
+            &code,
+            &pkce.verifier,
+        )
+        .map_err(|e| match e {
+            Error::Offline => {
+                "Couldn't reach OpenRouter. Check your connection and try again.".to_string()
+            }
+            Error::AuthRevoked => "OpenRouter didn't accept that sign-in. Try again.".to_string(),
+            _ => "Signing in to OpenRouter didn't work. Try again.".to_string(),
+        })
+    })
+    .await
+    .map_err(|_| "sign-in failed".to_string())??;
+    state
+        .deps
+        .secrets
+        .set(
+            AiProvider::Openrouter
+                .key_name()
+                .unwrap_or("ai-key-openrouter"),
+            key.expose(),
+        )
+        .map_err(internal("saving the key"))?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -740,11 +840,15 @@ pub async fn disable_ai(app: AppHandle, state: State<'_, AppState>) -> CmdResult
 /// Deletes the saved API key and withdraws consent.
 #[tauri::command]
 pub async fn forget_ai_key(app: AppHandle, state: State<'_, AppState>) -> CmdResult<AppSettings> {
-    state
-        .deps
-        .secrets
-        .delete(ANTHROPIC_KEY)
-        .map_err(internal("removing the key"))?;
+    // The key of the provider in use; a model on this computer has none.
+    let provider = lock_store(&state)?.load_settings().ai.provider;
+    if let Some(name) = provider.key_name() {
+        state
+            .deps
+            .secrets
+            .delete(name)
+            .map_err(internal("removing the key"))?;
+    }
     *state.ai_cache.lock().map_err(|_| "state unavailable")? = None;
     save_settings(&app, &state, |s| {
         s.ai.enabled = false;

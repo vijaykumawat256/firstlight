@@ -176,7 +176,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, time_24h: false, hide_titles: false },
   appearance: { theme: "system", accent: "system", ambient: params.has("ambient") },
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], important_senders: [], days_back: 3 },
-  ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", include_email: false, consented: null },
+  ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null },
   privacy: { crash_reports: false },
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
@@ -186,6 +186,16 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
 
 const listeners = new Set<(s: SyncSummary) => void>();
 const notify = () => listeners.forEach((l) => l({ ok: true, offline: false, needs_attention: false }));
+
+/** The host of an https address, or null (used to tie the agreement for a custom AI service to its host). */
+function customHost(address: string): string | null {
+  try {
+    const u = new URL(address);
+    return u.protocol === "https:" ? u.hostname : null;
+  } catch {
+    return null;
+  }
+}
 
 const LOCAL_CAL = "local-events";
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -327,9 +337,9 @@ const FIXTURE_MAIL = () => {
     other_unread: 34,
   };
 };
-let aiState = { enabled: false, consented: false, hasKey: false, provider: "anthropic" as AiProvider };
+let aiState = { enabled: false, consented: false, provider: "anthropic" as AiProvider, keys: new Set<AiProvider>() };
 if (params.has("aion")) {
-  aiState = { enabled: true, consented: true, hasKey: true, provider: "anthropic" };
+  aiState = { enabled: true, consented: true, provider: "anthropic", keys: new Set<AiProvider>(["anthropic"]) };
   settings.ai = { ...settings.ai, enabled: true, consented: "anthropic" };
 }
 if (params.has("mailon")) settings.email = { ...settings.email, enabled: true, apple_mail: true };
@@ -465,7 +475,7 @@ export const fixtureBackend: Backend = {
     if (target.kind === "url" && !target.url.startsWith("https://")) throw new Error("Refusing to open that link.");
   },
   async aiStatus() {
-    return { enabled: aiState.enabled, consented: aiState.consented, provider: aiState.provider, has_key: aiState.hasKey } satisfies AiStatus;
+    return { enabled: aiState.enabled, consented: aiState.consented, provider: aiState.provider, has_key: aiState.keys.has(aiState.provider) } satisfies AiStatus;
   },
   async aiPreview() {
     return [
@@ -485,10 +495,15 @@ export const fixtureBackend: Backend = {
     bump("__aiCalls");
     await sleep(300);
     if (!confirm) throw new Error("Please confirm what will be shared first.");
-    if (provider === "anthropic" && !aiState.hasKey && !(key && key.length >= 10)) throw new Error("Enter your API key.");
-    if (key === "sk-ant-rejected-key") throw new Error("The service rejected the key. Check it and try again.");
-    aiState = { enabled: true, consented: true, hasKey: provider === "anthropic" ? true : aiState.hasKey, provider };
-    settings = { ...settings, ai: { ...settings.ai, enabled: true, provider, consented: provider } };
+    const needsKey = provider !== "local";
+    if (needsKey && !aiState.keys.has(provider) && !(key && key.length >= 10)) throw new Error("Enter your API key.");
+    if (key === "sk-ant-rejected-key" || key === "rejected-key-0000") throw new Error("The service rejected the key. Check it and try again.");
+    if (provider === "custom" && !/^https:\/\/[a-z0-9.-]+\.[a-z]+(\/\S*)?$/.test(settings.ai.custom_endpoint)) throw new Error("Enter the service's address, starting with https://");
+    if (needsKey && key && key.length >= 10) aiState.keys.add(provider);
+    const host = provider === "custom" ? customHost(settings.ai.custom_endpoint) : null;
+    aiState = { ...aiState, enabled: true, consented: true, provider };
+    settings = { ...settings, ai: { ...settings.ai, enabled: true, provider, consented: provider, consented_host: host } };
+    (window as unknown as Record<string, unknown>).__aiEnabledFor = { provider, model: settings.ai.model };
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
   },
@@ -499,10 +514,19 @@ export const fixtureBackend: Backend = {
     return structuredClone(settings);
   },
   async forgetAiKey() {
-    aiState = { enabled: false, consented: false, hasKey: false, provider: aiState.provider };
-    settings = { ...settings, ai: { ...settings.ai, enabled: false, consented: null } };
+    aiState.keys.delete(aiState.provider);
+    aiState = { ...aiState, enabled: false, consented: false };
+    settings = { ...settings, ai: { ...settings.ai, enabled: false, consented: null, consented_host: null } };
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
+  },
+  async aiKeys() {
+    return [...aiState.keys];
+  },
+  async signInOpenrouter() {
+    await sleep(params.has("slowoauth") ? 1500 : 300);
+    if (params.has("orfail")) throw new Error("OpenRouter didn't accept that sign-in. Try again.");
+    aiState.keys.add("openrouter");
   },
   async getAiSummary() {
     bump("__aiCalls");
@@ -549,6 +573,8 @@ export const fixtureBackend: Backend = {
     const fixed = structuredClone(next);
     fixed.email.imap = settings.email.imap; // mailboxes change only through add/remove
     fixed.ai.consented = settings.ai.consented; // consent is only ever given by the enable action
+    fixed.ai.consented_host = settings.ai.consented_host;
+    if (fixed.ai.consented === "custom" && customHost(fixed.ai.custom_endpoint) !== fixed.ai.consented_host) fixed.ai.consented = null;
     if (fixed.ai.consented !== fixed.ai.provider) fixed.ai.enabled = false;
     fixed.general.sync_interval_minutes = clamp(fixed.general.sync_interval_minutes, 1, 1440);
     settings = fixed;

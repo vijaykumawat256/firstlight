@@ -190,6 +190,140 @@ pub enum AiProvider {
     Anthropic,
     /// A model running on this computer (Ollama, LM Studio, llama.cpp server, ...).
     Local,
+    /// OpenAI (ChatGPT's models) with the user's own API key.
+    Openai,
+    /// xAI (Grok) with the user's own API key.
+    Xai,
+    /// Google Gemini with the user's own API key.
+    Gemini,
+    /// Mistral with the user's own API key.
+    Mistral,
+    /// Groq with the user's own API key.
+    Groq,
+    /// OpenRouter: one account for models from many companies. Can be signed in to instead of pasting a key.
+    Openrouter,
+    /// Any other service that speaks the same "chat completions" protocol, at an https address the user
+    /// types. The key is sent to that address, so consent is tied to it.
+    Custom,
+}
+
+impl AiProvider {
+    /// Services that use the OpenAI-style protocol and an API key.
+    pub fn is_openai_style(self) -> bool {
+        !matches!(self, Self::Anthropic | Self::Local)
+    }
+
+    /// What the user sees.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Anthropic => "Anthropic (Claude)",
+            Self::Local => "A model on this computer",
+            Self::Openai => "OpenAI",
+            Self::Xai => "xAI (Grok)",
+            Self::Gemini => "Google Gemini",
+            Self::Mistral => "Mistral",
+            Self::Groq => "Groq",
+            Self::Openrouter => "OpenRouter",
+            Self::Custom => "Another service",
+        }
+    }
+
+    /// A reasonable model to start from; the user can type any other. These names change over time, so the
+    /// test request made when AI is turned on says clearly if the name is no longer valid.
+    pub fn default_model(self) -> &'static str {
+        match self {
+            Self::Anthropic => DEFAULT_ANTHROPIC_MODEL,
+            Self::Local => DEFAULT_LOCAL_MODEL,
+            Self::Openai => "gpt-4o-mini",
+            Self::Xai => "grok-3-mini",
+            Self::Gemini => "gemini-2.0-flash",
+            Self::Mistral => "mistral-small-latest",
+            Self::Groq => "llama-3.3-70b-versatile",
+            Self::Openrouter => "openai/gpt-4o-mini",
+            Self::Custom => "gpt-4o-mini",
+        }
+    }
+
+    /// The service's fixed address, for the providers that have one.
+    pub fn base_url(self) -> Option<&'static str> {
+        match self {
+            Self::Openai => Some("https://api.openai.com/v1"),
+            Self::Xai => Some("https://api.x.ai/v1"),
+            Self::Gemini => Some("https://generativelanguage.googleapis.com/v1beta/openai"),
+            Self::Mistral => Some("https://api.mistral.ai/v1"),
+            Self::Groq => Some("https://api.groq.com/openai/v1"),
+            Self::Openrouter => Some("https://openrouter.ai/api/v1"),
+            Self::Anthropic | Self::Local | Self::Custom => None,
+        }
+    }
+
+    /// Where this provider's API key lives in the keychain. `None` for a model on this computer.
+    /// Anthropic keeps the name it has always had, so existing keys keep working.
+    pub fn key_name(self) -> Option<&'static str> {
+        match self {
+            Self::Anthropic => Some("ai-key-anthropic"),
+            Self::Local => None,
+            Self::Openai => Some("ai-key-openai"),
+            Self::Xai => Some("ai-key-xai"),
+            Self::Gemini => Some("ai-key-gemini"),
+            Self::Mistral => Some("ai-key-mistral"),
+            Self::Groq => Some("ai-key-groq"),
+            Self::Openrouter => Some("ai-key-openrouter"),
+            Self::Custom => Some("ai-key-custom"),
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "anthropic" => Self::Anthropic,
+            "local" => Self::Local,
+            "openai" => Self::Openai,
+            "xai" => Self::Xai,
+            "gemini" => Self::Gemini,
+            "mistral" => Self::Mistral,
+            "groq" => Self::Groq,
+            "openrouter" => Self::Openrouter,
+            "custom" => Self::Custom,
+            _ => return None,
+        })
+    }
+
+    /// Every provider, for tests and for listing which keys are saved.
+    pub const ALL: [Self; 9] = [
+        Self::Anthropic,
+        Self::Local,
+        Self::Openai,
+        Self::Xai,
+        Self::Gemini,
+        Self::Mistral,
+        Self::Groq,
+        Self::Openrouter,
+        Self::Custom,
+    ];
+}
+
+/// The address of a custom service: https only, a plain public-style host name (the same rule as a custom mail
+/// server: no IP addresses, no `localhost`, no private-network names), no credentials, query or fragment.
+/// Returns it tidied (no trailing slash), or `None` if it is not acceptable.
+pub fn valid_custom_endpoint(s: &str) -> Option<String> {
+    let u = reqwest::Url::parse(s.trim()).ok()?;
+    let ok = u.scheme() == "https"
+        && u.username().is_empty()
+        && u.password().is_none()
+        && u.query().is_none()
+        && u.fragment().is_none()
+        && u.port().is_none_or(|p| p == 443)
+        && u.host_str().is_some_and(crate::mail::imap::valid_host)
+        && u.path().len() <= 200
+        && u.path()
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"/._-".contains(&b));
+    ok.then(|| s.trim().trim_end_matches('/').to_string())
+}
+
+/// The host of a custom endpoint, for tying consent to where the data goes.
+pub fn endpoint_host(s: &str) -> Option<String> {
+    reqwest::Url::parse(s).ok()?.host_str().map(str::to_string)
 }
 
 pub const DEFAULT_LOCAL_ENDPOINT: &str = "http://127.0.0.1:11434";
@@ -206,10 +340,15 @@ pub struct AiSettings {
     pub model: String,
     /// Only used for the local provider, and only loopback addresses are allowed.
     pub endpoint: String,
+    /// Only used for `AiProvider::Custom`: an https address (see [`valid_custom_endpoint`]).
+    pub custom_endpoint: String,
     /// Also share sender names and subjects of important mail (never snippets or bodies).
     pub include_email: bool,
     /// The provider the user agreed to. Set only by the explicit enable action; never by import or save.
     pub consented: Option<AiProvider>,
+    /// For a custom service, the host the user agreed to send data to. If the address changes to another host,
+    /// the agreement no longer applies and AI turns off until it is given again.
+    pub consented_host: Option<String>,
 }
 
 impl Default for AiSettings {
@@ -219,8 +358,10 @@ impl Default for AiSettings {
             provider: AiProvider::Anthropic,
             model: DEFAULT_ANTHROPIC_MODEL.into(),
             endpoint: DEFAULT_LOCAL_ENDPOINT.into(),
+            custom_endpoint: String::new(),
             include_email: false,
             consented: None,
+            consented_host: None,
         }
     }
 }
@@ -462,14 +603,23 @@ impl AppSettings {
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b"-._:/".contains(&b));
         if !model_ok {
-            ai.model = match ai.provider {
-                AiProvider::Anthropic => DEFAULT_ANTHROPIC_MODEL,
-                AiProvider::Local => DEFAULT_LOCAL_MODEL,
-            }
-            .into();
+            ai.model = ai.provider.default_model().into();
         }
         if !valid_local_endpoint(&ai.endpoint) {
             ai.endpoint = DEFAULT_LOCAL_ENDPOINT.into();
+        }
+        // A custom address that is not acceptable is dropped, never kept to be used later.
+        ai.custom_endpoint = valid_custom_endpoint(&ai.custom_endpoint).unwrap_or_default();
+        // Agreement to send data to a custom service is for the host the user saw. A different host needs a
+        // fresh agreement, so an edited address (or a settings change from anywhere) can never redirect it.
+        if ai.consented == Some(AiProvider::Custom)
+            && (ai.custom_endpoint.is_empty()
+                || ai.consented_host.as_deref() != endpoint_host(&ai.custom_endpoint).as_deref())
+        {
+            ai.consented = None;
+        }
+        if ai.consented != Some(AiProvider::Custom) {
+            ai.consented_host = None;
         }
         // AI can only be on for a provider the user explicitly agreed to on this computer.
         if ai.consented != Some(ai.provider) {
@@ -548,6 +698,7 @@ impl AppSettings {
         let mut imported = Self::from_value(inner);
         // Agreement to send data to an AI service must be given on this computer, never inherited from a file.
         imported.ai.consented = None;
+        imported.ai.consented_host = None;
         imported.ai.enabled = false;
         // Passwords are not in the file, so a mailbox from it could never sign in.
         imported.email.imap.clear();

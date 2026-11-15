@@ -39,6 +39,10 @@ export interface Backend {
   disableAi(): Promise<AppSettings>;
   /** Deletes the saved API key and withdraws consent. */
   forgetAiKey(): Promise<AppSettings>;
+  /** Which providers have an API key saved. */
+  aiKeys(): Promise<AiProvider[]>;
+  /** Signs in to OpenRouter in the browser and keeps the key it issues (no key to paste). */
+  signInOpenrouter(): Promise<void>;
   /** A short AI summary, or null (AI off or anything failed). Never rejects. */
   getAiSummary(): Promise<string | null>;
   getAppInfo(): Promise<AppInfo>;

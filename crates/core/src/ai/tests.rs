@@ -461,3 +461,175 @@ fn model_replies_are_plain_text_never_markup() {
     let s = clean_output("<img src=x onerror=alert(1)> Hello").unwrap();
     assert!(s.contains("Hello"));
 }
+
+// ---- OpenAI-style services (OpenAI, Grok, Gemini, Mistral, Groq, OpenRouter, custom) ------------
+
+fn prompt() -> Prompt {
+    Prompt {
+        system: "SYSTEM-TEXT".into(),
+        user: "USER-TEXT".into(),
+    }
+}
+
+fn style(server_base: &str) -> OpenAiStyleSummariser {
+    OpenAiStyleSummariser::new(
+        Arc::new(ReqwestClient::new_allow_http_for_tests().unwrap()),
+        server_base,
+        Redacted::new("sk-THE-OPENAI-KEY-123"),
+        "the-model",
+    )
+}
+
+#[test]
+fn an_openai_style_service_gets_one_request_with_the_key_only_in_the_header() {
+    let server = TestServer::start(|_| {
+        Resp::json(r#"{"choices":[{"message":{"content":"A calm morning."}}]}"#)
+    });
+    let out = style(&server.base).summarise(&prompt()).unwrap();
+    assert_eq!(out, "A calm morning.");
+    let seen = server.requests.lock().unwrap();
+    assert_eq!(seen.len(), 1);
+    let r = &seen[0];
+    assert_eq!(
+        (r.method.as_str(), r.path.as_str()),
+        ("POST", "/chat/completions")
+    );
+    assert_eq!(
+        r.header("authorization"),
+        Some("Bearer sk-THE-OPENAI-KEY-123")
+    );
+    let body: Value = serde_json::from_str(&r.body).unwrap();
+    assert_eq!(body["model"], "the-model");
+    assert_eq!(body["messages"][0]["role"], "system");
+    assert_eq!(body["messages"][0]["content"], "SYSTEM-TEXT");
+    assert_eq!(body["messages"][1]["content"], "USER-TEXT");
+    assert_eq!(body["stream"], false);
+    assert!(
+        body.get("max_tokens").is_some(),
+        "other services use max_tokens"
+    );
+    assert!(body.get("max_completion_tokens").is_none());
+    assert!(!r.body.contains("sk-THE"), "the key is never in the body");
+}
+
+#[test]
+fn openai_itself_is_asked_with_max_completion_tokens() {
+    let s = OpenAiStyleSummariser::new(
+        Arc::new(Counting(AtomicUsize::new(0))),
+        "https://api.openai.com/v1",
+        Redacted::new("k"),
+        "m",
+    );
+    assert_eq!(s.token_field(), "max_completion_tokens");
+    assert_eq!(style("http://127.0.0.1:1").token_field(), "max_tokens");
+    assert_eq!(
+        OpenAiStyleSummariser::new(
+            Arc::new(Counting(AtomicUsize::new(0))),
+            "https://api.x.ai/v1",
+            Redacted::new("k"),
+            "m"
+        )
+        .token_field(),
+        "max_tokens"
+    );
+}
+
+#[test]
+fn replies_may_be_a_string_or_a_list_of_text_parts_and_anything_else_is_empty() {
+    let v = |s: &str| reply_text(&serde_json::from_str::<Value>(s).unwrap());
+    assert_eq!(
+        v(r#"{"choices":[{"message":{"content":"plain"}}]}"#),
+        "plain"
+    );
+    assert_eq!(
+        v(
+            r#"{"choices":[{"message":{"content":[{"type":"text","text":"a"},{"type":"text","text":"b"}]}}]}"#
+        ),
+        "a b"
+    );
+    for odd in [
+        r#"{}"#,
+        r#"{"choices":[]}"#,
+        r#"{"choices":[{"message":{"content":null}}]}"#,
+        r#"{"choices":[{"message":{"content":7}}]}"#,
+    ] {
+        assert_eq!(v(odd), "");
+    }
+}
+
+#[test]
+fn openai_style_errors_are_told_apart_and_never_contain_the_key() {
+    for (status, check) in [
+        (401u16, "auth"),
+        (403, "auth"),
+        (402, "credit"),
+        (404, "model"),
+        (429, "offline"),
+        (503, "offline"),
+        (400, "rejected"),
+    ] {
+        let server = TestServer::start(move |_| {
+            Resp::status(status).with_body(r#"{"error":"sk-THE-OPENAI-KEY-123 is no good"}"#)
+        });
+        let err = style(&server.base).summarise(&prompt()).unwrap_err();
+        let text = format!("{err} {err:?}");
+        assert!(!text.contains("sk-THE"), "{status}: {text}");
+        match check {
+            "auth" => assert!(matches!(err, Error::AuthRevoked), "{status}"),
+            "credit" => assert!(text.contains("credit"), "{status}: {text}"),
+            "model" => assert!(text.contains("model"), "{status}: {text}"),
+            "offline" => assert!(matches!(err, Error::Offline), "{status}"),
+            _ => assert!(matches!(err, Error::Provider(_)), "{status}"),
+        }
+    }
+}
+
+#[test]
+fn every_provider_has_to_be_agreed_to_separately_before_anything_is_sent() {
+    for p in AiProvider::ALL {
+        for other in AiProvider::ALL {
+            let ai = AiSettings {
+                enabled: true,
+                provider: p,
+                consented: Some(other),
+                ..Default::default()
+            };
+            let made = AtomicUsize::new(0);
+            let out = summarise_if_enabled(&ai, prompt, || {
+                made.fetch_add(1, Ordering::SeqCst);
+                None
+            });
+            assert_eq!(out, None);
+            // The service is only even constructed when the agreement is for this very provider.
+            assert_eq!(
+                made.load(Ordering::SeqCst),
+                usize::from(p == other),
+                "{p:?} with agreement for {other:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn services_that_answer_a_bad_key_with_400_are_still_told_as_a_bad_key() {
+    // What xAI and Google really send for a wrong key (checked live), versus a genuine bad request.
+    for (body, bad_key) in [
+        (
+            r#"{"code":"invalid-argument","error":"Incorrect API key provided. You can obtain an API key from https://console.x.ai."}"#,
+            true,
+        ),
+        (
+            r#"[{"error":{"code":400,"message":"Please pass a valid API key.","status":"INVALID_ARGUMENT"}}]"#,
+            true,
+        ),
+        (
+            r#"{"error":{"message":"The model `nope` does not exist","type":"invalid_request_error"}}"#,
+            false,
+        ),
+        (r#"{"error":"max_tokens is too large"}"#, false),
+    ] {
+        let server = TestServer::start(move |_| Resp::status(400).with_body(body));
+        let err = style(&server.base).summarise(&prompt()).unwrap_err();
+        assert_eq!(matches!(err, Error::AuthRevoked), bad_key, "{body}");
+    }
+}

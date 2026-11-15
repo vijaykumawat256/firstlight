@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 const SHOTS = "e2e/screenshots";
@@ -162,7 +163,7 @@ test("turning on AI shows exactly what is sent and needs a key and agreement", a
   await page.getByRole("dialog").getByLabel("Anthropic API key").fill("sk-ant-a-good-looking-key");
   await page.getByRole("dialog").getByRole("button", { name: "Turn on" }).click();
   await expect(page.getByRole("switch", { name: "AI summaries" })).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByText("Anthropic (Claude) · claude-haiku-5-5")).toBeVisible();
+  await expect(page.getByText("Claude (Anthropic) · claude-haiku-5-5")).toBeVisible();
 });
 
 test("cancelling the agreement changes nothing", async ({ page }) => {
@@ -177,12 +178,13 @@ test("a local model needs no key and says it stays on this computer", async ({ p
   await openSettings(page, "", "AI summaries");
   await page.getByRole("switch", { name: "AI summaries" }).click();
   const dialog = page.getByRole("dialog", { name: "Turn on AI summaries?" });
-  await dialog.getByRole("radio", { name: "On this computer" }).click();
+  await dialog.getByRole("combobox", { name: "Provider" }).click();
+  await page.getByRole("option", { name: "A model on this computer" }).click();
   await expect(dialog).toContainText("runs on this computer");
   await expect(dialog.getByLabel("Model address")).toHaveValue("http://127.0.0.1:11434");
   await expect(dialog.getByLabel("Anthropic API key")).toHaveCount(0);
   await dialog.getByRole("button", { name: "Turn on" }).click();
-  await expect(page.getByText("A model on this computer · claude-haiku-5-5")).toBeVisible();
+  await expect(page.getByText("A model on this computer · llama3.2")).toBeVisible();
 });
 
 test("the AI summary replaces the normal one and is labelled", async ({ page }) => {
@@ -289,4 +291,99 @@ test("any other provider can be added with its server name, and a bad server nam
   await expect(email.getByText("sam@fastmail.com (imap.fastmail.com) · reading unread mail.")).toBeVisible();
   await email.getByRole("button", { name: "Remove sam@fastmail.com" }).click();
   await expect(email.getByText(/imap\.fastmail\.com/)).toHaveCount(0);
+});
+
+// ---------------------------------------------------------------------------------- other AI services
+
+async function openConsent(page: Page, query = "") {
+  await openSettings(page, query, "AI summaries");
+  await page.getByRole("switch", { name: "AI summaries" }).click();
+  const dialog = page.getByRole("dialog", { name: "Turn on AI summaries?" });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+async function chooseProvider(page: Page, dialog: ReturnType<Page["getByRole"]>, name: string) {
+  await dialog.getByRole("combobox", { name: "Provider" }).click();
+  await page.getByRole("option", { name }).click();
+}
+
+test("OpenAI and Grok work with just an API key, each saying where the summary goes", async ({ page }) => {
+  const dialog = await openConsent(page);
+  await chooseProvider(page, dialog, "ChatGPT models (OpenAI)");
+  await expect(dialog).toContainText("OpenAI's servers (api.openai.com)");
+  await expect(dialog.getByLabel("OpenAI API key")).toBeVisible();
+  await expect(dialog.getByLabel("Anthropic API key")).toHaveCount(0);
+  await expect(dialog.getByLabel("Model", { exact: true })).toHaveValue("gpt-4o-mini");
+  await expect(dialog.getByRole("button", { name: "Turn on" })).toBeDisabled(); // needs a key
+
+  // Switching provider changes the destination, the key field and the starting model.
+  await chooseProvider(page, dialog, "Grok (xAI)");
+  await expect(dialog).toContainText("xAI's servers (api.x.ai)");
+  await expect(dialog.getByLabel("Model", { exact: true })).toHaveValue("grok-3-mini");
+  await dialog.getByLabel("xAI API key").fill("xai-a-good-looking-key");
+  await dialog.getByRole("button", { name: "Turn on" }).click();
+  await expect(page.getByText("Grok (xAI) · grok-3-mini")).toBeVisible();
+  const on = await page.evaluate(() => (window as unknown as { __aiEnabledFor: { provider: string; model: string } }).__aiEnabledFor);
+  expect(on).toEqual({ provider: "xai", model: "grok-3-mini" });
+  // The key is saved for that provider only, and can be removed.
+  await expect(page.getByText("Saved in the system keychain, for Grok (xAI).")).toBeVisible();
+});
+
+test("a rejected key is explained and nothing is turned on", async ({ page }) => {
+  const dialog = await openConsent(page);
+  await chooseProvider(page, dialog, "ChatGPT models (OpenAI)");
+  await dialog.getByLabel("OpenAI API key").fill("rejected-key-0000");
+  await dialog.getByRole("button", { name: "Turn on" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("rejected the key");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("switch", { name: "AI summaries" })).toHaveAttribute("aria-checked", "false");
+});
+
+test("another OpenAI-compatible service needs an https address, and the agreement names that host", async ({ page }) => {
+  const dialog = await openConsent(page);
+  await chooseProvider(page, dialog, "Another service (OpenAI-compatible)");
+  await dialog.getByLabel("API key", { exact: true }).fill("my-private-key-123");
+  const turnOn = dialog.getByRole("button", { name: "Turn on" });
+  await expect(turnOn).toBeDisabled(); // no address yet
+  await expect(dialog).toContainText("the service whose address you enter below");
+
+  await dialog.getByLabel("Service address").fill("http://insecure.example.com/v1");
+  await expect(turnOn).toBeDisabled(); // https only
+  await dialog.getByLabel("Service address").fill("https://llm.example.com/v1");
+  await expect(dialog).toContainText("The service's servers (llm.example.com)");
+  await expect(turnOn).toBeEnabled();
+  await turnOn.click();
+  await expect(page.getByText("Another service (OpenAI-compatible) · gpt-4o-mini")).toBeVisible();
+});
+
+test("OpenRouter can be used by signing in, with no key to paste", async ({ page }) => {
+  const dialog = await openConsent(page);
+  await chooseProvider(page, dialog, "OpenRouter (many models)");
+  await expect(dialog).toContainText("OpenRouter's servers (openrouter.ai)");
+  const turnOn = dialog.getByRole("button", { name: "Turn on" });
+  await expect(turnOn).toBeDisabled();
+  await dialog.getByRole("button", { name: "Sign in with OpenRouter" }).click();
+  await expect(page.getByText("Signed in to OpenRouter").first()).toBeVisible();
+  await expect(dialog.getByLabel("OpenRouter API key")).toHaveAttribute("placeholder", /already saved/);
+  await expect(turnOn).toBeEnabled();
+  // Signing in only fetched a key: AI is still off until the person agrees to what is shown.
+  expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__aiEnabledFor)).toBeUndefined();
+  await turnOn.click();
+  await expect(page.getByText("OpenRouter (many models) · openai/gpt-4o-mini")).toBeVisible();
+});
+
+test("a failed OpenRouter sign-in explains itself", async ({ page }) => {
+  const dialog = await openConsent(page, "?orfail");
+  await chooseProvider(page, dialog, "OpenRouter (many models)");
+  await dialog.getByRole("button", { name: "Sign in with OpenRouter" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("didn't accept that sign-in");
+  await expect(dialog.getByRole("button", { name: "Turn on" })).toBeDisabled();
+});
+
+test("the other AI services have no accessibility problems", async ({ page }) => {
+  const dialog = await openConsent(page);
+  await chooseProvider(page, dialog, "OpenRouter (many models)");
+  const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
+  expect(r.violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(" ")}`)).toEqual([]);
 });

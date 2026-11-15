@@ -544,3 +544,122 @@ fn the_join_shortcut_and_menu_bar_text_default_off_and_are_kept_honest() {
     s.general.join_shortcut = Some("CmdOrCtrl+Shift+J".into());
     assert!(s.validate().is_ok());
 }
+
+#[test]
+fn every_ai_provider_is_complete_and_distinct() {
+    let mut keys = std::collections::HashSet::new();
+    for p in AiProvider::ALL {
+        assert!(
+            !p.label().is_empty() && !p.default_model().is_empty(),
+            "{p:?}"
+        );
+        // The defaults must survive sanitising (a bad default would be replaced forever).
+        let mut s = AppSettings::default();
+        s.ai.provider = p;
+        s.ai.model = p.default_model().into();
+        s.sanitize();
+        assert_eq!(s.ai.model, p.default_model(), "{p:?}");
+        // The name used in settings files and by the page round-trips.
+        let name = serde_json::to_value(p).unwrap();
+        assert_eq!(AiProvider::parse(name.as_str().unwrap()), Some(p), "{p:?}");
+        assert_eq!(p.key_name().is_some(), p != AiProvider::Local, "{p:?}");
+        if let Some(k) = p.key_name() {
+            assert!(keys.insert(k), "two providers share the key {k}");
+        }
+        // Only the fixed-address providers have a built-in address, and it is https.
+        if let Some(u) = p.base_url() {
+            assert!(u.starts_with("https://") && p.is_openai_style(), "{p:?}");
+        }
+    }
+    assert_eq!(
+        AiProvider::Anthropic.key_name(),
+        Some("ai-key-anthropic"),
+        "existing keys keep working"
+    );
+    assert_eq!(AiProvider::parse("evil"), None);
+}
+
+#[test]
+fn a_custom_ai_address_must_be_a_plain_https_host_and_nothing_else() {
+    for ok in [
+        "https://api.example.com/v1",
+        "https://api.example.com/v1/",
+        "https://llm.example.org",
+        "https://api.example.com:443/v1",
+    ] {
+        assert!(valid_custom_endpoint(ok).is_some(), "{ok}");
+    }
+    assert_eq!(
+        valid_custom_endpoint(" https://api.example.com/v1/ ").as_deref(),
+        Some("https://api.example.com/v1")
+    );
+    for bad in [
+        "",
+        "http://api.example.com/v1",
+        "https://127.0.0.1/v1",
+        "https://localhost/v1",
+        "https://10.0.0.5/v1",
+        "https://intranet/v1",
+        "https://router.local/v1",
+        "https://user:pw@api.example.com/v1",
+        "https://api.example.com:8443/v1",
+        "https://api.example.com/v1?key=1",
+        "https://api.example.com/v1#x",
+        "ftp://api.example.com",
+        "javascript:alert(1)",
+        "https://api.example.com/a b",
+        "not a url",
+    ] {
+        assert!(valid_custom_endpoint(bad).is_none(), "{bad:?}");
+    }
+}
+
+#[test]
+fn agreement_for_a_custom_service_is_for_that_host_only() {
+    let mut s = AppSettings::default();
+    s.ai.provider = AiProvider::Custom;
+    s.ai.custom_endpoint = "https://api.example.com/v1".into();
+    s.ai.consented = Some(AiProvider::Custom);
+    s.ai.consented_host = Some("api.example.com".into());
+    s.ai.enabled = true;
+    s.sanitize();
+    assert!(s.ai.enabled && s.ai.consented == Some(AiProvider::Custom));
+
+    // The same host with another path is still the same agreement.
+    s.ai.custom_endpoint = "https://api.example.com/other/v2".into();
+    s.sanitize();
+    assert!(s.ai.enabled);
+
+    // A different host is not: AI turns off and the agreement is gone.
+    s.ai.custom_endpoint = "https://evil.example.net/v1".into();
+    s.sanitize();
+    assert!(!s.ai.enabled && s.ai.consented.is_none() && s.ai.consented_host.is_none());
+
+    // A bad address is dropped, and cannot be on.
+    let mut t = AppSettings::default();
+    t.ai.provider = AiProvider::Custom;
+    t.ai.custom_endpoint = "http://127.0.0.1/v1".into();
+    t.ai.consented = Some(AiProvider::Custom);
+    t.ai.consented_host = Some("127.0.0.1".into());
+    t.ai.enabled = true;
+    t.sanitize();
+    assert!(t.ai.custom_endpoint.is_empty() && !t.ai.enabled && t.ai.consented.is_none());
+}
+
+#[test]
+fn an_imported_file_never_carries_agreement_for_any_provider() {
+    let file = r#"{"format":"daybrief-settings","settings":{"ai":{"enabled":true,"provider":"openai","consented":"openai","consented_host":"api.example.com","custom_endpoint":"https://api.example.com/v1","model":"gpt-4o-mini"}}}"#;
+    let s = AppSettings::import(file).unwrap();
+    assert!(!s.ai.enabled && s.ai.consented.is_none() && s.ai.consented_host.is_none());
+    assert_eq!(
+        s.ai.provider,
+        AiProvider::Openai,
+        "harmless choices still import"
+    );
+    // An unknown provider name only costs that one field.
+    let s = parse(
+        r#"{"ai":{"provider":"skynet","model":"x-1"},"general":{"sync_interval_minutes":15}}"#,
+    );
+    assert_eq!(s.ai.provider, AiProvider::Anthropic);
+    assert_eq!(s.general.sync_interval_minutes, 15);
+}

@@ -175,11 +175,11 @@ export interface AppSettings {
   notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; time_24h: boolean; hide_titles: boolean };
   appearance: { theme: ThemeChoice; accent: string; ambient: boolean };
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; important_senders: string[]; days_back: number };
-  ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; include_email: boolean; consented: AiProvider | null };
+  ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null };
   privacy: { crash_reports: boolean };
 }
 
-export type AiProvider = "anthropic" | "local";
+export type AiProvider = "anthropic" | "local" | "openai" | "xai" | "gemini" | "mistral" | "groq" | "openrouter" | "custom";
 
 export interface AiStatus {
   enabled: boolean;

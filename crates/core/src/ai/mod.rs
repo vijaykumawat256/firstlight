@@ -183,10 +183,20 @@ pub trait Summariser: Send + Sync {
     fn summarise(&self, prompt: &Prompt) -> Result<String>;
 }
 
+/// Whether an error body is complaining about the API key (used for services that reply 400 for that).
+fn says_bad_key(body: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(&body[..body.len().min(2000)]).to_ascii_lowercase();
+    text.contains("api key") || text.contains("api_key") || text.contains("apikey")
+}
+
 fn classify(resp: &HttpResponse) -> Result<()> {
     match resp.status {
         200..=299 => Ok(()),
         401 | 403 => Err(Error::AuthRevoked), // the key was refused
+        // xAI and Google answer a bad key with 400 and a message about the key rather than a 401.
+        400 if says_bad_key(&resp.body) => Err(Error::AuthRevoked),
+        402 => Err(Error::Provider("the account has no credit left".into())),
+        404 => Err(Error::Provider("that model was not found".into())),
         429 | 500..=599 => Err(Error::Offline),
         _ => Err(Error::Provider(
             "the AI service rejected the request".into(),
@@ -244,6 +254,69 @@ impl Summariser for AnthropicSummariser {
         Ok(text)
     }
 }
+
+/// Any service that speaks the OpenAI-style "chat completions" protocol over https with an API key: OpenAI,
+/// xAI (Grok), Google Gemini's compatible endpoint, Mistral, Groq, OpenRouter, or a custom address.
+pub struct OpenAiStyleSummariser {
+    http: Arc<dyn HttpClient>,
+    base: String,
+    key: Redacted,
+    model: String,
+}
+
+impl OpenAiStyleSummariser {
+    pub fn new(http: Arc<dyn HttpClient>, base: &str, key: Redacted, model: &str) -> Self {
+        Self {
+            http,
+            base: base.trim_end_matches('/').into(),
+            key,
+            model: model.into(),
+        }
+    }
+
+    /// OpenAI's newer models only accept `max_completion_tokens`; the others still use `max_tokens`.
+    fn token_field(&self) -> &'static str {
+        if self.base.contains("://api.openai.com") {
+            "max_completion_tokens"
+        } else {
+            "max_tokens"
+        }
+    }
+}
+
+impl Summariser for OpenAiStyleSummariser {
+    fn summarise(&self, p: &Prompt) -> Result<String> {
+        let mut body = json!({
+            "model": self.model, "stream": false,
+            "messages": [{ "role": "system", "content": p.system }, { "role": "user", "content": p.user }]
+        });
+        body[self.token_field()] = json!(MAX_TOKENS);
+        let req = HttpRequest::new("POST", format!("{}/chat/completions", self.base))
+            .header("Authorization", format!("Bearer {}", self.key.expose()))
+            .header("content-type", "application/json")
+            .body(body.to_string());
+        let resp = self.http.send(&req)?;
+        classify(&resp)?;
+        let v: Value = serde_json::from_slice(&resp.body)
+            .map_err(|_| Error::Provider("the AI service sent an unreadable reply".into()))?;
+        Ok(reply_text(&v))
+    }
+}
+
+/// The reply text: a string, or (from some services) a list of text parts.
+fn reply_text(v: &Value) -> String {
+    match v.pointer("/choices/0/message/content") {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Array(parts)) => parts
+            .iter()
+            .filter_map(|p| p.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join(" "),
+        _ => String::new(),
+    }
+}
+
+pub mod openrouter;
 
 /// A model running on this computer, through the OpenAI-compatible endpoint that Ollama, LM Studio and
 /// llama.cpp all provide.
