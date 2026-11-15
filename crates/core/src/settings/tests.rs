@@ -713,6 +713,9 @@ fn writing_to_calendars_is_off_by_default_and_a_file_can_never_turn_it_on() {
     let s = AppSettings::import(file).unwrap();
     assert!(!s.general.write_to_calendar_app);
     assert!(s.general.writable_accounts.is_empty());
+    let file = r#"{"format":"firstlight-settings","settings":{"email":{"send_invitations":true}}}"#;
+    assert!(!AppSettings::import(file).unwrap().email.send_invitations);
+    assert!(!AppSettings::default().email.send_invitations);
     assert!(!s.general.show_in_dock, "harmless preferences still import");
 }
 

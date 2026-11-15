@@ -746,7 +746,7 @@ pub struct InviteResult {
 }
 
 /// Prepares an invitation: saves a calendar file to Downloads and, if asked, opens the user's own mail
-/// app with a draft addressed to the people they chose. Firstlight never sends anything itself.
+/// app with a draft addressed to the people they chose. Nothing is sent by this command; sending is `send_invite_mail`, opt-in.
 #[tauri::command]
 pub async fn prepare_invite(
     app: AppHandle,
@@ -827,6 +827,177 @@ pub async fn prepare_invite(
     Ok(InviteResult {
         path: path.display().to_string(),
         mail_opened,
+    })
+}
+
+/// The exact message "Send now" would send, so the window can show it before anything leaves.
+#[derive(serde::Serialize)]
+pub struct InvitePreview {
+    subject: String,
+    body: String,
+}
+
+/// A mailbox invitations can be sent from.
+#[derive(serde::Serialize)]
+pub struct Sender {
+    id: String,
+    address: String,
+    label: String,
+}
+
+fn event_for_invite(
+    state: &AppState,
+    id: &str,
+) -> CmdResult<(
+    firstlight_core::settings::AppSettings,
+    Event,
+    Option<String>,
+    bool,
+)> {
+    let store = lock_store(state)?;
+    let own = firstlight_core::local::share_parts(&store, id)
+        .ok()
+        .flatten();
+    let event = match &own {
+        Some((e, _)) => e.clone(),
+        None => store
+            .get_event(id)
+            .map_err(internal("loading the event"))?
+            .ok_or("That event no longer exists.")?,
+    };
+    let rule = own.as_ref().and_then(|(_, r)| r.clone());
+    Ok((store.load_settings(), event, rule, own.is_some()))
+}
+
+/// Mailboxes the user may send from: none unless they turned sending on, and only Yahoo and iCloud have a
+/// built-in outgoing server.
+#[tauri::command]
+pub async fn invite_senders(state: State<'_, AppState>) -> CmdResult<Vec<Sender>> {
+    let settings = lock_store(&state)?.load_settings();
+    if !settings.email.send_invitations {
+        return Ok(vec![]);
+    }
+    Ok(settings
+        .email
+        .imap
+        .iter()
+        .filter(|m| firstlight_core::mail::smtp::server_for(m.preset).is_some())
+        .map(|m| Sender {
+            id: m.id.clone(),
+            address: m.address.clone(),
+            label: m.preset.label().to_string(),
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub async fn invite_preview(state: State<'_, AppState>, id: String) -> CmdResult<InvitePreview> {
+    let (settings, event, _, own) = event_for_invite(&state, &id)?;
+    let h24 = settings
+        .notify_for_engine(crate::notifier::system_uses_24h())
+        .time_24h;
+    let (subject, body) = firstlight_core::invite::message(&event, crate::local_tz(), h24, own);
+    Ok(InvitePreview { subject, body })
+}
+
+/// At most this many messages an hour, so a bug or a stuck button can never become a flood.
+const SEND_LIMIT_PER_HOUR: usize = 10;
+static SENT: std::sync::Mutex<Vec<std::time::Instant>> = std::sync::Mutex::new(Vec::new());
+
+fn within_send_limit() -> bool {
+    let Ok(mut sent) = SENT.lock() else {
+        return false;
+    };
+    let hour = std::time::Duration::from_secs(3600);
+    sent.retain(|t| t.elapsed() < hour);
+    if sent.len() >= SEND_LIMIT_PER_HOUR {
+        return false;
+    }
+    sent.push(std::time::Instant::now());
+    true
+}
+
+/// Sends the invitation from the chosen mailbox. Only when the user turned sending on, and only for the
+/// exact text `invite_preview` showed. Returns nothing about the message.
+#[tauri::command]
+pub async fn send_invite_mail(
+    state: State<'_, AppState>,
+    id: String,
+    recipients: String,
+    mailbox_id: String,
+) -> CmdResult<()> {
+    use firstlight_core::invite;
+    use firstlight_core::mail::smtp;
+    let to = invite::parse_list(&recipients).map_err(user_input_error)?;
+    if to.is_empty() {
+        return Err("Add at least one email address.".into());
+    }
+    if to.len() > smtp::MAX_RECIPIENTS {
+        return Err(format!(
+            "You can send to at most {} people at once.",
+            smtp::MAX_RECIPIENTS
+        ));
+    }
+    let (settings, event, rule, own) = event_for_invite(&state, &id)?;
+    if !settings.email.send_invitations {
+        return Err("Turn on “Send invitations from Firstlight” in Settings first.".into());
+    }
+    let mailbox = settings
+        .email
+        .imap
+        .iter()
+        .find(|m| m.id == mailbox_id)
+        .ok_or("That mailbox isn't connected.")?
+        .clone();
+    let server =
+        smtp::server_for(mailbox.preset).ok_or("Sending isn't available for that mailbox.")?;
+    let password = smtp::password_for(state.deps.secrets.as_ref(), &mailbox.id).map_err(|_| {
+        "Firstlight can't find that mailbox's password. Add the mailbox again.".to_string()
+    })?;
+    let tz = crate::local_tz();
+    let h24 = settings
+        .notify_for_engine(crate::notifier::system_uses_24h())
+        .time_24h;
+    let (subject, text) = invite::message(&event, tz, h24, own);
+    let ics = invite::ics(
+        &event,
+        &invite::IcsExtras {
+            tz,
+            rrule: rule.as_deref(),
+            include_notes: own,
+            now: Utc::now(),
+            removed: &[],
+            alarm_minutes: None,
+        },
+    );
+    if !within_send_limit() {
+        return Err("That's a lot of messages for one hour. Try again later.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let transport = smtp::TlsTransport::default();
+        smtp::send(
+            &transport,
+            &server,
+            &mailbox.address,
+            &password,
+            &smtp::Outgoing {
+                from: &mailbox.address,
+                to: &to,
+                subject: &subject,
+                text: &text,
+                ics: &ics,
+                now: Utc::now(),
+            },
+        )
+    })
+    .await
+    .map_err(|_| "Sending was interrupted.".to_string())?
+    .map_err(|e| match e {
+        Error::Invalid(m) => m.to_string(),
+        Error::AuthRevoked => "The mail server didn't accept the saved password. Add the mailbox again with a fresh app password.".to_string(),
+        Error::Offline => "Couldn't reach the mail server. Nothing was sent.".to_string(),
+        Error::Provider(m) => format!("The mail server didn't send it ({m}). Check the addresses and try again."),
+        _ => "The message couldn't be sent.".to_string(),
     })
 }
 

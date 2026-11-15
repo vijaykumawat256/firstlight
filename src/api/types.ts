@@ -51,7 +51,7 @@ export interface EventInput {
   repeat: { every: "daily" | "weekly" | "monthly" | "yearly"; interval: number; until: string | null } | null;
   /** Notify this many minutes before it starts (timed events only). */
   reminder_minutes: number | null;
-  /** People it is shared with. Firstlight never sends anything: sharing opens your own mail app. */
+  /** People it is shared with. Saving sends nothing: sharing opens your own mail app, or (if turned on) sends from your mailbox after you review it. */
   invitees: string[];
 }
 
@@ -75,6 +75,17 @@ export interface ExportResult {
   count: number;
 }
 
+/** A mailbox an invitation can be sent from. */
+export interface InviteSender {
+  id: string;
+  address: string;
+  label: string;
+}
+/** The exact subject and text "Send now" would send. */
+export interface InvitePreview {
+  subject: string;
+  body: string;
+}
 export interface InviteResult {
   path: string;
   mail_opened: boolean;
@@ -186,7 +197,7 @@ export interface AppSettings {
   };
   notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; time_24h: boolean; hide_titles: boolean };
   appearance: { theme: ThemeChoice; accent: string; ambient: boolean };
-  email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; important_senders: string[]; days_back: number };
+  email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null };
   privacy: { crash_reports: boolean };
 }

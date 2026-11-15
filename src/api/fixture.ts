@@ -183,7 +183,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, time_24h: false, hide_titles: false },
   appearance: { theme: "system", accent: "system", ambient: params.has("ambient") },
-  email: { enabled: false, apple_mail: false, account_ids: [], imap: [], important_senders: [], days_back: 3 },
+  email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null },
   privacy: { crash_reports: false },
 };
@@ -368,6 +368,9 @@ if (params.has("aion")) {
   aiState = { enabled: true, consented: true, provider: "anthropic", keys: new Set<AiProvider>(["anthropic"]) };
   settings.ai = { ...settings.ai, enabled: true, consented: "anthropic" };
 }
+if (params.has("sendon")) {
+  settings.email = { ...settings.email, send_invitations: true, imap: [{ id: "imap1", preset: "yahoo", address: "me@yahoo.com", host: null }] };
+}
 if (params.has("mailon")) settings.email = { ...settings.email, enabled: true, apple_mail: true };
 /** A CalDAV account with one calendar the server lets the user change and one it does not. */
 if (params.has("withcaldav")) {
@@ -511,6 +514,25 @@ export const fixtureBackend: Backend = {
   async getOwnEvent(id) {
     const rec = findRecord(id);
     return rec ? { id: rec.id, input: structuredClone(rec.input), saved_to: rec.destination ?? null } : null;
+  },
+  async inviteSenders() {
+    if (!settings.email.send_invitations) return [];
+    return settings.email.imap.filter((m) => m.preset !== "custom").map((m) => ({ id: m.id, address: m.address, label: m.preset === "yahoo" ? "Yahoo Mail" : "iCloud Mail" }));
+  },
+  async invitePreview(id) {
+    const ev = fixtureEvents().concat(ownEvents()).find((e) => e.id === id || findRecord(id)?.id === e.id) ?? ownEvents()[0];
+    return { subject: `Invitation: ${ev?.title ?? "Event"}`, body: `${ev?.title ?? "Event"}\n\nWhen: soon\n\nThe calendar file is attached, so you can add it to your calendar.` };
+  },
+  async sendInviteMail(id, recipients, mailboxId) {
+    await sleep(150);
+    if (!settings.email.send_invitations) throw new Error("Turn on “Send invitations from Firstlight” in Settings first.");
+    if (params.has("sendfail")) throw new Error("The mail server didn't accept the saved password. Add the mailbox again with a fresh app password.");
+    const list = recipients.split(/[\s,;]+/).filter(Boolean);
+    if (list.length === 0) throw new Error("Add at least one email address.");
+    if (list.some((a) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a))) throw new Error("One of those email addresses doesn't look right.");
+    if (!settings.email.imap.some((m) => m.id === mailboxId)) throw new Error("That mailbox isn't connected.");
+    const w = window as unknown as Record<string, unknown>;
+    w.__sent = [...((w.__sent as unknown[]) ?? []), { id, list, mailboxId }];
   },
   async prepareInvite(id, recipients, openMail) {
     await sleep(150);

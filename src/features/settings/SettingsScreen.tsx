@@ -430,7 +430,7 @@ export function SettingsScreen() {
               )}
             </Group>
 
-            <Group title="Your data" footer="Firstlight has no server and no account. Your events stay on this computer, your passwords and sign-ins live in the system keychain, and nothing is sent anywhere except to your own calendar providers.">
+            <Group title="Your data" footer="Firstlight has no server and no account. Your events stay on this computer, your passwords and sign-ins live in the system keychain, and nothing is sent anywhere except to your own calendar providers, and (only if you turn those on) your own mail provider, AI service and mailbox.">
               <SettingRow title="Export my own events" description="The events you added yourself, as a calendar file you can open in any calendar app.">
                 <Button size="sm" variant="secondary" disabled={exportEvents.isPending} onClick={() => exportEvents.mutate()}>
                   Export…

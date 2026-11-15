@@ -18,6 +18,7 @@ pub mod applemail;
 pub mod gmail;
 pub mod imap;
 pub mod microsoft;
+pub mod smtp;
 
 /// The longest snippet kept. Enough to recognise a message, far too little to be a copy of it.
 pub const MAX_SNIPPET_CHARS: usize = 160;

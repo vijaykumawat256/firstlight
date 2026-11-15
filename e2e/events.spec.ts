@@ -345,3 +345,58 @@ test("turning the account switch off again stops the offer", async ({ page }) =>
   await sw.click();
   await expect(sw).not.toBeChecked();
 });
+
+async function inviteDialog(page: import("@playwright/test").Page, url: string) {
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto(url);
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByLabel("Title").fill("Team lunch");
+  await sheet.getByLabel("Start time").fill("18:00");
+  await sheet.getByLabel("End time").fill("19:00");
+  await sheet.getByLabel("Invite people").fill("sam@example.com");
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  await page.getByRole("button", { name: /Team lunch/ }).click();
+  await page.getByRole("dialog", { name: "Team lunch" }).getByRole("button", { name: "Send invitation…" }).click();
+  return page.getByRole("dialog", { name: "Send invitation" });
+}
+
+test("sending is not offered unless the user turned it on", async ({ page }) => {
+  const dialog = await inviteDialog(page, "/");
+  await expect(dialog.getByRole("button", { name: "Review and send" })).toHaveCount(0);
+});
+
+test("with sending on, the exact message is shown first and goes out only on Send", async ({ page }) => {
+  const dialog = await inviteDialog(page, "/?sendon");
+  await dialog.getByRole("button", { name: "Review and send" }).click();
+  const review = page.getByRole("dialog", { name: "Review before sending" });
+  await expect(review).toContainText("me@yahoo.com");
+  await expect(review).toContainText("sam@example.com");
+  await expect(review).toContainText("Invitation: Team lunch");
+  await expect(review.getByLabel("Message text")).toContainText("calendar file is attached");
+  // Reviewing alone sends nothing.
+  expect(await page.evaluate(() => (window as unknown as { __sent?: unknown[] }).__sent ?? [])).toHaveLength(0);
+  await review.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Invitation sent").first()).toBeVisible();
+  const sent = await page.evaluate(() => (window as unknown as { __sent: { list: string[] }[] }).__sent);
+  expect(sent).toHaveLength(1);
+  expect(sent[0]!.list).toEqual(["sam@example.com"]);
+});
+
+test("a failed send says so, keeps the window open and sends nothing", async ({ page }) => {
+  const dialog = await inviteDialog(page, "/?sendon&sendfail");
+  await dialog.getByRole("button", { name: "Review and send" }).click();
+  const review = page.getByRole("dialog", { name: "Review before sending" });
+  await review.getByRole("button", { name: "Send" }).click();
+  await expect(review.getByRole("alert")).toContainText("didn't accept the saved password");
+  expect(await page.evaluate(() => (window as unknown as { __sent?: unknown[] }).__sent ?? [])).toHaveLength(0);
+});
+
+test("the review window has no accessibility violations", async ({ page }) => {
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  const dialog = await inviteDialog(page, "/?sendon");
+  await dialog.getByRole("button", { name: "Review and send" }).click();
+  await expect(page.getByRole("dialog", { name: "Review before sending" }).getByLabel("Message text")).toContainText("Team lunch");
+  const r = await new AxeBuilder({ page }).analyze();
+  expect(r.violations).toEqual([]);
+});

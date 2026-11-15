@@ -97,10 +97,26 @@ export function EmailGroup() {
               </Button>
             </SettingRow>
           ))}
-          <SettingRow title="Yahoo or iCloud mail" description="Sign in with an app-specific password. Firstlight only looks; it never changes your mail.">
+          <SettingRow title="Yahoo or iCloud mail" description="Sign in with an app-specific password. Firstlight only looks at your mail; it never changes it.">
             <Button size="sm" variant="secondary" disabled={e.imap.length >= 4} onClick={() => setAddMailbox(true)}>
               Add mailbox…
             </Button>
+          </SettingRow>
+
+          <SettingRow
+            title="Send invitations from Firstlight"
+            description={
+              e.imap.some((m) => m.preset !== "custom")
+                ? "Off by default. When on, Send invitation can send the message itself from your Yahoo or iCloud mailbox, after showing you exactly what goes out. Nothing is sent until you press Send."
+                : "Add a Yahoo or iCloud mailbox above to use this. Other providers can still use “Open in my mail app”."
+            }
+          >
+            <Switch
+              label="Send invitations from Firstlight"
+              checked={e.send_invitations && e.imap.some((m) => m.preset !== "custom")}
+              disabled={!e.imap.some((m) => m.preset !== "custom")}
+              onCheckedChange={(v) => update((d) => void (d.email.send_invitations = v))}
+            />
           </SettingRow>
 
           <SettingRow title="Important senders" description="Their mail is always shown. Use an address, @company.com, or a name. People who organise today's meetings count too." stack>

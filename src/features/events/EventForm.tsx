@@ -432,7 +432,7 @@ function FormSheet({
           value={d.invitees}
           onChange={(e) => set("invitees", e.target.value)}
           placeholder="sam@example.com, kim@example.com"
-          hint="Separate addresses with commas. Firstlight sends nothing itself: after saving, open the event and choose Send invitation to use your own mail app."
+          hint="Separate addresses with commas. Nothing is sent when you save: after saving, open the event and choose Send invitation."
           autoComplete="off"
           spellCheck={false}
         />

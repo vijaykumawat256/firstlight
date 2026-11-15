@@ -177,6 +177,10 @@ pub struct EmailSettings {
     /// Yahoo and iCloud mailboxes (IMAP). Only added or removed by their own commands, which keep the
     /// app password in the keychain in step; never exported, imported or changed by a plain save.
     pub imap: Vec<ImapMailbox>,
+    /// Let "Send invitation" send the message itself from a Yahoo or iCloud mailbox above, instead of only
+    /// opening a draft. Off by default; a settings file can never turn it on. Each message still needs a press
+    /// of Send in the invitation window.
+    pub send_invitations: bool,
     /// Addresses, `@domain`s, domains or names whose mail always shows.
     pub important_senders: Vec<String>,
     pub days_back: i64,
@@ -189,6 +193,7 @@ impl Default for EmailSettings {
             apple_mail: false,
             account_ids: vec![],
             imap: vec![],
+            send_invitations: false,
             important_senders: vec![],
             days_back: 3,
         }
@@ -722,6 +727,7 @@ impl AppSettings {
         // Writing to a calendar is never switched on by a file.
         imported.general.write_to_calendar_app = false;
         imported.general.writable_accounts.clear();
+        imported.email.send_invitations = false;
         imported.ai.consented = None;
         imported.ai.consented_host = None;
         imported.ai.enabled = false;

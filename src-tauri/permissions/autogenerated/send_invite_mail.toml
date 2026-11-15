@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-send-invite-mail"
+description = "Enables the send_invite_mail command without any pre-configured scope."
+commands.allow = ["send_invite_mail"]
+
+[[permission]]
+identifier = "deny-send-invite-mail"
+description = "Denies the send_invite_mail command without any pre-configured scope."
+commands.deny = ["send_invite_mail"]

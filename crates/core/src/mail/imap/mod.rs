@@ -14,7 +14,7 @@
 mod mime;
 #[cfg(test)]
 mod tests;
-mod wire;
+pub(crate) mod wire;
 
 use super::{OpenTarget, RawMessage, SourceBatch, subject_looks_like_invitation};
 use crate::secrets::SecretStore;

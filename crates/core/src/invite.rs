@@ -1,8 +1,9 @@
-//! Sharing an event with other people, without Firstlight ever sending anything.
+//! Sharing an event with other people.
 //!
-//! The app prepares the invitation and hands it to the user's own mail app (a `mailto:` link) plus an
-//! `.ics` file that any calendar understands. The user reads it and presses Send. No mail permission,
-//! no server and no password is involved, so "Firstlight never sends mail" stays true.
+//! By default the app prepares the invitation and hands it to the user's own mail app (a `mailto:` link) plus
+//! an `.ics` file that any calendar understands; the user reads it and presses Send. Only if the user turned on
+//! "Send invitations from Firstlight" (off by default) can `mail::smtp` send it from a Yahoo or iCloud mailbox
+//! they connected, and then only after showing the exact message and on their press of Send.
 
 use crate::model::{Event, When};
 use crate::{Error, Result};
