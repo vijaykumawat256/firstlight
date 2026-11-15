@@ -269,6 +269,17 @@ export interface AppInfo {
 
 export type UpdateStatus = { state: "not_configured" } | { state: "up_to_date" } | { state: "available"; version: string } | { state: "failed" };
 
+/** Mirrors `firstlight_core::prep`. */
+export interface MeetingPrep {
+  earlier: Array<{ id: string; title: string; when: When; notes: string | null }>;
+  next_time: { id: string; when: When } | null;
+  before: { id: string; title: string; gap_minutes: number } | null;
+  after: { id: string; title: string; gap_minutes: number } | null;
+  overlaps: Array<{ id: string; title: string; minutes: number }>;
+  /** Unread messages that look to be about the meeting (from the digest already fetched). */
+  mail: MailMessage[];
+}
+
 /** The answer to a question about the calendar, worked out on this computer from the stored events. */
 export interface CalendarAnswer {
   kind: "events" | "free";

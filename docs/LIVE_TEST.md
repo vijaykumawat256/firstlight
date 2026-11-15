@@ -17,6 +17,8 @@ For every step: note **what you did, what you expected, what happened**, and a s
 
 8. **Ask your calendar** (needs AI on with your key): press Cmd/Ctrl+K, type "when is my next dentist appointment", choose the Ask row. Try also: "when am I free for 2 hours on Thursday", "what do I have next Tuesday", "show everything with Sam this month", "what is the weather" (should say it can't). Check the dates under the answer match what you meant (models can misread "next week"), and that the answer is right against your real calendar. Also try it with a local model.
 
+9. **Meeting prep**: open a meeting that repeats (a weekly one). Expect a Prepare section with last time's date and what was written in it, the next time, what is right before and after, and a warning if it overlaps another meeting. With email on, an unread mail from the organiser or naming the meeting should appear (open the Inbox once first so it is fetched). Check it stays quiet (no section) for a one-off with nothing around it, and that no link or password from the notes shows.
+
 ## B. Needs you at the machine (about 30 minutes)
 1. Notifications show as "Firstlight". Click one: the app comes forward. Press Snooze 10 min: it returns.
 2. Menu-bar text (Settings → General): shows the next meeting; "Meeting" when titles are hidden.

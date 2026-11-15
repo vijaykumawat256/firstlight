@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, EventInput, FreeSlot, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, EventInput, FreeSlot, MeetingPrep, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -88,6 +88,10 @@ export function fixtureEvents(base: Date = new Date()): CalEvent[] {
       location: "Room 4B",
       join_url: "https://zoom.example.com/j/123456789",
       organizer: "Priya",
+    }),
+    ev("design-review-last-week", "fixture-work", "Design review", -7, [10, 30], [11, 30], {
+      organizer: "Priya",
+      description: "Agree the navigation pattern. See https://docs.example.com/nav?pw=secret for the mock-ups. Priya to share the revised flow.",
     }),
     ev("one-on-one", "fixture-work", "1:1 with Sam", 0, [11, 0], [11, 30], { my_response: "needs_action" }),
     ev("lunch", "fixture-personal", "Lunch with Alex", 0, [12, 30], [13, 30], { location: "Café Nero" }),
@@ -648,6 +652,46 @@ export const fixtureBackend: Backend = {
     const keywords = q.replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((x) => x.length > 2 && !stop.has(x));
     const events = fixtureEvents().filter((e) => overlaps(e, day, to) && keywords.every((k) => `${e.title} ${e.location ?? ""}`.toLowerCase().includes(k)));
     return { enabled: true, understood: true, problem: null, answer: { kind: "events", from: iso(day), to: iso(to), keywords, minutes: 30, count: events.length, events: events.slice(0, 50), slots: [] } } satisfies AskReply;
+  },
+  async getMeetingPrep(id) {
+    // A small stand-in for crates/logic/src/prep.rs.
+    const ids = visibleCalendarIds();
+    const all = fixtureEvents().filter((e) => ids.has(e.calendar_id) && e.status !== "cancelled" && e.my_response !== "declined");
+    const target = all.find((e) => e.id === id);
+    const empty: MeetingPrep = { earlier: [], next_time: null, before: null, after: null, overlaps: [], mail: [] };
+    if (!target || target.when.kind !== "timed") return empty;
+    const [ts, te] = [Date.parse(target.when.start), Date.parse(target.when.end)];
+    const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+    const same = (e: CalEvent) => e.id !== target.id && norm(e.title).length >= 4 && norm(e.title) === norm(target.title);
+    const timed = all.filter((e): e is CalEvent & { when: { kind: "timed"; start: string; end: string; tzid: string | null } } => e.id !== target.id && e.when.kind === "timed");
+    const tidy = (s: string | null) => {
+      const t = (s ?? "").split(/\s+/).filter((w) => w && !/^http/i.test(w)).join(" ");
+      return t ? (t.length > 300 ? `${t.slice(0, 299)}…` : t) : null;
+    };
+    const earlier = all
+      .filter((e) => same(e) && e.when.kind === "timed" && Date.parse(e.when.start) < ts)
+      .sort((a, b) => Date.parse(b.when.start) - Date.parse(a.when.start))
+      .slice(0, 3)
+      .map((e) => ({ id: e.id, title: e.title, when: e.when, notes: tidy(e.description) }));
+    const nextSame = all.filter((e) => same(e) && e.when.kind === "timed" && Date.parse(e.when.start) >= te).sort((a, b) => Date.parse(a.when.start) - Date.parse(b.when.start))[0];
+    const hr4 = 4 * 3_600_000;
+    const before = timed.filter((e) => Date.parse(e.when.end) <= ts && ts - Date.parse(e.when.end) <= hr4).sort((a, b) => Date.parse(b.when.end) - Date.parse(a.when.end))[0];
+    const after = timed.filter((e) => Date.parse(e.when.start) >= te && Date.parse(e.when.start) - te <= hr4).sort((a, b) => Date.parse(a.when.start) - Date.parse(b.when.start))[0];
+    const overlaps = timed
+      .filter((e) => Date.parse(e.when.start) < te && Date.parse(e.when.end) > ts)
+      .map((e) => ({ id: e.id, title: e.title, minutes: Math.round((Math.min(Date.parse(e.when.end), te) - Math.max(Date.parse(e.when.start), ts)) / 60_000) }));
+    const mail =
+      params.has("prepmail") && target.organizer === "Priya"
+        ? [{ id: "m1", sender_name: "Priya", sender_address: "priya@example.com", subject: "Design review: slides attached", received: new Date().toISOString(), snippet: "", open: { kind: "url", url: "https://mail.example.com/m/1" } as const }]
+        : [];
+    return {
+      earlier,
+      next_time: nextSame ? { id: nextSame.id, when: nextSame.when } : null,
+      before: before ? { id: before.id, title: before.title, gap_minutes: Math.round((ts - Date.parse(before.when.end)) / 60_000) } : null,
+      after: after ? { id: after.id, title: after.title, gap_minutes: Math.round((Date.parse(after.when.start) - te) / 60_000) } : null,
+      overlaps,
+      mail,
+    } satisfies MeetingPrep;
   },
   async findFreeTimes(minutes, days) {
     // A small browser-only stand-in for the Rust finder (crates/logic/src/briefing/slots.rs).

@@ -17,6 +17,7 @@ import { api, errorMessage, type CalEvent, type CalendarInfo, type OwnEvent } fr
 import { EventForm } from "@/features/events/EventForm";
 import { InviteDialog } from "@/features/events/InviteDialog";
 import { Badge, Button, Sheet, calendarColour, useToasts } from "@/design";
+import { MeetingPrep } from "./MeetingPrep";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { eventLink, isLinkOnly } from "./links";
 import { formatDate, formatTime } from "./format";
@@ -358,6 +359,7 @@ export function EventDetail({
                 )}
               </div>
             )}
+            <MeetingPrep event={event} />
             {event.description && (
               // Event text is untrusted: shown as plain text only, never as HTML.
               <p className="max-h-48 select-text overflow-y-auto whitespace-pre-wrap break-words rounded-card bg-fill p-3 text-body text-fg-2">

@@ -74,6 +74,7 @@
     "allow-forget-ai-key",
     "allow-get-ai-summary",
     "allow-ask-calendar",
+    "allow-get-meeting-prep",
     "allow-get-app-info",
     "allow-check-for-update",
     "allow-install-update",

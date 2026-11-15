@@ -92,6 +92,7 @@ fn main() {
             "forget_ai_key",
             "get_ai_summary",
             "ask_calendar",
+            "get_meeting_prep",
             "get_settings",
             "set_settings",
             "export_settings",

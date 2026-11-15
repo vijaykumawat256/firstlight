@@ -858,6 +858,51 @@ pub async fn forget_ai_key(app: AppHandle, state: State<'_, AppState>) -> CmdRes
     })
 }
 
+// ---- meeting prep ------------------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct PrepReply {
+    #[serde(flatten)]
+    prep: firstlight_core::prep::Prep,
+    /// Unread messages that look to be about the meeting, from the digest already fetched.
+    mail: Vec<firstlight_core::mail::MailMessage>,
+}
+
+/// What is worth knowing before a meeting: earlier times and their notes, what comes right before and after, overlaps
+/// and related unread mail. Local only and instant: it reads stored events and the cached mail digest, and uses no AI
+/// and no network.
+#[tauri::command]
+pub async fn get_meeting_prep(state: State<'_, AppState>, id: String) -> CmdResult<PrepReply> {
+    let (now, tz) = (Utc::now(), crate::local_tz());
+    let (settings, events) = {
+        let store = lock_store(&state)?;
+        let events = store
+            .events_between(now - Duration::days(60), now + Duration::days(120))
+            .map_err(internal("loading events"))?;
+        (store.load_settings(), dedupe(events))
+    };
+    let Some(target) = events.iter().find(|e| e.id == id) else {
+        return Ok(PrepReply {
+            prep: Default::default(),
+            mail: vec![],
+        });
+    };
+    let prep = firstlight_core::prep::prepare(target, &events, tz, &settings.briefing);
+    let mail = if settings.email.enabled {
+        state
+            .mail_cache
+            .lock()
+            .map_err(|_| "state unavailable")?
+            .as_ref()
+            .and_then(|(_, r)| r.digest.as_ref())
+            .map(|d| firstlight_core::mail::related::related(d, target))
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+    Ok(PrepReply { prep, mail })
+}
+
 // ---- ask your calendar -----------------------------------------------------------------
 
 const ASK_LIMIT_PER_HOUR: usize = 30;
