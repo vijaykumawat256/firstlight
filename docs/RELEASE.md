@@ -14,6 +14,14 @@ Everything here needs accounts or machines only you have. Nothing below has been
 | Google OAuth verification | Gmail scope is *restricted* | Needs a third-party security assessment (CASA). Without it, Gmail mail works only for up to 100 test users. Calendar-only scopes are lighter. |
 | Microsoft publisher verification | Removes the "unverified" consent warning | Partner Center account |
 
+## 0b. Installers anyone can install (no signing yet)
+
+- **Mac, on this Mac:** `npm run tauri build -- --bundles app,dmg`. The files appear in `target/release/bundle/` (`macos/Firstlight.app` and `dmg/Firstlight_0.1.0_aarch64.dmg`). This builds for the kind of Mac it runs on (Apple silicon here); an Intel Mac needs a build made on an Intel Mac or in CI.
+- **Windows (and Mac) in GitHub:** `.github/workflows/installers.yml`. After pushing, open the repository's Actions tab, choose **Installers**, **Run workflow** (or push a tag like `v0.1.0`). The run ends with downloadable files: `firstlight-windows` (an `.exe` installer that installs for the current user, no administrator needed) and `firstlight-mac` (the `.dmg`). Add `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` and `MICROSOFT_OAUTH_CLIENT_ID` under Settings, Secrets and variables, Actions, so Google and Microsoft sign-in work in those builds.
+- **Not verified:** the Windows installer has never been built or run by us. The Windows code (unlock detection, full-screen check) was only type-checked, so the first run may stop on a compile error that has to be fixed.
+- **Unsigned:** Windows shows "unknown publisher" (SmartScreen: More info, Run anyway) and macOS says it cannot verify the developer (right-click the app, Open). Signing is section 1 and 2 below.
+- **Android (APK):** not supported. This is a desktop app (menu bar, global shortcuts, unlock detection, start at login, the Calendar app link are all desktop-only). A phone version is the web build in Phase 7 (`docs/PHASE7_DESIGN.md`) or a separate mobile app project.
+
 ## 1. macOS: build, sign, notarise
 
 ```sh

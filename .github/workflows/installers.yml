@@ -1,0 +1,48 @@
+name: Installers
+
+# Builds the installers people actually install: an .exe for Windows and a .dmg for Mac. They are NOT signed
+# (see docs/RELEASE.md), so Windows shows "unknown publisher" and macOS asks to be opened with right-click.
+# Run it by hand (Actions tab, "Installers", Run workflow) or by pushing a tag such as v0.1.0. The finished
+# files appear at the bottom of the run as downloadable "artifacts".
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+            bundles: nsis
+            files: target/release/bundle/nsis/*.exe
+          - os: macos-latest
+            name: mac
+            bundles: app,dmg
+            files: target/release/bundle/dmg/*.dmg
+    runs-on: ${{ matrix.os }}
+    env:
+      # Baked into the app at build time (they identify the app; they are not passwords). Add them under
+      # Settings, Secrets and variables, Actions. If they are missing the app still builds, and the Google and
+      # Microsoft buttons say "Setup needed".
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      MICROSOFT_OAUTH_CLIENT_ID: ${{ secrets.MICROSOFT_OAUTH_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - name: Build the installer
+        run: npm run tauri build -- --bundles ${{ matrix.bundles }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firstlight-${{ matrix.name }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
