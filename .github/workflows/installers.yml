@@ -41,6 +41,10 @@ jobs:
       - run: npm ci
       - name: Build the installer
         run: npm run tauri build -- --bundles ${{ matrix.bundles }}
+        env:
+          # "-" signs the Mac app with no certificate ("ad hoc"), so its seal is intact. Without it macOS can call
+          # a downloaded copy "damaged". It is still not notarised: macOS asks to confirm the developer.
+          APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: firstlight-${{ matrix.name }}
