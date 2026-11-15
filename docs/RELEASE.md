@@ -22,6 +22,12 @@ Everything here needs accounts or machines only you have. Nothing below has been
 - **Unsigned:** Windows shows "unknown publisher" (SmartScreen: More info, Run anyway) and macOS says it cannot verify the developer (right-click the app, Open). Signing is section 1 and 2 below.
 - **Android (APK):** not supported. This is a desktop app (menu bar, global shortcuts, unlock detection, start at login, the Calendar app link are all desktop-only). A phone version is the web build in Phase 7 (`docs/PHASE7_DESIGN.md`) or a separate mobile app project.
 
+## 0c. After the rename (Daybrief to Firstlight)
+
+- The first start of a build with the new identity moves an old installation's data across automatically (`legacy.rs`): the database, account sign-ins, AI keys and mailbox passwords go from the old keychain service and folder to the new ones, are checked, and only then removed from the old place. macOS may ask to allow access to the old keychain entries: choose Always Allow. If it cannot be done (access refused), nothing old is touched and it is tried again at the next start.
+- macOS ties these to the app's identity, so after the rename they are asked for again: notifications, Calendar access, and Automation for Mail. Start at login must be switched off and on once in Settings so the login item points at the renamed app.
+- A Windows install of the old name is a different app: uninstall it, then install the new one (its data is under `%APPDATA%\com.daybrief.app` and is moved on first start, if the same Windows user opens the new app).
+
 ## 1. macOS: build, sign, notarise
 
 ```sh
@@ -55,7 +61,7 @@ Build on Windows (or a Windows CI runner) with the same command. Sign with `sign
 ## 3. Updater key (do this once, keep it forever)
 
 ```sh
-npx tauri signer generate -w ~/.tauri/daybrief-updater.key
+npx tauri signer generate -w ~/.tauri/firstlight-updater.key
 ```
 
 - Use a strong password. Back up the key file **and** the password somewhere separate from the repo (password manager plus an offline copy).
@@ -71,7 +77,7 @@ Verified: with a throwaway key, the build produced `Firstlight.app.tar.gz` and i
 {base}/beta/latest.json
 {base}/<version>/Firstlight.app.tar.gz  (+ .sig contents inlined in latest.json)
 ```
-The app picks the channel from Settings (General). Override the base at build time with `DAYBRIEF_UPDATE_BASE`. `latest.json` follows the Tauri v2 static format (`version`, `notes`, `pub_date`, `platforms.{darwin-aarch64,darwin-x86_64,windows-x86_64}.{url,signature}`).
+The app picks the channel from Settings (General). Override the base at build time with `FIRSTLIGHT_UPDATE_BASE`. `latest.json` follows the Tauri v2 static format (`version`, `notes`, `pub_date`, `platforms.{darwin-aarch64,darwin-x86_64,windows-x86_64}.{url,signature}`).
 
 Test plan for the first release: install version N from the notarised build, publish N+1 to `beta`, switch the channel, confirm the toast, install, relaunch, confirm data and sign-ins survived. Then test a *tampered* bundle (wrong signature) is refused.
 
@@ -85,7 +91,7 @@ Test plan for the first release: install version N from the notarised build, pub
 
 Cold start to a visible window was **not** measured precisely. Do it by hand with a stopwatch on your slowest machine; budget under 1 s from unlock to usable window. Re-measure with the window open and with several accounts synced.
 
-Use `DAYBRIEF_PROFILE=<name>` when running a release build next to your dev data: it uses a separate keychain service and database file. Delete the leftovers afterwards (`security delete-generic-password -s com.daybrief.app.<name>` and the `daybrief-<name>.db*` files).
+Use `FIRSTLIGHT_PROFILE=<name>` when running a release build next to your dev data: it uses a separate keychain service and database file. Delete the leftovers afterwards (`security delete-generic-password -s com.firstlight.desktop.<name>` and the `firstlight-<name>.db*` files).
 
 ## 5. QA matrix before tagging
 
@@ -99,7 +105,7 @@ Use `DAYBRIEF_PROFILE=<name>` when running a release build next to your dev data
 - [ ] VoiceOver pass through Briefing, Day, Week, Settings, About (axe passes, a screen reader has not been used)
 - [ ] Light, dark, each accent, reduced motion, increased contrast
 - [ ] Start at login across a real logout/login
-- [ ] Erase all data leaves no keychain entries (`security dump-keychain | grep daybrief`)
+- [ ] Erase all data leaves no keychain entries (`security dump-keychain | grep firstlight`)
 - [ ] Update flow (section 3) including a tampered bundle
 - [ ] Windows pass (section 2)
 
@@ -107,7 +113,7 @@ Use `DAYBRIEF_PROFILE=<name>` when running a release build next to your dev data
 
 ```sh
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
-cargo clippy -p daybrief --features updater -- -D warnings
+cargo clippy -p firstlight --features updater -- -D warnings
 cargo test --workspace && cargo deny check
 npm run check && npm run e2e
 npm run licences   # regenerates src/assets/licences.json (see scripts/gen-licences.mjs)

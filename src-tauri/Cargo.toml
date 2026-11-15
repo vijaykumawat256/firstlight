@@ -1,12 +1,12 @@
 [package]
-name = "daybrief"
+name = "firstlight"
 version.workspace = true
 edition.workspace = true
 publish = false
 description = "Firstlight desktop shell"
 
 [lib]
-name = "daybrief_lib"
+name = "firstlight_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -15,7 +15,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 chrono = { version = "0.4.45", features = ["serde"] }
 chrono-tz = "0.10.4"
-daybrief-core = { path = "../crates/core" }
+firstlight-core = { path = "../crates/core" }
 iana-time-zone = "0.1.65"
 keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native"] }
 log = "0.4.35"

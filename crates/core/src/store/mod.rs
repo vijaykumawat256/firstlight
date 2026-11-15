@@ -777,7 +777,7 @@ mod tests {
 
     #[test]
     fn database_file_is_unreadable_without_the_key() {
-        let dir = std::env::temp_dir().join(format!("daybrief-test-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("firstlight-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("db.sqlite");
         let k = key();

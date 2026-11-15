@@ -80,7 +80,7 @@ fn garbage(rng: &mut Rng) -> String {
         "\u{1f}",
         "TOTAL",
         "NOTRUNNING",
-        "{\"format\":\"daybrief-settings\",\"settings\":",
+        "{\"format\":\"firstlight-settings\",\"settings\":",
         "{\"general\":",
         "\"sync_interval_minutes\":",
         "ICS",

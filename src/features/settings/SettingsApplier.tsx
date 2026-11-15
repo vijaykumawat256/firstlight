@@ -8,7 +8,7 @@ import { setWeekStart } from "@/features/calendar/layout";
 import { useNav } from "@/app/nav";
 
 /** Remembers the theme so the next launch paints correctly before settings have loaded. */
-const THEME_CACHE = "daybrief.theme";
+const THEME_CACHE = "firstlight.theme";
 
 /** Which part of the day it is, for the optional background tint. */
 export function periodOf(d: Date): "morning" | "day" | "evening" | "night" {
@@ -90,7 +90,7 @@ export function SettingsApplier({ children }: { children: ReactNode }) {
   const defaultView = settings?.general.default_view;
   const loaded = defaultView !== undefined;
   useEffect(() => {
-    if (!loaded || window.location.hash === "#/upnext" || sessionStorageFlag("daybrief.opened")) return;
+    if (!loaded || window.location.hash === "#/upnext" || sessionStorageFlag("firstlight.opened")) return;
     goToDefaultView(qc);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only the first time settings are available
   }, [loaded]);

@@ -280,7 +280,7 @@ mod tests {
 }
 
 /// Live check against a real public feed. Ignored by default (needs the internet):
-/// `cargo test -p daybrief-core live_ -- --ignored --nocapture`
+/// `cargo test -p firstlight-core live_ -- --ignored --nocapture`
 #[cfg(test)]
 mod live {
     use super::*;

@@ -1,4 +1,4 @@
-/** CalDAV servers offered as one-tap presets. Keep in step with `PRESETS` in daybrief-core. */
+/** CalDAV servers offered as one-tap presets. Keep in step with `PRESETS` in firstlight-core. */
 export interface CaldavPreset {
   id: string;
   label: string;

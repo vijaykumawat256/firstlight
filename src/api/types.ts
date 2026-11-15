@@ -1,4 +1,4 @@
-/** Mirrors the JSON produced by `daybrief-core::model` (snake_case, RFC 3339 instants, ISO dates). */
+/** Mirrors the JSON produced by `firstlight-core::model` (snake_case, RFC 3339 instants, ISO dates). */
 
 export type When =
   | { kind: "timed"; start: string; end: string; tzid: string | null }
@@ -102,7 +102,7 @@ export interface SystemStatus {
   access: SystemAccess;
 }
 
-/** Mirrors `daybrief_core::briefing::Briefing`. */
+/** Mirrors `firstlight_core::briefing::Briefing`. */
 export interface BriefingItem {
   event: CalEvent;
   start: string;
@@ -141,7 +141,7 @@ export interface ImapMailbox {
   host: string | null;
 }
 
-/** Mirrors `daybrief_core::settings::AppSettings`. */
+/** Mirrors `firstlight_core::settings::AppSettings`. */
 export type DefaultView = "briefing" | "day" | "week" | "month";
 export type WeekStart = "auto" | "monday" | "sunday" | "saturday";
 export type TimeFormat = "auto" | "h12" | "h24";
@@ -189,7 +189,7 @@ export interface AiStatus {
   has_key: boolean;
 }
 
-/** Mirrors `daybrief_core::mail`. */
+/** Mirrors `firstlight_core::mail`. */
 export type OpenTarget = { kind: "url"; url: string } | { kind: "apple_mail"; message_id: string } | { kind: "none" };
 
 export interface MailMessage {

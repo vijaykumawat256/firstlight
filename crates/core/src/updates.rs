@@ -35,15 +35,19 @@ mod tests {
     fn builds_a_channel_specific_https_address() {
         assert_eq!(
             manifest_url(
-                "https://updates.example.com/daybrief",
+                "https://updates.example.com/firstlight",
                 UpdateChannel::Stable
             )
             .as_deref(),
-            Some("https://updates.example.com/daybrief/stable/latest.json")
+            Some("https://updates.example.com/firstlight/stable/latest.json")
         );
         assert_eq!(
-            manifest_url("https://updates.example.com/daybrief/", UpdateChannel::Beta).as_deref(),
-            Some("https://updates.example.com/daybrief/beta/latest.json")
+            manifest_url(
+                "https://updates.example.com/firstlight/",
+                UpdateChannel::Beta
+            )
+            .as_deref(),
+            Some("https://updates.example.com/firstlight/beta/latest.json")
         );
         assert_eq!(
             manifest_url("https://updates.example.com", UpdateChannel::Stable).as_deref(),

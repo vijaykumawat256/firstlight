@@ -1,15 +1,15 @@
 //! Shows the notifications the briefing module says are due.
 //!
 //! A background thread with its own database connection checks every 30 seconds. All the rules (what is
-//! due, never twice, quiet hours) live in `daybrief_core::briefing::notify`; this file only fetches the
+//! due, never twice, quiet hours) live in `firstlight_core::briefing::notify`; this file only fetches the
 //! inputs, shows the result, and records that it was shown.
 
 use chrono::{Duration, Utc};
-use daybrief_core::briefing::day_bounds;
-use daybrief_core::briefing::notify::due;
-use daybrief_core::dedupe::dedupe;
-use daybrief_core::secrets::Redacted;
-use daybrief_core::store::Store;
+use firstlight_core::briefing::day_bounds;
+use firstlight_core::briefing::notify::due;
+use firstlight_core::dedupe::dedupe;
+use firstlight_core::secrets::Redacted;
+use firstlight_core::store::Store;
 use std::path::PathBuf;
 use std::time::Duration as StdDuration;
 use tauri::AppHandle;
@@ -40,8 +40,8 @@ pub(crate) const SNOOZABLE: &str = "snoozable";
 pub(crate) const SNOOZE_ACTION: &str = "snooze";
 
 /// Snoozed notifications waiting for their time (in memory; see `briefing::snooze`).
-static SNOOZED: std::sync::Mutex<daybrief_core::briefing::snooze::SnoozeQueue> =
-    std::sync::Mutex::new(daybrief_core::briefing::snooze::SnoozeQueue::new());
+static SNOOZED: std::sync::Mutex<firstlight_core::briefing::snooze::SnoozeQueue> =
+    std::sync::Mutex::new(firstlight_core::briefing::snooze::SnoozeQueue::new());
 
 /// Called when the user presses Snooze on a notification: it comes back in ten minutes with the same words.
 pub(crate) fn snooze(title: &str, body: &str) {
@@ -105,7 +105,7 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
             // Give the first sync a moment so we don't announce from stale data at launch.
             std::thread::sleep(StdDuration::from_secs(8));
             loop {
-                if daybrief_core::contain::contained(|| {
+                if firstlight_core::contain::contained(|| {
                     let now = Utc::now();
                     // Read each tick: a changed system time zone applies without a restart.
                     let tz = crate::local_tz();
@@ -119,7 +119,7 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                     // once a day (and the first time round after launch).
                     if refreshed_on != Some(today) {
                         refreshed_on = Some(today);
-                        let _ = daybrief_core::local::refresh(&mut store, now);
+                        let _ = firstlight_core::local::refresh(&mut store, now);
                     }
                     let (from, _) = day_bounds(today, tz);
                     let (_, to) = day_bounds(today + Duration::days(1), tz);
@@ -129,12 +129,12 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                     {
                         // The menu-bar text, refreshed every tick (empty when the setting is off).
                         let next =
-                            daybrief_core::briefing::build(&dedupe(events.clone()), now, tz, &bs)
+                            firstlight_core::briefing::build(&dedupe(events.clone()), now, tz, &bs)
                                 .next;
                         let label = general
                             .tray_next_meeting
                             .then(|| {
-                                daybrief_core::briefing::glance::tray_label(
+                                firstlight_core::briefing::glance::tray_label(
                                     next.as_ref(),
                                     now,
                                     ns.hide_titles,
@@ -145,13 +145,13 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                             .flatten();
                         set_tray_text(&app, label.as_deref());
                         // Events with a reminder of their own are announced by it, not by the general heads-up.
-                        let own = daybrief_core::local::reminder_map(&store).unwrap_or_default();
+                        let own = firstlight_core::local::reminder_map(&store).unwrap_or_default();
                         let events: Vec<_> = dedupe(events)
                             .into_iter()
-                            .filter(|e| !daybrief_core::local::has_own_reminder(&own, e))
+                            .filter(|e| !firstlight_core::local::has_own_reminder(&own, e))
                             .collect();
                         for r in
-                            daybrief_core::local::due_reminders(&store, now).unwrap_or_default()
+                            firstlight_core::local::due_reminders(&store, now).unwrap_or_default()
                         {
                             if sent.contains(&r.id) {
                                 continue;
@@ -187,7 +187,7 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                                 &app,
                                 &n.title,
                                 &n.body,
-                                n.kind == daybrief_core::briefing::notify::Kind::Before,
+                                n.kind == firstlight_core::briefing::notify::Kind::Before,
                             );
                             log::info!("notification shown: {:?}", n.kind);
                         }

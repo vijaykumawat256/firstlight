@@ -16,7 +16,7 @@ export interface AiProviderInfo {
   defaultModel: string;
 }
 
-/** Keep the ids, hosts and default models in step with `AiProvider` in daybrief-core. */
+/** Keep the ids, hosts and default models in step with `AiProvider` in firstlight-core. */
 export const AI_PROVIDERS: AiProviderInfo[] = [
   { id: "anthropic", company: "Anthropic", label: "Claude (Anthropic)", host: "api.anthropic.com", keyLabel: "Anthropic API key", keyPlaceholder: "sk-ant-…", keyUrl: "https://console.anthropic.com/settings/keys", defaultModel: "claude-haiku-5-5" },
   { id: "openai", company: "OpenAI", label: "ChatGPT models (OpenAI)", host: "api.openai.com", keyLabel: "OpenAI API key", keyPlaceholder: "sk-…", keyUrl: "https://platform.openai.com/api-keys", defaultModel: "gpt-4o-mini" },

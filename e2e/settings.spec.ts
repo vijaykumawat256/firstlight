@@ -200,7 +200,7 @@ test("backing up and restoring settings", async ({ page }) => {
   await dialog.getByRole("button", { name: "Import" }).click();
   await expect(dialog.getByRole("alert")).toContainText("isn't a valid settings file");
 
-  await dialog.getByLabel("Settings file contents").fill(JSON.stringify({ format: "daybrief-settings", settings: { general: { default_view: "week" } } }));
+  await dialog.getByLabel("Settings file contents").fill(JSON.stringify({ format: "firstlight-settings", settings: { general: { default_view: "week" } } }));
   await dialog.getByRole("button", { name: "Import" }).click();
   await expect(page.getByText("Settings imported").first()).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();

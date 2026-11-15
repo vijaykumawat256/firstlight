@@ -2,7 +2,7 @@
 //! unless its signature verifies against the public key built into the app. Ordinary development builds have no
 //! updater, and every function here then reports "not configured".
 //!
-//! The address is baked in at build time (`DAYBRIEF_UPDATE_BASE`), never read from settings or the environment
+//! The address is baked in at build time (`FIRSTLIGHT_UPDATE_BASE`), never read from settings or the environment
 //! at run time, so nothing a user or a file can change redirects where updates come from.
 
 use serde::Serialize;
@@ -23,14 +23,14 @@ pub enum UpdateStatus {
 
 /// The update address built into this package, if any.
 pub fn configured_base() -> Option<&'static str> {
-    option_env!("DAYBRIEF_UPDATE_BASE").filter(|b| !b.is_empty())
+    option_env!("FIRSTLIGHT_UPDATE_BASE").filter(|b| !b.is_empty())
 }
 
 #[cfg(feature = "updater")]
 mod real {
     use super::*;
-    use daybrief_core::settings::UpdateChannel;
-    use daybrief_core::updates::manifest_url;
+    use firstlight_core::settings::UpdateChannel;
+    use firstlight_core::updates::manifest_url;
     use tauri::AppHandle;
     use tauri_plugin_updater::UpdaterExt;
 
@@ -78,7 +78,7 @@ mod real {
 #[cfg(not(feature = "updater"))]
 mod real {
     use super::*;
-    use daybrief_core::settings::UpdateChannel;
+    use firstlight_core::settings::UpdateChannel;
     use tauri::AppHandle;
 
     pub async fn check(_: &AppHandle, _: UpdateChannel) -> UpdateStatus {

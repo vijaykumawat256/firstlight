@@ -1,27 +1,27 @@
 //! The optional email digest and AI summaries: everything here is off until the user turns it on.
 //!
-//! Mail is read-only and reduced to sender, subject and a short snippet (see `daybrief_core::mail`).
+//! Mail is read-only and reduced to sender, subject and a short snippet (see `firstlight_core::mail`).
 //! AI sends only the text that `ai_preview` shows, to the provider the user agreed to.
 
 use crate::AppState;
 use crate::commands::{CmdResult, browser_sign_in, config_for, internal, lock_store, oauth_error};
 use chrono::{Duration, Utc};
-use daybrief_core::ai::{
+use firstlight_core::ai::{
     AnthropicSummariser, LocalSummariser, OpenAiStyleSummariser, Prompt, Summariser, build_prompt,
     summarise_if_enabled,
 };
-use daybrief_core::briefing::{Briefing, build, day_bounds};
-use daybrief_core::dedupe::dedupe;
-use daybrief_core::mail::applemail::{self, Outcome};
-use daybrief_core::mail::gmail::GmailSource;
-use daybrief_core::mail::imap::{self, ImapMailbox, ImapPreset, ImapSource, TlsConnect};
-use daybrief_core::mail::microsoft::MicrosoftMailSource;
-use daybrief_core::mail::{MailDigest, OpenTarget, SourceBatch, build_digest, gmail, microsoft};
-use daybrief_core::model::{Account, ProviderKind};
-use daybrief_core::oauth::{Pkce, TokenManager, loopback::Loopback, random_state};
-use daybrief_core::secrets::Redacted;
-use daybrief_core::settings::{AiProvider, AppSettings};
-use daybrief_core::{Error, oauth};
+use firstlight_core::briefing::{Briefing, build, day_bounds};
+use firstlight_core::dedupe::dedupe;
+use firstlight_core::mail::applemail::{self, Outcome};
+use firstlight_core::mail::gmail::GmailSource;
+use firstlight_core::mail::imap::{self, ImapMailbox, ImapPreset, ImapSource, TlsConnect};
+use firstlight_core::mail::microsoft::MicrosoftMailSource;
+use firstlight_core::mail::{MailDigest, OpenTarget, SourceBatch, build_digest, gmail, microsoft};
+use firstlight_core::model::{Account, ProviderKind};
+use firstlight_core::oauth::{Pkce, TokenManager, loopback::Loopback, random_state};
+use firstlight_core::secrets::Redacted;
+use firstlight_core::settings::{AiProvider, AppSettings};
+use firstlight_core::{Error, oauth};
 use serde::Serialize;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -104,8 +104,10 @@ struct ScratchDir(PathBuf);
 
 impl ScratchDir {
     fn new() -> std::io::Result<Self> {
-        let path =
-            std::env::temp_dir().join(format!("daybrief-mail-{}", daybrief_core::model::new_id()));
+        let path = std::env::temp_dir().join(format!(
+            "firstlight-mail-{}",
+            firstlight_core::model::new_id()
+        ));
         #[cfg(unix)]
         {
             use std::os::unix::fs::DirBuilderExt;
@@ -486,7 +488,7 @@ pub async fn add_imap_mailbox(
     }
     let id = existing
         .as_ref()
-        .map_or_else(daybrief_core::model::new_id, |m| m.id.clone());
+        .map_or_else(firstlight_core::model::new_id, |m| m.id.clone());
     let key = imap::secret_key(&id);
     state
         .deps
@@ -546,7 +548,7 @@ pub async fn open_mail_message(app: AppHandle, target: OpenTarget) -> CmdResult<
     use tauri_plugin_opener::OpenerExt;
     let url = match target {
         OpenTarget::Url { url } => {
-            let parsed = daybrief_core::http::Url::parse(&url)
+            let parsed = firstlight_core::http::Url::parse(&url)
                 .map_err(|_| "That link isn't valid.".to_string())?;
             let host_ok = parsed.host_str().is_some_and(|h| MAIL_HOSTS.contains(&h));
             if parsed.scheme() != "https" || !host_ok {
@@ -631,7 +633,7 @@ fn make_summariser(state: &AppState, settings: &AppSettings) -> Option<Box<dyn S
             let key = saved_key(state, p)?;
             let base = match p.base_url() {
                 Some(fixed) => fixed.to_string(),
-                None => daybrief_core::settings::valid_custom_endpoint(&ai.custom_endpoint)?,
+                None => firstlight_core::settings::valid_custom_endpoint(&ai.custom_endpoint)?,
             };
             Some(Box::new(OpenAiStyleSummariser::new(
                 state.deps.ai_http.clone(),
@@ -731,7 +733,7 @@ pub async fn enable_ai(
     }
     // The host the user is agreeing to send data to (only meaningful for a custom service).
     let agreed_host = (provider == AiProvider::Custom)
-        .then(|| daybrief_core::settings::endpoint_host(&settings.ai.custom_endpoint))
+        .then(|| firstlight_core::settings::endpoint_host(&settings.ai.custom_endpoint))
         .flatten();
     let summariser = make_summariser(&state, &settings).ok_or("Enter your API key.")?;
     let probe = Prompt {
@@ -772,7 +774,7 @@ const OPENROUTER_WAIT: StdDuration = StdDuration::from_secs(300);
 /// only gets the key; turning AI on is still the separate step that shows exactly what would be sent.
 #[tauri::command]
 pub async fn sign_in_openrouter(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
-    use daybrief_core::ai::openrouter;
+    use firstlight_core::ai::openrouter;
     use tauri_plugin_opener::OpenerExt;
     let (deps, cancel, lock) = (
         state.deps.clone(),
@@ -790,8 +792,8 @@ pub async fn sign_in_openrouter(app: AppHandle, state: State<'_, AppState>) -> C
         let redirect = listener.redirect_uri("localhost");
         let (state_token, pkce) = (random_state(), Pkce::generate());
         let url = openrouter::authorization_url(&redirect, &pkce.challenge, &state_token);
-        let parsed =
-            daybrief_core::http::Url::parse(&url).map_err(|_| "bad sign-in address".to_string())?;
+        let parsed = firstlight_core::http::Url::parse(&url)
+            .map_err(|_| "bad sign-in address".to_string())?;
         if parsed.scheme() != "https" || parsed.host_str() != Some(openrouter::HOST) {
             return Err("Refusing to open an unexpected sign-in address.".into());
         }

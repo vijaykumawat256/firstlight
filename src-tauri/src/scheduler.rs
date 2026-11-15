@@ -6,10 +6,10 @@
 
 use crate::providers::{Deps, provider_for};
 use chrono::{DateTime, Duration, Utc};
-use daybrief_core::model::AccountStatus;
-use daybrief_core::secrets::Redacted;
-use daybrief_core::store::Store;
-use daybrief_core::sync::{Backoff, default_window, sync_account};
+use firstlight_core::model::AccountStatus;
+use firstlight_core::secrets::Redacted;
+use firstlight_core::store::Store;
+use firstlight_core::sync::{Backoff, default_window, sync_account};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -71,7 +71,7 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted, deps: Deps) -> Syn
                     Err(RecvTimeoutError::Disconnected) => break,
                 };
                 // A bug triggered by a hostile feed fails this round, never the app (see `contained`).
-                let round = daybrief_core::contain::contained(|| {
+                let round = firstlight_core::contain::contained(|| {
                     run_round(&mut store, &deps, &mut entries, trigger)
                 });
                 if round.is_none() {

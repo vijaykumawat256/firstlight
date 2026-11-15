@@ -1,8 +1,8 @@
 //! OS keychain implementation of [`SecretStore`]
 //! (Keychain on macOS, Credential Manager on Windows).
 
-use daybrief_core::secrets::SecretStore;
-use daybrief_core::{Error, Result};
+use firstlight_core::secrets::SecretStore;
+use firstlight_core::{Error, Result};
 use keyring::Entry;
 
 pub struct KeychainStore {

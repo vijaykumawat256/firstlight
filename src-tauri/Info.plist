@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleIdentifier</key>
-  <string>com.daybrief.app</string>
+  <string>com.firstlight.desktop</string>
   <key>CFBundleName</key>
   <string>Firstlight</string>
   <key>NSCalendarsFullAccessUsageDescription</key>

@@ -17,6 +17,7 @@ pub mod http;
 pub mod ics;
 pub mod invite;
 pub mod join;
+pub mod legacy;
 pub mod local;
 pub mod mail;
 pub mod model;

@@ -1,5 +1,5 @@
 [package]
-name = "daybrief-core"
+name = "firstlight-core"
 description = "Platform-independent calendar logic. Must never depend on Tauri."
 edition.workspace = true
 version.workspace = true

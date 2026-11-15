@@ -251,16 +251,16 @@ fn export_and_import_round_trip() {
 fn import_refuses_foreign_oversized_and_broken_files_without_changing_anything() {
     assert!(AppSettings::import("not json").is_err());
     assert!(AppSettings::import(r#"{"format":"something-else","settings":{}}"#).is_err());
-    assert!(AppSettings::import(r#"{"format":"daybrief-settings"}"#).is_err());
+    assert!(AppSettings::import(r#"{"format":"firstlight-settings"}"#).is_err());
     assert!(
         AppSettings::import(&format!(
-            r#"{{"format":"daybrief-settings","settings":{{"pad":"{}"}}}}"#,
+            r#"{{"format":"firstlight-settings","settings":{{"pad":"{}"}}}}"#,
             "x".repeat(MAX_IMPORT_BYTES)
         ))
         .is_err()
     );
     // An imported file with damaged values still loads, sanitised.
-    let s = AppSettings::import(r#"{"format":"daybrief-settings","settings":{"general":{"sync_interval_minutes":99999},"appearance":{"accent":"nope"}}}"#).unwrap();
+    let s = AppSettings::import(r#"{"format":"firstlight-settings","settings":{"general":{"sync_interval_minutes":99999},"appearance":{"accent":"nope"}}}"#).unwrap();
     assert_eq!(
         (
             s.general.sync_interval_minutes,
@@ -320,7 +320,7 @@ fn ai_cannot_be_on_without_consent_for_that_provider() {
 
 #[test]
 fn an_imported_file_can_never_grant_consent_or_switch_ai_on() {
-    let file = r#"{"format":"daybrief-settings","settings":{"ai":{"enabled":true,"provider":"anthropic","consented":"anthropic","model":"claude-haiku-5-5"}}}"#;
+    let file = r#"{"format":"firstlight-settings","settings":{"ai":{"enabled":true,"provider":"anthropic","consented":"anthropic","model":"claude-haiku-5-5"}}}"#;
     let s = AppSettings::import(file).unwrap();
     assert_eq!((s.ai.enabled, s.ai.consented), (false, None));
     assert_eq!(
@@ -467,7 +467,7 @@ fn imap_mailboxes_are_cleaned_and_never_travel_in_files() {
     );
     let back = AppSettings::import(&s.export()).unwrap();
     assert!(back.email.imap.is_empty());
-    let hostile = r#"{"format":"daybrief-settings","settings":{"email":{"imap":[{"id":"z9","preset":"yahoo","address":"a@b.c"}]}}}"#;
+    let hostile = r#"{"format":"firstlight-settings","settings":{"email":{"imap":[{"id":"z9","preset":"yahoo","address":"a@b.c"}]}}}"#;
     assert!(AppSettings::import(hostile).unwrap().email.imap.is_empty());
 }
 
@@ -500,7 +500,7 @@ fn a_custom_mailbox_with_a_bad_server_is_dropped_and_a_good_one_kept() {
     assert_eq!(s.email.imap[0].id, "a1");
     // Never exported, never imported.
     assert!(!s.export().contains("fastmail"));
-    let file = r#"{"format":"daybrief-settings","settings":{"email":{"imap":[{"id":"z9","preset":"custom","address":"a@b.co","host":"imap.fastmail.com"}]}}}"#;
+    let file = r#"{"format":"firstlight-settings","settings":{"email":{"imap":[{"id":"z9","preset":"custom","address":"a@b.co","host":"imap.fastmail.com"}]}}}"#;
     assert!(AppSettings::import(file).unwrap().email.imap.is_empty());
 }
 
@@ -648,7 +648,7 @@ fn agreement_for_a_custom_service_is_for_that_host_only() {
 
 #[test]
 fn an_imported_file_never_carries_agreement_for_any_provider() {
-    let file = r#"{"format":"daybrief-settings","settings":{"ai":{"enabled":true,"provider":"openai","consented":"openai","consented_host":"api.example.com","custom_endpoint":"https://api.example.com/v1","model":"gpt-4o-mini"}}}"#;
+    let file = r#"{"format":"firstlight-settings","settings":{"ai":{"enabled":true,"provider":"openai","consented":"openai","consented_host":"api.example.com","custom_endpoint":"https://api.example.com/v1","model":"gpt-4o-mini"}}}"#;
     let s = AppSettings::import(file).unwrap();
     assert!(!s.ai.enabled && s.ai.consented.is_none() && s.ai.consented_host.is_none());
     assert_eq!(
@@ -688,4 +688,19 @@ fn firstlight_shows_in_the_dock_or_taskbar_unless_turned_off() {
             .general
             .show_in_dock
     );
+}
+
+#[test]
+fn settings_files_saved_before_the_rename_still_import() {
+    let old = r#"{"format":"daybrief-settings","settings":{"general":{"sync_interval_minutes":30},"appearance":{"theme":"dark"}}}"#;
+    let s = AppSettings::import(old).unwrap();
+    assert_eq!(s.general.sync_interval_minutes, 30);
+    assert_eq!(format!("{:?}", s.appearance.theme), "Dark");
+    // New exports use the new name, and anything else is still refused.
+    assert!(
+        AppSettings::default()
+            .export()
+            .contains("\"format\": \"firstlight-settings\"")
+    );
+    assert!(AppSettings::import(r#"{"format":"something-else","settings":{}}"#).is_err());
 }

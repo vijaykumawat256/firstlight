@@ -2,10 +2,10 @@
 
 use chrono::Utc;
 use chrono_tz::Tz;
-use daybrief_core::http::HttpClient;
-use daybrief_core::model::ProviderKind;
-use daybrief_core::oauth::OAuthConfig;
-use daybrief_core::providers::{
+use firstlight_core::http::HttpClient;
+use firstlight_core::model::ProviderKind;
+use firstlight_core::oauth::OAuthConfig;
+use firstlight_core::providers::{
     Provider,
     caldav::CaldavProvider,
     fixture::FixtureProvider,
@@ -16,7 +16,7 @@ use daybrief_core::providers::{
     microsoft::MicrosoftProvider,
     system::{SystemProvider, SystemSource},
 };
-use daybrief_core::secrets::SecretStore;
+use firstlight_core::secrets::SecretStore;
 use std::sync::Arc;
 
 /// Everything providers need from the outside world. Cheap to clone.

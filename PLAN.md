@@ -1,6 +1,6 @@
-# Daybrief — Build Plan
+# Firstlight — Build Plan
 
-> "Daybrief" is a placeholder name. Rename freely; keep it in one constant so it is easy to change.
+> The app is called Firstlight. Keep the name in one constant so it is easy to change.
 
 This document is the full brief for building the app. It is written for an AI coding agent working in this folder. Read all of sections 1–8 before writing code, then work through the phases in section 9 in order.
 
@@ -378,14 +378,14 @@ Done when:
 
 ### Phase 7 — Optional account, encrypted sync, and web version
 
-Goal: sign in once to Daybrief and see the same setup on another device or in a browser.
+Goal: sign in once to Firstlight and see the same setup on another device or in a browser.
 
 **Before writing code, produce a design document and get the user's approval.** This phase introduces a server and changes the threat model.
 
 Direction already agreed:
 
 - The account is optional. The desktop app keeps working without it.
-- Sign-in to Daybrief uses passkeys.
+- Sign-in to Firstlight uses passkeys.
 - **End-to-end encrypted vault.** Connected accounts, their tokens and settings are encrypted on the device with a key the server never sees. The server stores only ciphertext. Include a recovery key for a lost device.
 - The web version reuses the React UI through a web implementation of `src/api`.
 - Google and Microsoft can be called directly from the browser. CalDAV and IMAP cannot, so they need a small relay; design it so it cannot read or store credentials at rest.

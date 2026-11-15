@@ -1,10 +1,10 @@
-//! Opt-in, local, content-free crash reports (see `daybrief_core::crash` for what a report contains).
+//! Opt-in, local, content-free crash reports (see `firstlight_core::crash` for what a report contains).
 //!
 //! The hook is installed once at startup and does nothing unless the user turned reports on. A report is
 //! written to the app's log folder; nothing is ever sent anywhere.
 
 use chrono::Utc;
-use daybrief_core::crash::report_text;
+use firstlight_core::crash::report_text;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -82,8 +82,8 @@ mod tests {
 
     fn temp() -> PathBuf {
         let d = std::env::temp_dir().join(format!(
-            "daybrief-crash-test-{}",
-            daybrief_core::model::new_id()
+            "firstlight-crash-test-{}",
+            firstlight_core::model::new_id()
         ));
         std::fs::create_dir_all(&d).unwrap();
         d

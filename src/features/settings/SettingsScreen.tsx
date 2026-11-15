@@ -459,7 +459,7 @@ export function SettingsScreen() {
           spellCheck={false}
           rows={7}
           className="w-full select-text resize-none rounded-card bg-fill p-3 font-mono text-footnote text-fg placeholder:text-fg-3"
-          placeholder='{ "format": "daybrief-settings", … }'
+          placeholder='{ "format": "firstlight-settings", … }'
         />
         {importMutation.isError && (
           <p role="alert" className="mt-2 text-body text-danger">

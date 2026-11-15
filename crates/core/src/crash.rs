@@ -63,7 +63,7 @@ mod tests {
             "crates/core/src/ics/mod.rs"
         );
         assert_eq!(
-            scrub_path("C:\\Users\\jane\\code\\daybrief\\src-tauri\\src\\lib.rs"),
+            scrub_path("C:\\Users\\jane\\code\\firstlight\\src-tauri\\src\\lib.rs"),
             "src-tauri/src/lib.rs"
         );
         assert_eq!(

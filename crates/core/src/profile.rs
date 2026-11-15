@@ -22,8 +22,8 @@ pub fn keychain_service(base: &str, profile: Option<&str>) -> String {
 /// The database file name for a profile.
 pub fn db_file_name(profile: Option<&str>) -> String {
     match profile {
-        Some(p) => format!("daybrief-{p}.db"),
-        None => "daybrief.db".to_string(),
+        Some(p) => format!("firstlight-{p}.db"),
+        None => "firstlight.db".to_string(),
     }
 }
 
@@ -54,15 +54,15 @@ mod tests {
     #[test]
     fn the_default_profile_is_unchanged_and_others_are_separate() {
         assert_eq!(
-            keychain_service("com.daybrief.app", None),
-            "com.daybrief.app"
+            keychain_service("com.firstlight.desktop", None),
+            "com.firstlight.desktop"
         );
-        assert_eq!(db_file_name(None), "daybrief.db");
+        assert_eq!(db_file_name(None), "firstlight.db");
         assert_eq!(
-            keychain_service("com.daybrief.app", Some("qa")),
-            "com.daybrief.app.qa"
+            keychain_service("com.firstlight.desktop", Some("qa")),
+            "com.firstlight.desktop.qa"
         );
-        assert_eq!(db_file_name(Some("qa")), "daybrief-qa.db");
+        assert_eq!(db_file_name(Some("qa")), "firstlight-qa.db");
         assert_ne!(db_file_name(Some("a")), db_file_name(Some("b")));
     }
 }

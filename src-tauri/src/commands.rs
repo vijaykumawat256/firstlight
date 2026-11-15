@@ -5,20 +5,20 @@ use crate::AppState;
 use crate::providers::provider_for;
 use crate::scheduler::Trigger;
 use chrono::{Duration, Utc};
-use daybrief_core::dedupe::dedupe;
-use daybrief_core::http::normalise_calendar_url;
-use daybrief_core::model::*;
-use daybrief_core::oauth::loopback::Loopback;
-use daybrief_core::oauth::{
+use firstlight_core::dedupe::dedupe;
+use firstlight_core::http::normalise_calendar_url;
+use firstlight_core::model::*;
+use firstlight_core::oauth::loopback::Loopback;
+use firstlight_core::oauth::{
     self, OAuthConfig, Pkce, authorization_url, exchange_code, random_state,
 };
-use daybrief_core::providers::caldav::{CaldavProvider, CaldavSecret, validate_server};
-use daybrief_core::providers::ics::IcsProvider;
-use daybrief_core::providers::system::{Access, SYSTEM_ACCOUNT_ID};
-use daybrief_core::providers::{google, microsoft};
-use daybrief_core::store::Store;
-use daybrief_core::sync::{default_window, sync_account};
-use daybrief_core::{Error, SyncReport};
+use firstlight_core::providers::caldav::{CaldavProvider, CaldavSecret, validate_server};
+use firstlight_core::providers::ics::IcsProvider;
+use firstlight_core::providers::system::{Access, SYSTEM_ACCOUNT_ID};
+use firstlight_core::providers::{google, microsoft};
+use firstlight_core::store::Store;
+use firstlight_core::sync::{default_window, sync_account};
+use firstlight_core::{Error, SyncReport};
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -267,7 +267,7 @@ pub async fn add_demo_account(
     let (deps, db, key) = (state.deps.clone(), state.db_path.clone(), state.key.clone());
     let view = tauri::async_runtime::spawn_blocking(move || -> CmdResult<AccountView> {
         let mut store = Store::open(&db, &key).map_err(internal("opening the database"))?;
-        let account = daybrief_core::providers::fixture::FixtureProvider::account(Utc::now());
+        let account = firstlight_core::providers::fixture::FixtureProvider::account(Utc::now());
         store
             .upsert_account(&account)
             .map_err(internal("saving the account"))?;
@@ -328,7 +328,7 @@ pub async fn remove_account(state: State<'_, AppState>, id: String) -> CmdResult
 pub async fn create_event(
     app: AppHandle,
     state: State<'_, AppState>,
-    event: daybrief_core::local::EventInput,
+    event: firstlight_core::local::EventInput,
 ) -> CmdResult<Event> {
     save_own_event(&app, &state, None, event)
 }
@@ -338,7 +338,7 @@ pub async fn update_event(
     app: AppHandle,
     state: State<'_, AppState>,
     id: String,
-    event: daybrief_core::local::EventInput,
+    event: firstlight_core::local::EventInput,
 ) -> CmdResult<Event> {
     save_own_event(&app, &state, Some(&id), event)
 }
@@ -348,7 +348,7 @@ pub async fn update_event(
 pub async fn delete_event(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
     {
         let mut store = lock_store(&state)?;
-        daybrief_core::local::delete(&mut store, &id, Utc::now()).map_err(user_input_error)?;
+        firstlight_core::local::delete(&mut store, &id, Utc::now()).map_err(user_input_error)?;
     }
     let _ = app.emit("events-changed", ());
     Ok(())
@@ -382,7 +382,7 @@ pub async fn export_own_events(
     use tauri_plugin_opener::OpenerExt;
     let exported = {
         let store = lock_store(&state)?;
-        daybrief_core::local::export_all(&store, Utc::now())
+        firstlight_core::local::export_all(&store, Utc::now())
             .map_err(internal("exporting events"))?
     };
     let Some((text, count)) = exported else {
@@ -406,9 +406,9 @@ pub async fn export_own_events(
 pub async fn get_own_event(
     state: State<'_, AppState>,
     id: String,
-) -> CmdResult<Option<daybrief_core::local::OwnEvent>> {
+) -> CmdResult<Option<firstlight_core::local::OwnEvent>> {
     let store = lock_store(&state)?;
-    daybrief_core::local::get(&store, &id).map_err(user_input_error)
+    firstlight_core::local::get(&store, &id).map_err(user_input_error)
 }
 
 /// Removes one day of a repeating event; the rest of the series stays.
@@ -420,7 +420,7 @@ pub async fn skip_event_occurrence(
 ) -> CmdResult<()> {
     {
         let mut store = lock_store(&state)?;
-        daybrief_core::local::skip_occurrence(&mut store, &id, Utc::now())
+        firstlight_core::local::skip_occurrence(&mut store, &id, Utc::now())
             .map_err(user_input_error)?;
     }
     let _ = app.emit("events-changed", ());
@@ -447,7 +447,9 @@ fn system_accent() -> Option<&'static str> {
     None
 }
 
-/// macOS stores the accent as a number; absent means the default multicolour blue.
+/// macOS stores the accent as a number; absent means the default multicolour blue. Only called on macOS
+/// (and by its test, which runs everywhere), so other systems do not see it as dead code.
+#[cfg(any(target_os = "macos", test))]
 pub(crate) fn accent_name(value: &str) -> Option<&'static str> {
     match value {
         "0" => Some("red"),
@@ -476,7 +478,7 @@ pub async fn prepare_invite(
     recipients: String,
     open_mail: bool,
 ) -> CmdResult<InviteResult> {
-    use daybrief_core::invite;
+    use firstlight_core::invite;
     use tauri::Manager;
     use tauri_plugin_opener::OpenerExt;
 
@@ -486,7 +488,7 @@ pub async fn prepare_invite(
     }
     let (settings, event, rule, own) = {
         let store = lock_store(&state)?;
-        let own = daybrief_core::local::share_parts(&store, &id)
+        let own = firstlight_core::local::share_parts(&store, &id)
             .ok()
             .flatten();
         let event = match &own {
@@ -555,11 +557,11 @@ fn save_own_event(
     app: &AppHandle,
     state: &AppState,
     id: Option<&str>,
-    event: daybrief_core::local::EventInput,
+    event: firstlight_core::local::EventInput,
 ) -> CmdResult<Event> {
     let saved = {
         let mut store = lock_store(state)?;
-        daybrief_core::local::save(&mut store, id, &event, crate::local_tz(), Utc::now())
+        firstlight_core::local::save(&mut store, id, &event, crate::local_tz(), Utc::now())
             .map_err(user_input_error)?
     };
     let _ = app.emit("events-changed", ());
@@ -730,8 +732,8 @@ pub(crate) async fn browser_sign_in(
         let url = authorization_url(&cfg, &redirect, &state_token, &pkce.challenge, extra)
             .map_err(oauth_error)?;
 
-        let parsed =
-            daybrief_core::http::Url::parse(&url).map_err(|_| "bad sign-in address".to_string())?;
+        let parsed = firstlight_core::http::Url::parse(&url)
+            .map_err(|_| "bad sign-in address".to_string())?;
         if parsed.scheme() != "https"
             || !parsed
                 .host_str()
@@ -917,12 +919,12 @@ pub async fn open_privacy_settings(app: AppHandle, pane: String) -> CmdResult<()
 
 // ---- the briefing ------------------------------------------------------------------
 
-/// Today and tomorrow, worked out by the briefing engine (pure; see daybrief-core).
+/// Today and tomorrow, worked out by the briefing engine (pure; see firstlight-core).
 #[tauri::command]
 pub async fn get_briefing(
     state: State<'_, AppState>,
-) -> CmdResult<daybrief_core::briefing::Briefing> {
-    use daybrief_core::briefing::{build, day_bounds};
+) -> CmdResult<firstlight_core::briefing::Briefing> {
+    use firstlight_core::briefing::{build, day_bounds};
     let now = Utc::now();
     let tz = crate::local_tz();
     let store = lock_store(&state)?;
@@ -955,7 +957,7 @@ pub async fn open_briefing(app: AppHandle) -> CmdResult<()> {
 
 // ---- settings --------------------------------------------------------------------------
 
-use daybrief_core::settings::AppSettings;
+use firstlight_core::settings::AppSettings;
 
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> CmdResult<AppSettings> {
@@ -1011,13 +1013,13 @@ pub async fn save_settings_export(app: AppHandle, state: State<'_, AppState>) ->
         .path()
         .download_dir()
         .map_err(|_| "Couldn't find your Downloads folder.".to_string())?;
-    let mut path = dir.join("daybrief-settings.json");
+    let mut path = dir.join("firstlight-settings.json");
     // Never overwrite something the user already has.
     for n in 2..100 {
         if !path.exists() {
             break;
         }
-        path = dir.join(format!("daybrief-settings ({n}).json"));
+        path = dir.join(format!("firstlight-settings ({n}).json"));
     }
     std::fs::write(&path, text).map_err(|_| "Couldn't save the file.".to_string())?;
     Ok(path.display().to_string())
@@ -1040,7 +1042,7 @@ pub async fn erase_all_data(app: AppHandle, state: State<'_, AppState>) -> CmdRe
     use tauri_plugin_autostart::ManagerExt;
     let report = {
         let store = lock_store(&state)?;
-        daybrief_core::erase::erase_everything(&store, state.deps.secrets.as_ref())
+        firstlight_core::erase::erase_everything(&store, state.deps.secrets.as_ref())
             .map_err(internal("erasing data"))?
     };
     log::info!(

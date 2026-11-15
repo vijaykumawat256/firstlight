@@ -213,9 +213,10 @@ mod tests {
 
     /// Live probe on a Mac: reads the real window list and checks it is not empty (an unreadable list would
     /// otherwise look the same as "nothing is full screen"). Run with
-    /// `cargo test -p daybrief fullscreen -- --ignored --nocapture`.
+    /// `cargo test -p firstlight fullscreen -- --ignored --nocapture`.
     #[test]
     #[ignore]
+    #[cfg(target_os = "macos")]
     fn live_probe() {
         let (windows, displays) = snapshot();
         println!("displays: {displays:?}");

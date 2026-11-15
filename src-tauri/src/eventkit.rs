@@ -5,15 +5,14 @@
 //! non-thread-safe Objective-C object is shared between threads.
 
 use chrono::{DateTime, Utc};
-use daybrief_core::providers::system::{
-    Access, SysCalendar, SysCalendarKind, SysEvent, SysResponse, SysStatus, SystemSource,
-};
-use daybrief_core::{Error, Result};
+use firstlight_core::providers::system::{Access, SysCalendar, SysEvent, SystemSource};
+use firstlight_core::{Error, Result};
 
 #[cfg(target_os = "macos")]
 mod mac {
     use super::*;
     use block2::{DynBlock, RcBlock};
+    use firstlight_core::providers::system::{SysCalendarKind, SysResponse, SysStatus};
     use objc2::rc::autoreleasepool;
     use objc2::runtime::{Bool, NSObjectProtocol};
     use objc2_event_kit::{

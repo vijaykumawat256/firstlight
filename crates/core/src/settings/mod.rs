@@ -19,7 +19,9 @@ pub const SETTINGS_KEY: &str = "app_settings";
 pub const CURRENT_VERSION: u32 = 1;
 /// Settings files larger than this are refused on import.
 pub const MAX_IMPORT_BYTES: usize = 64 * 1024;
-const EXPORT_FORMAT: &str = "daybrief-settings";
+const EXPORT_FORMAT: &str = "firstlight-settings";
+/// The name files were exported under before the app was renamed; still accepted when importing.
+const LEGACY_EXPORT_FORMAT: &str = "daybrief-settings";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -692,7 +694,10 @@ impl AppSettings {
         }
         let v: Value = serde_json::from_str(text)
             .map_err(|_| "That isn't a valid settings file.".to_string())?;
-        if v.get("format").and_then(Value::as_str) != Some(EXPORT_FORMAT) {
+        if !matches!(
+            v.get("format").and_then(Value::as_str),
+            Some(EXPORT_FORMAT | LEGACY_EXPORT_FORMAT)
+        ) {
             return Err("That isn't a Firstlight settings file.".into());
         }
         let Some(inner) = v.get("settings") else {

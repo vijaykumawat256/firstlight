@@ -201,7 +201,7 @@ const LOCAL_CAL = "local-events";
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const ymd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
-/** Mirrors the Rust checks (`daybrief_core::local`) closely enough for the browser tests. */
+/** Mirrors the Rust checks (`firstlight_core::local`) closely enough for the browser tests. */
 function checkOwn(input: EventInput): EventInput {
   const title = input.title.trim();
   if (!title) throw new Error("Give the event a title.");
@@ -582,10 +582,10 @@ export const fixtureBackend: Backend = {
     return structuredClone(settings);
   },
   async exportSettings() {
-    return JSON.stringify({ format: "daybrief-settings", version: 1, settings }, null, 2);
+    return JSON.stringify({ format: "firstlight-settings", version: 1, settings }, null, 2);
   },
   async saveSettingsExport() {
-    return "/Users/you/Downloads/daybrief-settings.json";
+    return "/Users/you/Downloads/firstlight-settings.json";
   },
   async importSettings(text) {
     let parsed: { format?: string; settings?: Partial<AppSettings> };
@@ -594,7 +594,7 @@ export const fixtureBackend: Backend = {
     } catch {
       throw new Error("That isn't a valid settings file.");
     }
-    if (parsed.format !== "daybrief-settings") throw new Error("That isn't a Firstlight settings file.");
+    if (parsed.format !== "firstlight-settings") throw new Error("That isn't a Firstlight settings file.");
     settings = { ...structuredClone(DEFAULT_SETTINGS), ...parsed.settings } as AppSettings;
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);

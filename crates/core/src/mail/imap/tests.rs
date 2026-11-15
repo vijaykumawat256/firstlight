@@ -417,7 +417,7 @@ fn unused_read_import_guard() {
 }
 
 /// Live check, no credentials: TLS to the real servers must verify and greet us.
-/// Run: `cargo test -p daybrief-core live_imap -- --ignored --nocapture`
+/// Run: `cargo test -p firstlight-core live_imap -- --ignored --nocapture`
 #[test]
 #[ignore]
 fn live_imap_greeting_over_verified_tls() {

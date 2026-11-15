@@ -53,7 +53,6 @@ See [PHASE7_DESIGN.md](PHASE7_DESIGN.md). Waiting for your decisions at the end 
 ## 5. Things only you can do
 - Fill in the Google ID and secret in `.env` (docs/OAUTH_SETUP.md), then try Microsoft and Google sign-in.
 - `git push` (several local commits are not on GitHub yet), which also starts the first automatic build, including Windows.
-- Decide whether to rename the internal identifier `com.daybrief.app` (costs a re-sign-in once real accounts are connected).
 - Apple Developer account, Windows signing certificate, an update host, a privacy contact (docs/RELEASE.md).
 
 ## 6. Built but never seen working (try these)

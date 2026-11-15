@@ -1,6 +1,6 @@
 // Generates src/assets/licences.json: every third-party package that ships in the app, with its licence text.
 //   * Rust crates: from `cargo metadata`, restricted to the platforms we ship and to normal (non-dev, non-build)
-//     dependencies of the `daybrief` crate.
+//     dependencies of the `firstlight` crate.
 //   * npm packages: production dependencies only (what ends up in the app's JavaScript).
 // Run `npm run licences` before each release.
 import { execFileSync } from "node:child_process";
@@ -24,7 +24,7 @@ for (const platform of ["aarch64-apple-darwin", "x86_64-pc-windows-msvc"]) {
   );
   const byId = new Map(meta.packages.map((p) => [p.id, p]));
   const nodes = new Map(meta.resolve.nodes.map((n) => [n.id, n]));
-  const start = meta.packages.find((p) => p.name === "daybrief").id;
+  const start = meta.packages.find((p) => p.name === "firstlight").id;
   const seen = new Set();
   const stack = [start];
   while (stack.length) {
@@ -38,7 +38,7 @@ for (const platform of ["aarch64-apple-darwin", "x86_64-pc-windows-msvc"]) {
   }
   for (const id of seen) {
     const p = byId.get(id);
-    if (p.name === "daybrief" || p.name === "daybrief-core") continue;
+    if (p.name === "firstlight" || p.name === "firstlight-core") continue;
     const key = `${p.name}@${p.version}`;
     if (!rust.has(key)) {
       rust.set(key, { name: p.name, version: p.version, license: p.license ?? "see source", repository: p.repository ?? null, text: licenceText(dirname(p.manifest_path)) });

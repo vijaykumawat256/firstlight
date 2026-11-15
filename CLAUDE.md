@@ -1,6 +1,6 @@
 # Firstlight: working notes for agents
 
-The app's name is **Firstlight** (renamed from the placeholder "Daybrief"). Only the display name changed: the bundle identifier (`com.daybrief.app`), keychain service, database file, crate names, `DAYBRIEF_*` env vars and the `daybrief-settings` export format keep the old word on purpose, so existing data keeps working. Changing the identifier is a separate decision (it orphans the keychain key and database).
+The app's name is **Firstlight** everywhere: window, program file (`Firstlight`), crates (`firstlight-core`, package `firstlight`), bundle identifier (`com.firstlight.desktop`), keychain service, data folder, database file (`firstlight.db`), env vars (`FIRSTLIGHT_PROFILE`, `FIRSTLIGHT_UPDATE_BASE`) and the settings export format (`firstlight-settings`). It used to be called Daybrief, and the old names are spelled out in exactly two places so nothing else can drift back: `crates/core/src/legacy.rs` (moves an old installation's database and secrets across on first start; see its tests) and `LEGACY_EXPORT_FORMAT` in `settings/mod.rs` (old settings files still import). Do not reintroduce the old name anywhere else.
 
 The full brief is `PLAN.md`; read it first. Open decisions and the reasons behind what is not built: `docs/NEXT.md`; the Phase 7 proposal awaiting approval: `docs/PHASE7_DESIGN.md` (no Phase 7 code until the user approves it). This file records what is true *now* and what you'd otherwise rediscover.
 
@@ -40,7 +40,7 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Sync: `crates/core/src/sync` (pure, tested) + `src-tauri/src/scheduler.rs` (thread, own DB connection, backoff).
 - Adding an account always goes through `commands::connect` (keychain write, first sync, rollback on failure).
 - OAuth client IDs come from `.env` at build time (`src-tauri/build.rs`); guide in `docs/OAUTH_SETUP.md`.
-- Mock HTTP server for tests: `crates/core/src/http.rs` `testserver`. Live check: `cargo test -p daybrief-core live_ -- --ignored --nocapture`.
+- Mock HTTP server for tests: `crates/core/src/http.rs` `testserver`. Live check: `cargo test -p firstlight-core live_ -- --ignored --nocapture`.
 - Browser fixture backend flags: `?fresh` (no accounts), `?attention`, `?slowoauth`, `?oauthfail`, `?nomicrosoft`.
 - Google/Microsoft sync fetch the whole window every time (no sync tokens/delta); revisit once live credentials allow verification.
 
@@ -77,7 +77,7 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Mail digest cache is 3 minutes; AI summary cache is 5 minutes, keyed by the facts (not the clock line) so an unchanged day is not re-sent.
 
 ## Phase 6 notes
-- `DAYBRIEF_PROFILE=<name>` gives a separate keychain service and DB file: use it for any release-build experiment, then delete the leftovers (commands in `docs/RELEASE.md`).
+- `FIRSTLIGHT_PROFILE=<name>` gives a separate keychain service and DB file: use it for any release-build experiment, then delete the leftovers (commands in `docs/RELEASE.md`).
 - Updater is behind `--features updater`; config in `src-tauri/tauri.release.conf.json` (placeholder pubkey/endpoint). Build signing needs `TAURI_SIGNING_PRIVATE_KEY` as key *contents*. Never commit keys.
 - Windows code (`unlock.rs` `#[cfg(windows)]`) is type-checked only, never run. The `windows` crate needs `Win32_Graphics_Gdi` for `RegisterClassW`.
 - Screens are lazy-loaded; e2e must wait for the region/heading before asserting.
@@ -85,7 +85,7 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Measured (release, hidden): idle RSS about 100 MB, CPU 0%.
 
 ## IMAP notes (Yahoo, iCloud)
-- `crates/core/src/mail/imap`: own small client (no IMAP crate): `wire.rs` (bounded reader/tokenizer), `mime.rs` (header decoding), `mod.rs` (presets, session, `TlsConnect`). Tests use a scripted loopback server; `cargo test -p daybrief-core live_imap -- --ignored --nocapture` checks TLS + greeting against the real servers (no login; verified working).
+- `crates/core/src/mail/imap`: own small client (no IMAP crate): `wire.rs` (bounded reader/tokenizer), `mime.rs` (header decoding), `mod.rs` (presets, session, `TlsConnect`). Tests use a scripted loopback server; `cargo test -p firstlight-core live_imap -- --ignored --nocapture` checks TLS + greeting against the real servers (no login; verified working).
 - Yahoo and iCloud are `ImapPreset` variants with a built-in server. `ImapPreset::Custom` takes a host from the add-mailbox dialog only, validated by `valid_host` (plain lower-case public-style name; no IPs, `localhost`, `.local/.lan/.home/.internal` etc.). Port 993 only, TLS only. `TlsConnect` re-checks the name, `ImapMailbox::is_valid` drops bad records on load, imports clear mailboxes, and a Yahoo/iCloud record with a `host` is invalid. Custom mailboxes have `OpenTarget::None` (no trustworthy web address), so their rows are not clickable.
 - Read-only rules: `EXAMINE`, `BODY.PEEK`, headers only. A test forbids write verbs and body fetches in the commands sent; keep it passing.
 - Mailboxes live in `settings.email.imap` (no secret); the app password is keychain key `imap-mail:{id}`. They change only via `add_imap_mailbox`/`remove_imap_mailbox`; `apply_and_save` preserves the stored list, export omits it, import clears it, erase deletes the passwords.
@@ -131,7 +131,7 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 ## Menu bar text, join shortcut, holidays
 - Menu-bar text: `general.tray_next_meeting` (OFF by default: a title in the menu bar is visible in screen shares; `notify.hide_titles` turns it into "Meeting"). The notifier tick calls `set_tray_text`, which only touches the tray when the text changed. Text comes from `briefing::glance::tray_label`. macOS shows it next to the icon; Windows only has a tooltip. Not seen on a real menu bar yet.
 - Join shortcut: `general.join_shortcut`, registered next to the show/hide one in `apply_shortcut(app, show, join)` (the two keys must differ; `validate`/`sanitize` enforce it). `glance::join_target` prefers a meeting starting within the lead time over the running one. With nothing to join it shows a "Nothing to join" notification.
-- Holidays: a picker of 17 public Google holiday feeds (`accounts/holidays.ts`), added as ordinary ICS accounts. `cargo test -p daybrief-core live_every_offered -- --ignored` fetches and parses every one with the production client (all 17 passed); keep its id list in step with the TS list. Birthdays come from the Calendar-app provider (Contacts' Birthdays calendar), not from the picker.
+- Holidays: a picker of 17 public Google holiday feeds (`accounts/holidays.ts`), added as ordinary ICS accounts. `cargo test -p firstlight-core live_every_offered -- --ignored` fetches and parses every one with the production client (all 17 passed); keep its id list in step with the TS list. Birthdays come from the Calendar-app provider (Contacts' Birthdays calendar), not from the picker.
 
 ## Search, snooze, export
 - Search: `features/search` (`SearchHost` is mounted once in `App.tsx`; Cmd/Ctrl+K toggles it, the briefing header has a Search button). Matching is `searchEvents` (every word, accent-insensitive, title and place; cancelled/declined hidden; upcoming first) and `parseJump` (today/tomorrow/weekday/ISO/"dec 24") in `search.ts`, both unit-tested. It loads 30 days back to 90 ahead in two requests because `get_events` is capped at 62 days. A day result opens the calendar on that date through `nav.calendarDate`.

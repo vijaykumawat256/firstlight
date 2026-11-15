@@ -1,6 +1,6 @@
 //! Firstlight desktop shell: windows, tray, autostart, unlock detection, and the
 //! small set of commands the UI is allowed to call. All calendar logic lives in
-//! `daybrief-core`.
+//! `firstlight-core`.
 
 mod commands;
 mod crash_reports;
@@ -16,9 +16,9 @@ mod updates;
 
 use chrono::Utc;
 use chrono_tz::Tz;
-use daybrief_core::http::{ReqwestClient, Transport};
-use daybrief_core::secrets::{Redacted, load_or_create_db_key};
-use daybrief_core::store::Store;
+use firstlight_core::http::{ReqwestClient, Transport};
+use firstlight_core::secrets::{Redacted, load_or_create_db_key};
+use firstlight_core::store::Store;
 use providers::Deps;
 use scheduler::{SyncHandle, Trigger};
 use std::path::PathBuf;
@@ -28,7 +28,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
-const KEYCHAIN_SERVICE: &str = "com.daybrief.app";
+const KEYCHAIN_SERVICE: &str = "com.firstlight.desktop";
 const MAIN_WINDOW: &str = "main";
 const UP_NEXT_WINDOW: &str = "upnext";
 /// The small panel hides itself after this long if the user ignores it.
@@ -161,7 +161,7 @@ fn join_next_meeting(app: &AppHandle) {
     let Some(state) = app.try_state::<AppState>() else {
         return;
     };
-    use daybrief_core::briefing::{build, day_bounds};
+    use firstlight_core::briefing::{build, day_bounds};
     let (now, tz) = (chrono::Utc::now(), local_tz());
     let url = {
         let Ok(store) = state.store.lock() else {
@@ -173,11 +173,15 @@ fn join_next_meeting(app: &AppHandle) {
         let (_, to) = day_bounds(today + chrono::Duration::days(1), tz);
         let events = store
             .events_between(from, to)
-            .map(daybrief_core::dedupe::dedupe)
+            .map(firstlight_core::dedupe::dedupe)
             .unwrap_or_default();
         let b = build(&events, now, tz, &settings.briefing);
-        daybrief_core::briefing::glance::join_target(&b, now, settings.unlock.up_next_lead_minutes)
-            .and_then(|i| i.event.join_url.clone())
+        firstlight_core::briefing::glance::join_target(
+            &b,
+            now,
+            settings.unlock.up_next_lead_minutes,
+        )
+        .and_then(|i| i.event.join_url.clone())
     };
     // Only https links are ever opened (PLAN.md section 3), whatever a calendar put in the field.
     match url.filter(|u| u.starts_with("https://")) {
@@ -256,7 +260,7 @@ pub(crate) fn hide_up_next(app: &AppHandle) {
 
 /// Applies the unlock rules and shows whatever they call for.
 fn on_unlock(app: &AppHandle) {
-    use daybrief_core::briefing::{
+    use firstlight_core::briefing::{
         BriefingSettings, build, day_bounds,
         rules::{Action, UnlockRules, decide},
     };
@@ -284,7 +288,7 @@ fn on_unlock(app: &AppHandle) {
     let (_, to) = day_bounds(today + chrono::Duration::days(1), tz);
     let events = store
         .events_between(from, to)
-        .map(daybrief_core::dedupe::dedupe)
+        .map(firstlight_core::dedupe::dedupe)
         .unwrap_or_default();
     let next_start = build(&events, now, tz, &settings)
         .next
@@ -511,21 +515,43 @@ pub fn run() {
             // Database key lives only in the OS keychain.
             // An optional profile gives a second, separate copy of the data (own keychain entries and database),
             // so a release build can be tried without touching a real installation.
-            let profile = std::env::var("DAYBRIEF_PROFILE")
+            let profile = std::env::var("FIRSTLIGHT_PROFILE")
                 .ok()
-                .and_then(|p| daybrief_core::profile::validate(&p));
-            let keychain = keychain::KeychainStore::new(daybrief_core::profile::keychain_service(
-                KEYCHAIN_SERVICE,
-                profile.as_deref(),
-            ));
+                .and_then(|p| firstlight_core::profile::validate(&p));
+            let keychain = keychain::KeychainStore::new(
+                firstlight_core::profile::keychain_service(KEYCHAIN_SERVICE, profile.as_deref()),
+            );
+            let dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&dir)?;
+
+            // An installation from before the rename (the app was called Daybrief) keeps its data: the database
+            // and its secrets are moved under the current names, checked, and only then removed from the old
+            // place. If that cannot be done now, nothing old is touched and it is tried again at the next start.
+            if let Some(parent) = dir.parent() {
+                use firstlight_core::legacy;
+                let paths = legacy::Paths {
+                    old_dir: parent.join(legacy::OLD_APP_DIR),
+                    old_db: legacy::old_db_file_name(profile.as_deref()),
+                    new_dir: dir.clone(),
+                    new_db: firstlight_core::profile::db_file_name(profile.as_deref()),
+                };
+                let old_keychain =
+                    keychain::KeychainStore::new(firstlight_core::profile::keychain_service(
+                        legacy::OLD_KEYCHAIN_BASE,
+                        profile.as_deref(),
+                    ));
+                match legacy::migrate(&paths, &old_keychain, &keychain) {
+                    Ok(outcome) => log::info!("previous installation: {outcome:?}"),
+                    Err(e) => log::error!("could not move the previous data: {e}"),
+                }
+            }
+
             let key = load_or_create_db_key(&keychain).map_err(|e| {
                 log::error!("keychain unavailable: {e}");
                 e.to_string()
             })?;
 
-            let dir = app.path().app_data_dir()?;
-            std::fs::create_dir_all(&dir)?;
-            let db_path = dir.join(daybrief_core::profile::db_file_name(profile.as_deref()));
+            let db_path = dir.join(firstlight_core::profile::db_file_name(profile.as_deref()));
             let store = Store::open(&db_path, &key).map_err(|e| {
                 log::error!("cannot open database: {e}");
                 e.to_string()

@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 export type ThemeChoice = "system" | "light" | "dark";
 
-const STORAGE_KEY = "daybrief.theme";
+const STORAGE_KEY = "firstlight.theme";
 
 function read(): ThemeChoice {
   try {
