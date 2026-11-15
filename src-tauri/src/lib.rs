@@ -480,7 +480,6 @@ pub fn run() {
             commands::export_own_events,
             commands::skip_event_occurrence,
             commands::get_system_accent,
-            commands::prepare_invite,
             commands::invite_senders,
             commands::invite_preview,
             commands::send_invite_mail,

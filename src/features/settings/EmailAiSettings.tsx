@@ -107,8 +107,8 @@ export function EmailGroup() {
             title="Send invitations from Firstlight"
             description={
               e.imap.some((m) => m.preset !== "custom")
-                ? "Off by default. When on, Send invitation can send the message itself from your Yahoo or iCloud mailbox, after showing you exactly what goes out. Nothing is sent until you press Send."
-                : "Add a Yahoo or iCloud mailbox above to use this. Other providers can still use “Open in my mail app”."
+                ? "Off by default. When on, you can invite people to events you create: they get a real calendar invitation from your Yahoo or iCloud mailbox, with Accept and Decline in their calendar app, and their answers come back to you. You see the exact message first and nothing is sent until you press Send. Turned off, Firstlight offers no way to invite anyone."
+                : "Add a Yahoo or iCloud mailbox above to use this. Until then, Firstlight offers no way to invite people, because it can't send a real invitation."
             }
           >
             <Switch

@@ -86,10 +86,6 @@ export interface InvitePreview {
   subject: string;
   body: string;
 }
-export interface InviteResult {
-  path: string;
-  mail_opened: boolean;
-}
 export type AccountStatus = "ok" | "needs_attention";
 
 export interface AccountView {

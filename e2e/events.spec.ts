@@ -148,58 +148,25 @@ test("a repeat can end on a date, and impossible choices are explained", async (
   await expect(sheet.getByRole("alert")).toContainText("before it starts");
 });
 
-test("invite people: the invitation opens in your own mail app, nothing is sent by Firstlight", async ({ page }) => {
+test("with no mailbox to send from there is no way to invite anyone, but who is already invited still shows", async ({ page }) => {
   await page.clock.install({ time: at(9, 30) });
-  await page.goto("/");
+  await page.goto("/?preinvited");
   await page.getByRole("button", { name: "New event" }).click();
   const sheet = page.getByRole("dialog", { name: "New event" });
-  await sheet.getByLabel("Title").fill("Team lunch");
-  await sheet.getByLabel("Start time").fill("18:00");
-  await sheet.getByLabel("End time").fill("19:00");
-  await sheet.getByLabel("Invite people").fill("Sam@Example.com, kim@example.org");
-  await sheet.getByRole("button", { name: "Add event" }).click();
-  await expect(page.getByText("Event added").first()).toBeVisible();
-
+  await expect(sheet.getByLabel("Title")).toBeVisible();
+  await expect(sheet.getByLabel("Invite people")).toHaveCount(0);
+  await sheet.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: /^(?!Sort out).*Team lunch/ }).click();
   const detail = page.getByRole("dialog", { name: "Team lunch" });
-  await expect(detail).toContainText("Invited: sam@example.com, kim@example.org");
-  await detail.getByRole("button", { name: "Send invitation…" }).click();
-
-  const dialog = page.getByRole("dialog", { name: "Send invitation" });
-  await expect(dialog.getByLabel("To")).toHaveValue("sam@example.com, kim@example.org");
-  await expect(dialog).toContainText("doesn't send anything");
-
-  await dialog.getByLabel("To").fill("not-an-address");
-  await dialog.getByRole("button", { name: "Open in my mail app" }).click();
-  await expect(dialog.getByRole("alert")).toContainText("doesn't look right");
-
-  await dialog.getByLabel("To").fill("sam@example.com");
-  await dialog.getByRole("button", { name: "Open in my mail app" }).click();
-  await expect(page.getByText("Your mail app is open").first()).toBeVisible();
-  const sent = await page.evaluate(() => (window as unknown as { __invites: { list: string[]; openMail: boolean }[] }).__invites);
-  expect(sent).toHaveLength(1);
-  expect(sent[0]).toMatchObject({ list: ["sam@example.com"], openMail: true });
-});
-
-test("the file alone can be saved without any address", async ({ page }) => {
-  await page.clock.install({ time: at(9, 30) });
-  await page.goto("/");
-  await page.getByRole("button", { name: "New event" }).click();
-  const sheet = page.getByRole("dialog", { name: "New event" });
-  await sheet.getByLabel("Title").fill("Solo");
-  await sheet.getByRole("button", { name: "Add event" }).click();
-  await page.getByRole("button", { name: /Solo/ }).first().click();
-  await page.getByRole("dialog", { name: "Solo" }).getByRole("button", { name: "Send invitation…" }).click();
-  const dialog = page.getByRole("dialog", { name: "Send invitation" });
-  await expect(dialog.getByRole("button", { name: "Open in my mail app" })).toBeDisabled();
-  await dialog.getByRole("button", { name: "Just save the file" }).click();
-  await expect(page.getByText("Calendar file saved").first()).toBeVisible();
+  await expect(detail).toContainText("Invited: sam@example.com");
+  await expect(detail.getByRole("button", { name: /Send invitation/ })).toHaveCount(0);
+  await expect(detail.getByRole("button", { name: "Edit" })).toBeVisible();
 });
 
 test("the form with repeat, reminder and invitees, and the invitation dialog, have no accessibility violations", async ({ page }) => {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
   await page.clock.install({ time: at(9, 30) });
-  await page.goto("/");
+  await page.goto("/?sendon");
   await page.getByRole("button", { name: "New event" }).click();
   const sheet = page.getByRole("dialog", { name: "New event" });
   await sheet.getByRole("combobox", { name: "Repeat" }).click();
@@ -361,11 +328,6 @@ async function inviteDialog(page: import("@playwright/test").Page, url: string) 
   return page.getByRole("dialog", { name: "Send invitation" });
 }
 
-test("sending is not offered unless the user turned it on", async ({ page }) => {
-  const dialog = await inviteDialog(page, "/");
-  await expect(dialog.getByRole("button", { name: "Review and send" })).toHaveCount(0);
-});
-
 test("with sending on, the exact message is shown first and goes out only on Send", async ({ page }) => {
   const dialog = await inviteDialog(page, "/?sendon");
   await dialog.getByRole("button", { name: "Review and send" }).click();
@@ -373,14 +335,17 @@ test("with sending on, the exact message is shown first and goes out only on Sen
   await expect(review).toContainText("me@yahoo.com");
   await expect(review).toContainText("sam@example.com");
   await expect(review).toContainText("Invitation: Team lunch");
-  await expect(review.getByLabel("Message text")).toContainText("calendar file is attached");
+  await expect(review.getByLabel("Message text")).toContainText("Accept or decline it in your calendar app");
+  await expect(review.getByLabel("Message text")).toContainText("Organiser: me@yahoo.com");
+  await expect(review).toContainText("real calendar invitation");
   // Reviewing alone sends nothing.
   expect(await page.evaluate(() => (window as unknown as { __sent?: unknown[] }).__sent ?? [])).toHaveLength(0);
   await review.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("Invitation sent").first()).toBeVisible();
-  const sent = await page.evaluate(() => (window as unknown as { __sent: { list: string[] }[] }).__sent);
+  const sent = await page.evaluate(() => (window as unknown as { __sent: { list: string[]; kind: string }[] }).__sent);
   expect(sent).toHaveLength(1);
   expect(sent[0]!.list).toEqual(["sam@example.com"]);
+  expect(sent[0]!.kind).toBe("request");
 });
 
 test("a failed send says so, keeps the window open and sends nothing", async ({ page }) => {
@@ -412,4 +377,48 @@ test("Find a time lists free stretches, changes with the length asked, and has n
   await expect.poll(() => dialog.getByRole("button", { name: /^Copy / }).count()).toBeLessThanOrEqual(before);
   const r = await new AxeBuilder({ page }).analyze();
   expect(r.violations).toEqual([]);
+});
+
+
+test("with sending on, the form can invite people and nothing is sent by saving", async ({ page }) => {
+  const dialog = await inviteDialog(page, "/?sendon");
+  await expect(dialog.getByLabel("To")).toHaveValue("sam@example.com");
+  expect(await page.evaluate(() => (window as unknown as { __sent?: unknown[] }).__sent ?? [])).toHaveLength(0);
+});
+
+test("deleting an event you invited people to offers to tell them, and sends a cancellation only if you leave that on", async ({ page }) => {
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/?sendon&preinvited");
+  await page.getByRole("button", { name: /^(?!Sort out).*Team lunch/ }).click();
+  const detail = page.getByRole("dialog", { name: "Team lunch" });
+  await detail.getByRole("button", { name: "Delete" }).click();
+  await expect(detail.getByText(/Tell the person you invited that it is cancelled \(sam@example.com\), from me@yahoo.com/)).toBeVisible();
+  await expect(detail.getByLabel("Cancellation message")).toContainText("has been cancelled");
+  await detail.getByRole("button", { name: "Yes, delete it" }).click();
+  await expect(page.getByText("Event deleted").first()).toBeVisible();
+  const sent = await page.evaluate(() => (window as unknown as { __sent: { list: string[]; kind: string }[] }).__sent);
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({ kind: "cancel", list: ["sam@example.com"] });
+});
+
+test("unticking the cancellation deletes quietly, and a failed cancellation deletes nothing", async ({ page }) => {
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/?sendon&preinvited");
+  await page.getByRole("button", { name: /^(?!Sort out).*Team lunch/ }).click();
+  const detail = page.getByRole("dialog", { name: "Team lunch" });
+  await detail.getByRole("button", { name: "Delete" }).click();
+  await detail.getByRole("checkbox").uncheck();
+  await detail.getByRole("button", { name: "Yes, delete it" }).click();
+  await expect(page.getByText("Event deleted").first()).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __sent?: unknown[] }).__sent ?? [])).toHaveLength(0);
+
+  await page.goto("/?sendon&sendfail&preinvited");
+  await page.getByRole("button", { name: /^(?!Sort out).*Team lunch/ }).click();
+  const again = page.getByRole("dialog", { name: "Team lunch" });
+  await again.getByRole("button", { name: "Delete" }).click();
+  await again.getByRole("button", { name: "Yes, delete it" }).click();
+  await expect(page.getByText("Couldn't delete the event").first()).toBeVisible();
+  await expect(page.getByText(/The cancellation couldn't be sent, so nothing was deleted/).first()).toBeVisible();
+  await again.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("button", { name: /^(?!Sort out).*Team lunch/ })).toBeVisible();
 });

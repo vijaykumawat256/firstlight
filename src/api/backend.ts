@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, WeekAhead, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteResult, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, WeekAhead, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -26,14 +26,13 @@ export interface Backend {
   skipOccurrence(id: string): Promise<void>;
   /** The macOS accent colour as a palette name, or null (default blue, graphite, other systems). */
   getSystemAccent(): Promise<string | null>;
-  /** Saves a calendar file to Downloads and, if asked, opens your mail app with a draft. Nothing is sent by this call. */
-  prepareInvite(id: string, recipients: string, openMail: boolean): Promise<InviteResult>;
   /** Mailboxes "Send now" can use. Empty unless the user turned sending on. */
   inviteSenders(): Promise<InviteSender[]>;
   /** The exact message that would be sent. */
-  invitePreview(id: string): Promise<InvitePreview>;
+  /** The exact message that would go out: an invitation (`request`) or a cancellation (`cancel`). */
+  invitePreview(id: string, mailboxId: string, kind: "request" | "cancel"): Promise<InvitePreview>;
   /** Sends the invitation from the chosen mailbox. Only on the user's press of Send. */
-  sendInviteMail(id: string, recipients: string, mailboxId: string): Promise<void>;
+  sendInviteMail(id: string, recipients: string, mailboxId: string, kind: "request" | "cancel"): Promise<void>;
   updateEvent(id: string, input: EventInput): Promise<CalEvent>;
   deleteEvent(id: string): Promise<void>;
   /** `host` is only used for a custom mailbox (an IMAP server on port 993). */

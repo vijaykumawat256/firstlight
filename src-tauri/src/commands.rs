@@ -758,99 +758,7 @@ pub(crate) fn accent_name(value: &str) -> Option<&'static str> {
     }
 }
 
-#[derive(serde::Serialize)]
-pub struct InviteResult {
-    /// Where the calendar file was saved.
-    path: String,
-    mail_opened: bool,
-}
-
-/// Prepares an invitation: saves a calendar file to Downloads and, if asked, opens the user's own mail
-/// app with a draft addressed to the people they chose. Nothing is sent by this command; sending is `send_invite_mail`, opt-in.
-#[tauri::command]
-pub async fn prepare_invite(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-    recipients: String,
-    open_mail: bool,
-) -> CmdResult<InviteResult> {
-    use firstlight_core::invite;
-    use tauri::Manager;
-    use tauri_plugin_opener::OpenerExt;
-
-    let to = invite::parse_list(&recipients).map_err(user_input_error)?;
-    if open_mail && to.is_empty() {
-        return Err("Add at least one email address.".into());
-    }
-    let (settings, event, rule, own) = {
-        let store = lock_store(&state)?;
-        let own = firstlight_core::local::share_parts(&store, &id)
-            .ok()
-            .flatten();
-        let event = match &own {
-            Some((e, _)) => e.clone(),
-            None => store
-                .get_event(&id)
-                .map_err(internal("loading the event"))?
-                .ok_or("That event no longer exists.")?,
-        };
-        let rule = own.as_ref().and_then(|(_, r)| r.clone());
-        (store.load_settings(), event, rule, own.is_some())
-    };
-    let tz = crate::local_tz();
-    let h24 = settings
-        .notify_for_engine(crate::notifier::system_uses_24h())
-        .time_24h;
-    let text = invite::ics(
-        &event,
-        &invite::IcsExtras {
-            tz,
-            rrule: rule.as_deref(),
-            include_notes: own,
-            now: Utc::now(),
-            removed: &[],
-            alarm_minutes: None,
-        },
-    );
-    let dir = app
-        .path()
-        .download_dir()
-        .map_err(|_| "Couldn't find your Downloads folder.".to_string())?;
-    let slug: String = event
-        .title
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect::<String>()
-        .split('-')
-        .filter(|p| !p.is_empty())
-        .collect::<Vec<_>>()
-        .join("-");
-    let slug: String = slug.chars().take(40).collect();
-    let slug = if slug.is_empty() {
-        "event".to_string()
-    } else {
-        slug
-    };
-    let path = unique_path(&dir, &slug, "ics");
-    std::fs::write(&path, text).map_err(|_| "Couldn't save the invitation file.".to_string())?;
-    let _ = app.opener().reveal_item_in_dir(&path);
-
-    let mut mail_opened = false;
-    if open_mail {
-        let (subject, body) = invite::message(&event, tz, h24, own);
-        app.opener()
-            .open_url(invite::mailto(&to, &subject, &body), None::<&str>)
-            .map_err(|_| "Couldn't open your mail app.".to_string())?;
-        mail_opened = true;
-    }
-    Ok(InviteResult {
-        path: path.display().to_string(),
-        mail_opened,
-    })
-}
-
-/// The exact message "Send now" would send, so the window can show it before anything leaves.
+/// The exact message the "Review before sending" window shows, so nothing leaves that the person has not read.
 #[derive(serde::Serialize)]
 pub struct InvitePreview {
     subject: String,
@@ -865,32 +773,8 @@ pub struct Sender {
     label: String,
 }
 
-fn event_for_invite(
-    state: &AppState,
-    id: &str,
-) -> CmdResult<(
-    firstlight_core::settings::AppSettings,
-    Event,
-    Option<String>,
-    bool,
-)> {
-    let store = lock_store(state)?;
-    let own = firstlight_core::local::share_parts(&store, id)
-        .ok()
-        .flatten();
-    let event = match &own {
-        Some((e, _)) => e.clone(),
-        None => store
-            .get_event(id)
-            .map_err(internal("loading the event"))?
-            .ok_or("That event no longer exists.")?,
-    };
-    let rule = own.as_ref().and_then(|(_, r)| r.clone());
-    Ok((store.load_settings(), event, rule, own.is_some()))
-}
-
 /// Mailboxes the user may send from: none unless they turned sending on, and only Yahoo and iCloud have a
-/// built-in outgoing server.
+/// built-in outgoing server. When there are none, the app offers no way to invite anyone.
 #[tauri::command]
 pub async fn invite_senders(state: State<'_, AppState>) -> CmdResult<Vec<Sender>> {
     let settings = lock_store(&state)?.load_settings();
@@ -910,13 +794,79 @@ pub async fn invite_senders(state: State<'_, AppState>) -> CmdResult<Vec<Sender>
         .collect())
 }
 
-#[tauri::command]
-pub async fn invite_preview(state: State<'_, AppState>, id: String) -> CmdResult<InvitePreview> {
-    let (settings, event, _, own) = event_for_invite(&state, &id)?;
-    let h24 = settings
+/// Everything about an invitation except the people: the event (only ever one of the user's own), its
+/// repeat rule, the settings and the mailbox it would come from.
+struct InviteBasis {
+    settings: firstlight_core::settings::AppSettings,
+    event: Event,
+    rule: Option<String>,
+    mailbox: firstlight_core::mail::imap::ImapMailbox,
+}
+
+fn invite_basis(state: &AppState, id: &str, mailbox_id: &str) -> CmdResult<InviteBasis> {
+    let (settings, event, rule) = {
+        let store = lock_store(state)?;
+        let Some((event, rule)) = firstlight_core::local::share_parts(&store, id)
+            .ok()
+            .flatten()
+        else {
+            // Only the organiser invites. An event from a connected calendar belongs to someone else.
+            return Err("You can only invite people to events you created here.".into());
+        };
+        (store.load_settings(), event, rule)
+    };
+    if !settings.email.send_invitations {
+        return Err("Turn on “Send invitations from Firstlight” in Settings first.".into());
+    }
+    let mailbox = settings
+        .email
+        .imap
+        .iter()
+        .find(|m| m.id == mailbox_id)
+        .ok_or("That mailbox isn't connected.")?
+        .clone();
+    if firstlight_core::mail::smtp::server_for(mailbox.preset).is_none() {
+        return Err("Sending isn't available for that mailbox.".into());
+    }
+    Ok(InviteBasis {
+        settings,
+        event,
+        rule,
+        mailbox,
+    })
+}
+
+/// "request" (invite, or tell people it changed) or "cancel".
+fn invite_method(kind: &str) -> CmdResult<firstlight_core::invite::Method> {
+    match kind {
+        "request" => Ok(firstlight_core::invite::Method::Request),
+        "cancel" => Ok(firstlight_core::invite::Method::Cancel),
+        _ => Err("That kind of message can't be sent.".into()),
+    }
+}
+
+fn invite_text(b: &InviteBasis, method: firstlight_core::invite::Method) -> (String, String) {
+    use firstlight_core::invite;
+    let h24 = b
+        .settings
         .notify_for_engine(crate::notifier::system_uses_24h())
         .time_24h;
-    let (subject, body) = firstlight_core::invite::message(&event, crate::local_tz(), h24, own);
+    let tz = crate::local_tz();
+    match method {
+        invite::Method::Request => invite::message(&b.event, tz, h24, true, &b.mailbox.address),
+        invite::Method::Cancel => invite::cancel_message(&b.event, tz, h24, &b.mailbox.address),
+    }
+}
+
+#[tauri::command]
+pub async fn invite_preview(
+    state: State<'_, AppState>,
+    id: String,
+    mailbox_id: String,
+    kind: String,
+) -> CmdResult<InvitePreview> {
+    let basis = invite_basis(&state, &id, &mailbox_id)?;
+    let (subject, body) = invite_text(&basis, invite_method(&kind)?);
     Ok(InvitePreview { subject, body })
 }
 
@@ -937,14 +887,16 @@ fn within_send_limit() -> bool {
     true
 }
 
-/// Sends the invitation from the chosen mailbox. Only when the user turned sending on, and only for the
-/// exact text `invite_preview` showed. Returns nothing about the message.
+/// Sends a real calendar invitation (or a cancellation) from the chosen mailbox: the people get Accept and Decline
+/// in their own calendar app and answers come back to that mailbox. Only when the user turned sending on, only for
+/// an event they created, and only for the exact text `invite_preview` showed. Returns nothing about the message.
 #[tauri::command]
 pub async fn send_invite_mail(
     state: State<'_, AppState>,
     id: String,
     recipients: String,
     mailbox_id: String,
+    kind: String,
 ) -> CmdResult<()> {
     use firstlight_core::invite;
     use firstlight_core::mail::smtp;
@@ -958,41 +910,38 @@ pub async fn send_invite_mail(
             smtp::MAX_RECIPIENTS
         ));
     }
-    let (settings, event, rule, own) = event_for_invite(&state, &id)?;
-    if !settings.email.send_invitations {
-        return Err("Turn on “Send invitations from Firstlight” in Settings first.".into());
-    }
-    let mailbox = settings
-        .email
-        .imap
-        .iter()
-        .find(|m| m.id == mailbox_id)
-        .ok_or("That mailbox isn't connected.")?
-        .clone();
-    let server =
-        smtp::server_for(mailbox.preset).ok_or("Sending isn't available for that mailbox.")?;
-    let password = smtp::password_for(state.deps.secrets.as_ref(), &mailbox.id).map_err(|_| {
-        "Firstlight can't find that mailbox's password. Add the mailbox again.".to_string()
-    })?;
-    let tz = crate::local_tz();
-    let h24 = settings
-        .notify_for_engine(crate::notifier::system_uses_24h())
-        .time_24h;
-    let (subject, text) = invite::message(&event, tz, h24, own);
-    let ics = invite::ics(
-        &event,
+    let method = invite_method(&kind)?;
+    let basis = invite_basis(&state, &id, &mailbox_id)?;
+    let server = smtp::server_for(basis.mailbox.preset)
+        .ok_or("Sending isn't available for that mailbox.")?;
+    let password =
+        smtp::password_for(state.deps.secrets.as_ref(), &basis.mailbox.id).map_err(|_| {
+            "Firstlight can't find that mailbox's password. Add the mailbox again.".to_string()
+        })?;
+    let now = Utc::now();
+    let (subject, text) = invite_text(&basis, method);
+    let ics = invite::ics_itip(
+        &basis.event,
         &invite::IcsExtras {
-            tz,
-            rrule: rule.as_deref(),
-            include_notes: own,
-            now: Utc::now(),
+            tz: crate::local_tz(),
+            rrule: basis.rule.as_deref(),
+            include_notes: true,
+            now,
             removed: &[],
             alarm_minutes: None,
         },
-    );
+        &invite::Schedule {
+            method,
+            organizer: &basis.mailbox.address,
+            attendees: &to,
+            sequence: invite::sequence_at(now),
+        },
+    )
+    .map_err(user_input_error)?;
     if !within_send_limit() {
         return Err("That's a lot of messages for one hour. Try again later.".into());
     }
+    let mailbox = basis.mailbox;
     tauri::async_runtime::spawn_blocking(move || {
         let transport = smtp::TlsTransport::default();
         smtp::send(
@@ -1006,7 +955,8 @@ pub async fn send_invite_mail(
                 subject: &subject,
                 text: &text,
                 ics: &ics,
-                now: Utc::now(),
+                method: method.name(),
+                now,
             },
         )
     })

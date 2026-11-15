@@ -115,7 +115,8 @@ fn out<'a>(to: &'a [String], subject: &'a str) -> Outgoing<'a> {
         to,
         subject,
         text: "Lunch\n\nWhen: Friday\n.hidden dot line\n",
-        ics: "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+        ics: "BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nEND:VCALENDAR\r\n",
+        method: "REQUEST",
         now: DateTime::from_timestamp(1_800_000_000, 0).unwrap(),
     }
 }
@@ -341,29 +342,50 @@ fn the_recipient_count_is_limited() {
 }
 
 #[test]
-fn the_attachment_and_text_decode_back_to_what_was_given() {
+fn the_text_and_the_calendar_part_sit_side_by_side_and_the_file_is_attached_too() {
     let to = vec!["a@b.com".to_string()];
     let m = build_message(&out(&to, "x")).unwrap();
-    let boundary = m
+    let boundaries: Vec<String> = m
         .split("boundary=\"")
-        .nth(1)
-        .unwrap()
-        .split('"')
-        .next()
-        .unwrap()
-        .to_string();
-    let parts: Vec<&str> = m.split(&format!("--{boundary}")).collect();
+        .skip(1)
+        .map(|r| r.split('"').next().unwrap().to_string())
+        .collect();
+    assert_eq!(boundaries.len(), 2, "mixed outside, alternative inside");
     let dec = |p: &str| {
         let body = p.split_once("\r\n\r\n").unwrap().1.replace("\r\n", "");
-        String::from_utf8(STANDARD.decode(body).unwrap()).unwrap()
+        String::from_utf8(STANDARD.decode(body.trim_end_matches('-')).unwrap()).unwrap()
     };
+    let ics = "BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nEND:VCALENDAR\r\n";
+    let inner: Vec<&str> = m.split(&format!("--{}", boundaries[1])).collect();
+    assert!(inner[1].contains("Content-Type: text/plain"));
     assert_eq!(
-        dec(parts[1]),
+        dec(inner[1]),
         "Lunch\r\n\r\nWhen: Friday\r\n.hidden dot line\r\n"
     );
-    assert_eq!(dec(parts[2]), "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
-    assert!(m.contains("method=PUBLISH"));
+    assert!(inner[2].contains("Content-Type: text/calendar; charset=utf-8; method=REQUEST"));
+    assert_eq!(dec(inner[2]), ics);
+    // After the alternative: the same file as an attachment.
+    let attachment = m.rsplit(&format!("--{}", boundaries[0])).nth(1).unwrap();
+    assert!(attachment.contains("filename=\"invite.ics\""));
+    assert_eq!(dec(attachment), ics);
     assert!(m.lines().all(|l| l.len() <= 998));
+}
+
+#[test]
+fn only_an_invitation_or_a_cancellation_can_be_sent() {
+    let to = vec!["a@b.com".to_string()];
+    for method in ["PUBLISH", "REPLY", "request", "REQUEST\r\nBcc: x@y.com", ""] {
+        let o = Outgoing {
+            method,
+            ..out(&to, "x")
+        };
+        assert!(build_message(&o).is_err(), "{method:?}");
+    }
+    let o = Outgoing {
+        method: "CANCEL",
+        ..out(&to, "x")
+    };
+    assert!(build_message(&o).unwrap().contains("method=CANCEL"));
 }
 
 #[test]

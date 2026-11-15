@@ -78,7 +78,6 @@ fn main() {
             "export_own_events",
             "skip_event_occurrence",
             "get_system_accent",
-            "prepare_invite",
             "invite_senders",
             "invite_preview",
             "send_invite_mail",

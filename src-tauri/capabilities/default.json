@@ -60,7 +60,6 @@
     "allow-export-own-events",
     "allow-skip-event-occurrence",
     "allow-get-system-accent",
-    "allow-prepare-invite",
     "allow-invite-senders",
     "allow-invite-preview",
     "allow-send-invite-mail",

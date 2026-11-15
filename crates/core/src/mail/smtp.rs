@@ -129,8 +129,11 @@ pub struct Outgoing<'a> {
     pub to: &'a [String],
     pub subject: &'a str,
     pub text: &'a str,
-    /// The calendar file, attached.
+    /// The calendar invitation (`REQUEST`) or cancellation (`CANCEL`) as a file; it travels inside the message
+    /// where calendar apps look for it and again as an attachment.
     pub ics: &'a str,
+    /// The iTIP method named in the calendar part's header: must match the file.
+    pub method: &'a str,
     pub now: DateTime<Utc>,
 }
 
@@ -187,18 +190,28 @@ pub fn build_message(m: &Outgoing) -> Result<String> {
     }
     let domain = from.split_once('@').map_or("localhost", |(_, d)| d);
     let id = crate::model::new_id();
-    let boundary = format!("=_firstlight_{}", crate::model::new_id());
+    if !matches!(m.method, "REQUEST" | "CANCEL") {
+        return Err(Error::Invalid("That kind of message can't be sent."));
+    }
+    let outer = format!("=_firstlight_{}", crate::model::new_id());
+    let inner = format!("=_firstlight_{}", crate::model::new_id());
     let body = m.text.replace("\r\n", "\n").replace('\n', "\r\n");
+    // The shape calendar apps expect: the readable text and the calendar part side by side (so the app can show
+    // Accept and Decline), and the same file attached for apps that only look for attachments.
     let msg = format!(
         "From: {from}\r\nTo: {to}\r\nSubject: {subject}\r\nDate: {date}\r\nMessage-ID: <{id}@{domain}>\r\nMIME-Version: 1.0\r\n\
-         Content-Type: multipart/mixed; boundary=\"{boundary}\"\r\n\r\n\
-         --{boundary}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n{text}\r\n\
-         --{boundary}\r\nContent-Type: text/calendar; charset=utf-8; method=PUBLISH; name=\"invitation.ics\"\r\n\
-         Content-Disposition: attachment; filename=\"invitation.ics\"\r\nContent-Transfer-Encoding: base64\r\n\r\n{ics}\r\n\
-         --{boundary}--\r\n",
+         Content-Type: multipart/mixed; boundary=\"{outer}\"\r\n\r\n\
+         --{outer}\r\nContent-Type: multipart/alternative; boundary=\"{inner}\"\r\n\r\n\
+         --{inner}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n{text}\r\n\
+         --{inner}\r\nContent-Type: text/calendar; charset=utf-8; method={method}\r\nContent-Transfer-Encoding: base64\r\n\r\n{ics}\r\n\
+         --{inner}--\r\n\
+         --{outer}\r\nContent-Type: application/ics; name=\"invite.ics\"\r\n\
+         Content-Disposition: attachment; filename=\"invite.ics\"\r\nContent-Transfer-Encoding: base64\r\n\r\n{ics}\r\n\
+         --{outer}--\r\n",
         to = to.join(", "),
         subject = encode_header(m.subject),
         date = m.now.to_rfc2822(),
+        method = m.method,
         text = b64_lines(body.as_bytes()),
         ics = b64_lines(m.ics.as_bytes()),
     );

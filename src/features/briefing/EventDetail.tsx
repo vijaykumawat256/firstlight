@@ -15,7 +15,7 @@ import {
 import { useState } from "react";
 import { api, errorMessage, type CalEvent, type CalendarInfo, type OwnEvent } from "@/api";
 import { EventForm } from "@/features/events/EventForm";
-import { InviteDialog } from "@/features/events/InviteDialog";
+import { InviteDialog, useInviteSenders } from "@/features/events/InviteDialog";
 import { Badge, Button, Sheet, calendarColour, useToasts } from "@/design";
 import { MeetingPrep } from "./MeetingPrep";
 import { CopyLinkButton } from "./CopyLinkButton";
@@ -101,8 +101,22 @@ export function EventDetail({
   const [confirming, setConfirming] = useState<null | "one" | "all">(null);
   // One day of a repeat opened for editing on its own (see EventForm `detach`).
   const [detachTarget, setDetachTarget] = useState<{ id: string; own: OwnEvent } | null>(null);
+  // Real invitations need a mailbox to send from; without one Firstlight offers no way to invite anyone.
+  const senders = useInviteSenders();
+  const sender = senders.data?.[0];
+  // Deleting an event you invited people to can tell them it is cancelled.
+  const [tellThem, setTellThem] = useState(true);
   const remove = useMutation({
-    mutationFn: ({ id, one }: { id: string; one: boolean }) => (one ? api.skipOccurrence(id) : api.deleteEvent(id)),
+    mutationFn: async ({ id, one, tell }: { id: string; one: boolean; tell?: { to: string; mailboxId: string } }) => {
+      if (tell && !one) {
+        try {
+          await api.sendInviteMail(id, tell.to, tell.mailboxId, "cancel");
+        } catch (e) {
+          throw new Error(`The cancellation couldn't be sent, so nothing was deleted. ${errorMessage(e)}`, { cause: e });
+        }
+      }
+      return one ? api.skipOccurrence(id) : api.deleteEvent(id);
+    },
     onSuccess: (_, { one }) => {
       setConfirming(null);
       onClose();
@@ -128,6 +142,14 @@ export function EventDetail({
   const savedTo = record.data?.saved_to ?? null;
   const savedCalendar = savedTo ? calendars.find((c) => c.remote_id === savedTo)?.name : undefined;
   const series = !!event?.recurrence_master_id;
+  const invitees = info?.invitees ?? [];
+  const canInvite = own && !!sender;
+  const notifyOnDelete = canInvite && invitees.length > 0 && confirming === "all";
+  const cancelPreview = useQuery({
+    queryKey: ["invite-preview", event?.id, sender?.id, "cancel"],
+    queryFn: () => api.invitePreview(event!.id, sender!.id, "cancel"),
+    enabled: notifyOnDelete,
+  });
   /** This one day's details as a separate, non-repeating event for the form. */
   const editOne = () => {
     if (!event || !info) return;
@@ -308,22 +330,30 @@ export function EventDetail({
                     Edit this day
                   </Button>
                 )}
-                <Button
-                  variant="secondary"
-                  leading={<Mail className="size-4" aria-hidden />}
-                  onClick={() => {
-                    setInviting({ event, invitees: info?.invitees ?? [] });
-                    onClose();
-                  }}
-                >
-                  Send invitation…
-                </Button>
+                {canInvite && (
+                  <Button
+                    variant="secondary"
+                    leading={<Mail className="size-4" aria-hidden />}
+                    onClick={() => {
+                      setInviting({ event, invitees });
+                      onClose();
+                    }}
+                  >
+                    Send invitation…
+                  </Button>
+                )}
                 {confirming ? (
                   <>
                     <Button
                       variant="danger"
                       disabled={remove.isPending}
-                      onClick={() => remove.mutate({ id: event.id, one: confirming === "one" })}
+                      onClick={() =>
+                        remove.mutate({
+                          id: event.id,
+                          one: confirming === "one",
+                          tell: notifyOnDelete && tellThem && sender ? { to: invitees.join(", "), mailboxId: sender.id } : undefined,
+                        })
+                      }
                     >
                       {remove.isPending
                         ? "Deleting…"
@@ -356,6 +386,23 @@ export function EventDetail({
                       {series ? "Delete all" : "Delete"}
                     </Button>
                   </>
+                )}
+                {notifyOnDelete && (
+                  <div className="basis-full rounded-card bg-fill p-3">
+                    <label className="flex items-start gap-2 text-body text-fg">
+                      <input type="checkbox" className="mt-1" checked={tellThem} onChange={(e) => setTellThem(e.target.checked)} />
+                      <span>
+                        Tell the {invitees.length === 1 ? "person" : `${invitees.length} people`} you invited that it is cancelled ({invitees.join(", ")}), from {sender?.address}.
+                      </span>
+                    </label>
+                    {tellThem && cancelPreview.data && (
+                      <pre aria-label="Cancellation message" className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap text-footnote text-fg-2">
+                        {cancelPreview.data.subject}
+                        {"\n\n"}
+                        {cancelPreview.data.body}
+                      </pre>
+                    )}
+                  </div>
                 )}
               </div>
             )}

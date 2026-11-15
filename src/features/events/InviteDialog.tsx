@@ -3,11 +3,15 @@ import { useState } from "react";
 import { api, errorMessage, type CalEvent, type InviteSender } from "@/api";
 import { Button, Dialog, TextField, useToasts } from "@/design";
 
+/** The mailboxes people can be invited from. Empty means Firstlight can't send real invitations, so it offers none. */
+export function useInviteSenders() {
+  return useQuery({ queryKey: ["invite-senders"], queryFn: () => api.inviteSenders(), staleTime: 30_000 });
+}
+
 /**
- * Share one of your own events. By default Firstlight sends nothing: it saves a calendar file to Downloads
- * and opens a draft in your own mail app, which you read and send yourself. If you turned on "Send
- * invitations from Firstlight" and have a Yahoo or iCloud mailbox, "Review and send" shows the exact message
- * and sends it only when you press Send.
+ * Invite people to one of your own events. They get a real calendar invitation from your mailbox: Accept and
+ * Decline appear in their calendar app and their answers come back to you. Firstlight shows the exact message
+ * first and sends it only when you press Send.
  */
 export function InviteDialog({
   event,
@@ -18,51 +22,39 @@ export function InviteDialog({
   invitees: string[];
   onClose: () => void;
 }) {
-  return event ? (
-    <Body event={event} invitees={invitees} onClose={onClose} />
-  ) : null;
+  return event ? <Body event={event} invitees={invitees} onClose={onClose} /> : null;
 }
 
-function Body({
-  event,
-  invitees,
-  onClose,
-}: {
-  event: CalEvent;
-  invitees: string[];
-  onClose: () => void;
-}) {
+function Body({ event, invitees, onClose }: { event: CalEvent; invitees: string[]; onClose: () => void }) {
   const push = useToasts((s) => s.push);
   const [to, setTo] = useState(invitees.join(", "));
-  const run = useMutation({
-    mutationFn: (openMail: boolean) =>
-      api.prepareInvite(event.id, to, openMail),
-    onSuccess: (r) => {
-      onClose();
-      push(
-        r.mail_opened
-          ? {
-              title: "Your mail app is open",
-              description:
-                "Attach the calendar file from your Downloads folder, then send.",
-            }
-          : { title: "Calendar file saved", description: r.path },
-      );
-    },
-  });
-  const hasAddress = to.trim().length > 0;
-  const senders = useQuery({ queryKey: ["invite-senders"], queryFn: () => api.inviteSenders() });
+  const senders = useInviteSenders();
   const [reviewing, setReviewing] = useState(false);
   const [mailbox, setMailbox] = useState<string | null>(null);
   const sender: InviteSender | undefined = senders.data?.find((m) => m.id === mailbox) ?? senders.data?.[0];
-  const preview = useQuery({ queryKey: ["invite-preview", event.id], queryFn: () => api.invitePreview(event.id), enabled: reviewing });
+  const preview = useQuery({
+    queryKey: ["invite-preview", event.id, sender?.id, "request"],
+    queryFn: () => api.invitePreview(event.id, sender!.id, "request"),
+    enabled: reviewing && !!sender,
+  });
   const send = useMutation({
-    mutationFn: () => api.sendInviteMail(event.id, to, sender!.id),
+    mutationFn: () => api.sendInviteMail(event.id, to, sender!.id, "request"),
     onSuccess: () => {
       onClose();
       push({ title: "Invitation sent", description: `From ${sender?.address}` });
     },
   });
+  const hasAddress = to.trim().length > 0;
+
+  // Without a mailbox to send from there is nothing real to offer, so nothing is.
+  if (!senders.isPending && !sender) {
+    return (
+      <Dialog open onOpenChange={(o) => !o && onClose()} title="Send invitation" description="Invitations can't be sent right now." footer={<Button onClick={onClose}>Close</Button>}>
+        <p className="text-body text-fg-2">Turn on “Send invitations from Firstlight” in Settings, under Email, and connect a Yahoo or iCloud mailbox.</p>
+      </Dialog>
+    );
+  }
+
   if (reviewing && sender) {
     return (
       <Dialog
@@ -90,7 +82,9 @@ function Body({
             <dd className="break-words text-fg">{preview.data?.subject ?? "…"}</dd>
           </dl>
           <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-card bg-fill px-3 py-2 text-body text-fg" aria-label="Message text">{preview.data?.body ?? "Loading…"}</pre>
-          <p className="text-footnote text-fg-2">The calendar file (.ics) is attached, so they can add the event to their calendar. Replies go to {sender.address}.</p>
+          <p className="text-footnote text-fg-2">
+            It goes out as a real calendar invitation: Accept and Decline appear in their calendar app, and their answers come back to {sender.address}.
+          </p>
         </div>
       </Dialog>
     );
@@ -100,37 +94,17 @@ function Body({
       open
       onOpenChange={(o) => !o && onClose()}
       title="Send invitation"
-      description={`Share “${event.title}” with people by email.`}
+      description={`Invite people to “${event.title}”.`}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button disabled={run.isPending} onClick={() => run.mutate(false)}>
-            Just save the file
-          </Button>
-          {sender && (
-            <Button variant="primary" disabled={run.isPending || !hasAddress} onClick={() => setReviewing(true)}>
-              Review and send
-            </Button>
-          )}
-          <Button
-            variant={sender ? "secondary" : "primary"}
-            disabled={run.isPending || !hasAddress}
-            onClick={() => run.mutate(true)}
-          >
-            {run.isPending ? "Preparing…" : "Open in my mail app"}
+          <Button variant="primary" disabled={!sender || !hasAddress} onClick={() => setReviewing(true)}>
+            Review and send
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3 pb-2">
-        {run.isError && (
-          <p
-            role="alert"
-            className="rounded-card bg-danger-soft px-3 py-2 text-body text-danger"
-          >
-            {errorMessage(run.error)}
-          </p>
-        )}
         <TextField
           label="To"
           value={to}
@@ -151,9 +125,7 @@ function Body({
           </label>
         )}
         <p className="text-footnote text-fg-2">
-          {sender
-            ? "“Review and send” shows the exact message first and sends it from your mailbox when you press Send. “Open in my mail app” saves a calendar file (.ics) to Downloads and opens a draft instead; attach the file, then press Send yourself."
-            : "Firstlight doesn't send anything. It opens a draft in your mail app and saves a calendar file (.ics) to Downloads. Attach that file so they can add the event to their calendar, then press Send yourself."}
+          They get a real calendar invitation from {sender?.address ?? "your mailbox"}. You see the exact message first, and nothing is sent until you press Send. If you change the event later, send it again and their calendar updates.
         </p>
       </div>
     </Dialog>

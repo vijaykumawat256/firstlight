@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
+import { useInviteSenders } from "@/features/events/InviteDialog";
 import { api, errorMessage, type EventInput, type OwnEvent } from "@/api";
 import {
   Button,
@@ -221,6 +222,8 @@ function FormSheet({
   const [destination, setDestination] = useState("local");
   const writable = useQuery({ queryKey: ["writable-calendars"], queryFn: () => api.writableCalendars(), staleTime: 0 });
   const choices = !initial && !detach ? (writable.data ?? []) : [];
+  // The field to invite people appears only when real invitations can go out; otherwise only who is already invited shows.
+  const canInvite = (useInviteSenders().data?.length ?? 0) > 0;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -309,7 +312,7 @@ function FormSheet({
           </div>
         )}
         {destination !== "local" && choices.length > 0 && (
-          <p className="text-footnote text-fg-2">It is added to that calendar in your Calendar app, so it appears on your other devices too. People you invite are not emailed by it: use Send invitation for that.</p>
+          <p className="text-footnote text-fg-2">It is added to that calendar in your Calendar app, so it appears on your other devices too.{canInvite ? " People you invite are not emailed by saving: use Send invitation for that." : ""}</p>
         )}
         {initial?.saved_to && !detach && <p className="text-footnote text-fg-2">This event is in your Calendar app, so changes you make here are made there too.</p>}
         <TextField
@@ -427,15 +430,19 @@ function FormSheet({
           autoComplete="off"
           spellCheck={false}
         />
-        <TextField
-          label="Invite people"
-          value={d.invitees}
-          onChange={(e) => set("invitees", e.target.value)}
-          placeholder="sam@example.com, kim@example.com"
-          hint="Separate addresses with commas. Nothing is sent when you save: after saving, open the event and choose Send invitation."
-          autoComplete="off"
-          spellCheck={false}
-        />
+        {canInvite ? (
+          <TextField
+            label="Invite people"
+            value={d.invitees}
+            onChange={(e) => set("invitees", e.target.value)}
+            placeholder="sam@example.com, kim@example.com"
+            hint="Separate addresses with commas. They get a real calendar invitation, but nothing is sent when you save: after saving, open the event and choose Send invitation."
+            autoComplete="off"
+            spellCheck={false}
+          />
+        ) : (
+          d.invitees.trim() !== "" && <p className="text-footnote text-fg-2">Invited: {d.invitees}</p>
+        )}
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor={notesId}

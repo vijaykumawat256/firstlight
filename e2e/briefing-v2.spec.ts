@@ -182,7 +182,7 @@ test.describe("conflict help", () => {
   });
 
   test("after moving an event you invited people to, you are offered the updated invitation", async ({ page }) => {
-    await start(page);
+    await start(page, "sendon");
     await addOwn(page, "Eye test", "10:45", "11:15", async (sheet) => {
       await sheet.getByLabel("Invite people").fill("sam@example.com");
     });

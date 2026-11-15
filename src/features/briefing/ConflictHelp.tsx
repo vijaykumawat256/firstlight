@@ -3,7 +3,7 @@ import { ArrowRightLeft, Copy, Mail } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage, type CalEvent, type ConflictHelp as Help, type ConflictReason } from "@/api";
 import { Button, Dialog, IconButton, useToasts } from "@/design";
-import { InviteDialog } from "@/features/events/InviteDialog";
+import { InviteDialog, useInviteSenders } from "@/features/events/InviteDialog";
 import { formatDate, formatDuration, formatTime } from "./format";
 
 const REASON: Record<ConflictReason, string> = {
@@ -48,6 +48,7 @@ type Slot = { start: string; end: string };
 function MoveCard({ moved, options, yours, onMoved }: { moved: CalEvent; options: Slot[]; yours: boolean; onMoved: (made: CalEvent, invitees: string[]) => void }) {
   const push = useToasts((s) => s.push);
   const qc = useQueryClient();
+  const canInvite = (useInviteSenders().data?.length ?? 0) > 0;
   const own = useQuery({ queryKey: ["own-event", moved.id], queryFn: () => api.getOwnEvent(moved.id), enabled: yours });
   const rec = own.data ?? null;
   const repeats = !!rec?.input.repeat;
@@ -69,7 +70,8 @@ function MoveCard({ moved, options, yours, onMoved }: { moved: CalEvent; options
     onSuccess: ({ made, o }) => {
       void qc.invalidateQueries();
       push({ title: mode === "day" ? "That day was moved" : "Moved", description: range(o) });
-      onMoved(made, rec?.input.invitees ?? []);
+      // Only when a real invitation can be sent is the person offered to tell the people they invited.
+      onMoved(made, canInvite ? (rec?.input.invitees ?? []) : []);
     },
     onError: (e) => push({ title: "Couldn't move it", description: errorMessage(e), tone: "danger" }),
   });
@@ -105,7 +107,7 @@ function MoveCard({ moved, options, yours, onMoved }: { moved: CalEvent; options
       </ul>
       {mode === "day" && <p className="text-footnote text-fg-2">This moves only this day. The rest of the series stays where it is.</p>}
       {yours && rec && repeats && !mode && <p className="text-footnote text-fg-2">It repeats and is saved in another calendar, so change it from the event itself.</p>}
-      {mode && (rec?.input.invitees.length ?? 0) > 0 && <p className="text-footnote text-fg-2">After moving it you can send the people you invited an updated invitation.</p>}
+      {mode && canInvite && (rec?.input.invitees.length ?? 0) > 0 && <p className="text-footnote text-fg-2">After moving it you can send the people you invited an updated invitation.</p>}
       {!yours && (
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" leading={<Mail className="size-4" aria-hidden />} disabled={draft.isPending} onClick={() => draft.mutate()}>

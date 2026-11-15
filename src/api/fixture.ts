@@ -376,6 +376,12 @@ if (params.has("sendon")) {
   settings.email = { ...settings.email, send_invitations: true, imap: [{ id: "imap1", preset: "yahoo", address: "me@yahoo.com", host: null }] };
 }
 if (params.has("mailon")) settings.email = { ...settings.email, enabled: true, apple_mail: true };
+/** `?preinvited`: one of your own events that already has someone invited, with sending not set up. */
+if (params.has("preinvited")) {
+  const day = new Date();
+  const at = (h: number) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), h).toISOString();
+  saveFixtureEvent(null, { title: "Team lunch", all_day: false, start: at(18), end: at(19), location: null, join_url: null, notes: null, repeat: null, reminder_minutes: null, invitees: ["sam@example.com"] });
+}
 /** A CalDAV account with one calendar the server lets the user change and one it does not. */
 if (params.has("withcaldav")) {
   accounts.push({
@@ -523,11 +529,15 @@ export const fixtureBackend: Backend = {
     if (!settings.email.send_invitations) return [];
     return settings.email.imap.filter((m) => m.preset !== "custom").map((m) => ({ id: m.id, address: m.address, label: m.preset === "yahoo" ? "Yahoo Mail" : "iCloud Mail" }));
   },
-  async invitePreview(id) {
+  async invitePreview(id, mailboxId, kind) {
     const ev = fixtureEvents().concat(ownEvents()).find((e) => e.id === id || findRecord(id)?.id === e.id) ?? ownEvents()[0];
-    return { subject: `Invitation: ${ev?.title ?? "Event"}`, body: `${ev?.title ?? "Event"}\n\nWhen: soon\n\nThe calendar file is attached, so you can add it to your calendar.` };
+    const title = ev?.title ?? "Event";
+    const me = settings.email.imap.find((m) => m.id === mailboxId)?.address ?? "you@example.com";
+    return kind === "cancel"
+      ? { subject: `Cancelled: ${title}`, body: `${title} has been cancelled.\n\nWas: soon\nOrganiser: ${me}` }
+      : { subject: `Invitation: ${title}`, body: `${title}\n\nWhen: soon\nOrganiser: ${me}\n\nThis is a calendar invitation. Accept or decline it in your calendar app and your answer goes back to the organiser.` };
   },
-  async sendInviteMail(id, recipients, mailboxId) {
+  async sendInviteMail(id, recipients, mailboxId, kind) {
     await sleep(150);
     if (!settings.email.send_invitations) throw new Error("Turn on “Send invitations from Firstlight” in Settings first.");
     if (params.has("sendfail")) throw new Error("The mail server didn't accept the saved password. Add the mailbox again with a fresh app password.");
@@ -536,16 +546,7 @@ export const fixtureBackend: Backend = {
     if (list.some((a) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a))) throw new Error("One of those email addresses doesn't look right.");
     if (!settings.email.imap.some((m) => m.id === mailboxId)) throw new Error("That mailbox isn't connected.");
     const w = window as unknown as Record<string, unknown>;
-    w.__sent = [...((w.__sent as unknown[]) ?? []), { id, list, mailboxId }];
-  },
-  async prepareInvite(id, recipients, openMail) {
-    await sleep(150);
-    const list = recipients.split(/[\s,;]+/).filter(Boolean);
-    if (list.some((a) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a))) throw new Error("One of those email addresses doesn't look right.");
-    if (openMail && list.length === 0) throw new Error("Add at least one email address.");
-    const w = window as unknown as Record<string, unknown>;
-    w.__invites = [...((w.__invites as unknown[]) ?? []), { id, list, openMail }];
-    return { path: "/Users/you/Downloads/invitation.ics", mail_opened: openMail };
+    w.__sent = [...((w.__sent as unknown[]) ?? []), { id, list, mailboxId, kind }];
   },
   async openMailMessage(target) {
     if (target.kind === "url" && !target.url.startsWith("https://")) throw new Error("Refusing to open that link.");
