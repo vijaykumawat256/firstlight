@@ -161,6 +161,37 @@ pub trait SystemSource: Send + Sync {
     }
 }
 
+/// Something that can keep events Firstlight creates: the Calendar app, or a CalDAV account. Only what the
+/// form collects goes in; only events Firstlight created are ever changed or removed through it.
+pub trait CalendarWriter {
+    /// Creates an event in `calendar_id`, or (with `existing`) replaces one Firstlight made before, and
+    /// returns the store's identifier for it. A repeating event is changed as a whole.
+    fn save_event(
+        &self,
+        calendar_id: &str,
+        existing: Option<&str>,
+        event: &SysNewEvent,
+        tz: Tz,
+    ) -> Result<String>;
+    /// Removes an event Firstlight created (all of it, if it repeats). Already gone counts as done.
+    fn delete_event(&self, event_id: &str) -> Result<()>;
+}
+
+impl<T: SystemSource + ?Sized> CalendarWriter for T {
+    fn save_event(
+        &self,
+        calendar_id: &str,
+        existing: Option<&str>,
+        event: &SysNewEvent,
+        tz: Tz,
+    ) -> Result<String> {
+        SystemSource::save_event(self, calendar_id, existing, event, tz)
+    }
+    fn delete_event(&self, event_id: &str) -> Result<()> {
+        SystemSource::delete_event(self, event_id)
+    }
+}
+
 pub struct SystemProvider {
     source: Arc<dyn SystemSource>,
     tz: Tz,

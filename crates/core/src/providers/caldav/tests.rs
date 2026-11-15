@@ -285,3 +285,29 @@ fn presets_are_valid_https_servers() {
         assert!(validate_server(url).is_ok(), "{url}");
     }
 }
+
+#[test]
+fn a_calendar_is_writable_only_when_the_server_says_the_user_may_write() {
+    let node = |inner: &str| xml::parse(&format!(r#"<d:p xmlns:d="DAV:">{inner}</d:p>"#)).unwrap();
+    let privs = |names: &[&str]| {
+        node(
+            &names
+                .iter()
+                .map(|n| format!("<d:privilege><d:{n}/></d:privilege>"))
+                .collect::<String>(),
+        )
+    };
+    assert!(
+        !can_write(None),
+        "a server that says nothing is treated as read-only"
+    );
+    assert!(!can_write(Some(&privs(&["read"]))));
+    assert!(!can_write(Some(&privs(&["read", "bind"]))));
+    assert!(can_write(Some(&privs(&["read", "write"]))));
+    assert!(can_write(Some(&privs(&["all"]))));
+    assert!(can_write(Some(&privs(&[
+        "bind",
+        "write-content",
+        "unbind"
+    ]))));
+}

@@ -12,9 +12,13 @@ use firstlight_core::oauth::loopback::Loopback;
 use firstlight_core::oauth::{
     self, OAuthConfig, Pkce, authorization_url, exchange_code, random_state,
 };
-use firstlight_core::providers::caldav::{CaldavProvider, CaldavSecret, validate_server};
+use firstlight_core::providers::caldav::{
+    CaldavProvider, CaldavSecret, CaldavWriter, validate_server,
+};
 use firstlight_core::providers::ics::IcsProvider;
-use firstlight_core::providers::system::{Access, SYSTEM_ACCOUNT_ID};
+use firstlight_core::providers::system::{
+    Access, CalendarWriter, SYSTEM_ACCOUNT_ID, SysNewEvent, SystemSource,
+};
 use firstlight_core::providers::{google, microsoft};
 use firstlight_core::store::Store;
 use firstlight_core::sync::{default_window, sync_account};
@@ -358,17 +362,19 @@ pub async fn update_event(
     }
 }
 
-/// Removes one of the user's own events (and, if it was saved in the Calendar app, from there too). Events
-/// Firstlight did not create can never be removed here.
+/// Removes one of the user's own events (and, if it was saved in the Calendar app or a CalDAV account, from
+/// there too). Events Firstlight did not create can never be removed here.
 #[tauri::command]
 pub async fn delete_event(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
-    let allowed = calendar_writing_allowed(&state).is_ok();
     {
         let mut store = lock_store(&state)?;
-        // Without the setting the Calendar app is not handed in, so an event that lives there is refused.
-        let source: Option<&dyn firstlight_core::providers::system::SystemSource> =
-            allowed.then(|| state.deps.system.as_ref());
-        firstlight_core::local::delete_with(&mut store, source, &id, Utc::now())
+        let remote = firstlight_core::local::remote_of(&store, &id).map_err(user_input_error)?;
+        // Without permission no writer is handed in, so an event that lives elsewhere is refused.
+        let writer: Option<Box<dyn CalendarWriter>> = match &remote {
+            Some(r) => writer_for_existing(&state, &store, r).ok(),
+            None => None,
+        };
+        firstlight_core::local::delete_with(&mut store, writer.as_deref(), &id, Utc::now())
             .map_err(user_input_error)?;
     }
     state.sync.trigger(Trigger::Manual);
@@ -376,26 +382,27 @@ pub async fn delete_event(app: AppHandle, state: State<'_, AppState>, id: String
     Ok(())
 }
 
+const SYSTEM_WRITE_OFF: &str =
+    "Turn on “Let Firstlight add events to the Calendar app” in Settings first.";
+const SYSTEM_ACCESS_OFF: &str = "Allow Firstlight to use your calendars in System Settings first.";
+
 /// Whether Firstlight may write to the Calendar app right now: the user turned it on, and the system
 /// allowed access to calendars. Both are checked at the moment of every write.
 fn calendar_writing_allowed(state: &AppState) -> CmdResult<()> {
-    use firstlight_core::providers::system::Access;
     if !lock_store(state)?
         .load_settings()
         .general
         .write_to_calendar_app
     {
-        return Err(
-            "Turn on “Let Firstlight add events to the Calendar app” in Settings first.".into(),
-        );
+        return Err(SYSTEM_WRITE_OFF.into());
     }
     if state.deps.system.access() != Access::Granted {
-        return Err("Allow Firstlight to use your calendars in System Settings first.".into());
+        return Err(SYSTEM_ACCESS_OFF.into());
     }
     Ok(())
 }
 
-/// A calendar in the Calendar app that events can be added to.
+/// A calendar events can be added to: one in the Calendar app, or one on a CalDAV account the user allowed.
 #[derive(serde::Serialize)]
 pub struct WritableCalendar {
     id: String,
@@ -428,14 +435,120 @@ fn writable_list(state: &AppState) -> CmdResult<Vec<WritableCalendar>> {
         .collect())
 }
 
-/// The calendars the "Save to" menu offers. Empty unless the setting is on and access was allowed, so the
-/// form shows nothing extra to anyone who has not opted in.
+/// The calendars of the CalDAV accounts the user allowed, that the server says may be changed.
+fn caldav_writable_list(state: &AppState) -> CmdResult<Vec<WritableCalendar>> {
+    let store = lock_store(state)?;
+    let allowed = store.load_settings().general.writable_accounts;
+    let mut out = Vec::new();
+    for acct in store
+        .list_accounts()
+        .map_err(internal("reading accounts"))?
+    {
+        if acct.provider != ProviderKind::Caldav || !allowed.contains(&acct.id) {
+            continue;
+        }
+        for c in store
+            .calendars_for_account(&acct.id)
+            .map_err(internal("reading calendars"))?
+            .into_iter()
+            .filter(|c| !c.read_only)
+        {
+            out.push(WritableCalendar {
+                id: c.id,
+                name: c.name,
+                source: acct.display_name.clone(),
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// The calendars the "Save to" menu offers. Empty unless the user opted in somewhere, so the form shows
+/// nothing extra to anyone who has not.
 #[tauri::command]
 pub async fn writable_calendars(state: State<'_, AppState>) -> CmdResult<Vec<WritableCalendar>> {
-    if calendar_writing_allowed(&state).is_err() {
-        return Ok(vec![]);
+    let mut out = if calendar_writing_allowed(&state).is_ok() {
+        writable_list(&state)?
+    } else {
+        vec![]
+    };
+    out.extend(caldav_writable_list(&state)?);
+    Ok(out)
+}
+
+/// Where a new event goes: a CalDAV calendar (account, address) when `calendar_id` is one of ours, else the
+/// Calendar app.
+fn caldav_calendar(store: &Store, calendar_id: &str) -> Option<(Account, Calendar)> {
+    let cal = store
+        .list_calendars()
+        .ok()?
+        .into_iter()
+        .find(|c| c.id == calendar_id)?;
+    let acct = store.get_account(&cal.account_id).ok()??;
+    (acct.provider == ProviderKind::Caldav).then_some((acct, cal))
+}
+
+/// The writer for a CalDAV calendar, after checking the user allowed writing to that account and the server
+/// lets them change that calendar.
+fn caldav_writer(
+    state: &AppState,
+    store: &Store,
+    acct: &Account,
+    cal: &Calendar,
+) -> CmdResult<Box<dyn CalendarWriter>> {
+    if !store
+        .load_settings()
+        .general
+        .writable_accounts
+        .contains(&acct.id)
+    {
+        return Err(format!(
+            "Turn on “Let Firstlight add events to {}” in Settings first.",
+            acct.display_name
+        ));
     }
-    writable_list(&state)
+    if cal.read_only {
+        return Err("That calendar can't be added to.".into());
+    }
+    Ok(Box::new(CaldavWriter::new(
+        state.deps.http.clone(),
+        state.deps.secrets.clone(),
+        &acct.id,
+        &cal.remote_id,
+    )))
+}
+
+/// The writer for an event we saved before, found through where it was saved.
+fn writer_for_existing(
+    state: &AppState,
+    store: &Store,
+    remote: &firstlight_core::local::RemoteRef,
+) -> CmdResult<Box<dyn CalendarWriter>> {
+    if remote.account_id.is_none() {
+        calendar_writing_allowed(state)?;
+        return Ok(Box::new(SystemWriter(state.deps.system.clone())));
+    }
+    let (acct, cal) = caldav_calendar(store, &remote.calendar_id)
+        .ok_or("That calendar isn't connected any more.")?;
+    caldav_writer(state, store, &acct, &cal)
+}
+
+/// Lets the Calendar app be handed around as a `CalendarWriter`.
+struct SystemWriter(std::sync::Arc<dyn SystemSource>);
+
+impl CalendarWriter for SystemWriter {
+    fn save_event(
+        &self,
+        calendar_id: &str,
+        existing: Option<&str>,
+        event: &SysNewEvent,
+        tz: chrono_tz::Tz,
+    ) -> firstlight_core::Result<String> {
+        self.0.save_event(calendar_id, existing, event, tz)
+    }
+    fn delete_event(&self, event_id: &str) -> firstlight_core::Result<()> {
+        self.0.delete_event(event_id)
+    }
 }
 
 fn save_calendar_event(
@@ -445,28 +558,71 @@ fn save_calendar_event(
     calendar_id: &str,
     event: firstlight_core::local::EventInput,
 ) -> CmdResult<Event> {
-    calendar_writing_allowed(state)?;
-    // A new event may only go to a calendar the system lists as changeable (an edit keeps its own calendar).
-    if id.is_none() && !writable_list(state)?.iter().any(|c| c.id == calendar_id) {
-        return Err("That calendar can't be added to.".into());
-    }
+    // Which account the event goes to: where it already is, or the calendar the form named.
+    let (writer, account, calendar_id, place): (
+        Box<dyn CalendarWriter>,
+        Option<String>,
+        String,
+        &str,
+    ) = {
+        let store = lock_store(state)?;
+        let existing = match id {
+            Some(id) => Some(
+                firstlight_core::local::remote_of(&store, id)
+                    .map_err(user_input_error)?
+                    .ok_or("That event is stored only on this computer.")?,
+            ),
+            None => None,
+        };
+        let target = match &existing {
+            Some(r) => r.calendar_id.clone(),
+            None => calendar_id.to_string(),
+        };
+        let caldav = match &existing {
+            Some(r) => r.account_id.is_some(),
+            None => caldav_calendar(&store, &target).is_some(),
+        };
+        if caldav {
+            let (acct, cal) = caldav_calendar(&store, &target)
+                .ok_or("That calendar isn't connected any more.")?;
+            let w = caldav_writer(state, &store, &acct, &cal)?;
+            (w, Some(acct.id), target, "The server")
+        } else {
+            drop(store);
+            calendar_writing_allowed(state)?;
+            // A new event may only go to a calendar the system lists as changeable (an edit keeps its own).
+            if id.is_none() && !writable_list(state)?.iter().any(|c| c.id == target) {
+                return Err("That calendar can't be added to.".into());
+            }
+            (
+                Box::new(SystemWriter(state.deps.system.clone())),
+                None,
+                target,
+                "The Calendar app",
+            )
+        }
+    };
     let saved = {
         let mut store = lock_store(state)?;
         firstlight_core::local::save_to_calendar(
             &mut store,
-            state.deps.system.as_ref(),
+            writer.as_ref(),
+            account.as_deref(),
             id,
-            calendar_id,
+            &calendar_id,
             &event,
             crate::local_tz(),
             Utc::now(),
         )
         .map_err(|e| match e {
             Error::Invalid(m) => m.to_string(),
-            Error::PermissionNeeded => {
-                "Allow Firstlight to use your calendars in System Settings first.".to_string()
+            Error::PermissionNeeded => SYSTEM_ACCESS_OFF.to_string(),
+            Error::AuthRevoked => "Firstlight couldn't sign in to that account. Reconnect it in Settings, then try again.".to_string(),
+            Error::Offline => format!("{place} couldn't be reached. Nothing was changed."),
+            Error::Provider(m) if account.is_some() => {
+                format!("{place} couldn't save that ({m}). Nothing was changed.")
             }
-            _ => "The Calendar app couldn't save that. Nothing was changed.".to_string(),
+            _ => format!("{place} couldn't save that. Nothing was changed."),
         })?
     };
     // Bring the saved event back through the normal sync so it appears like any other event.

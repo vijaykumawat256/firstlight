@@ -28,7 +28,7 @@ If you add invitees and save to Google or Outlook, **the provider emails them**.
 3. Which comes first, Google or Microsoft? (Both are similar; one at a time halves the live testing.)
 
 ### Update 2026-11-14: Mac Calendar app write built
-Built, opt-in (default off), macOS only: see CLAUDE.md "Writing to the Calendar app". Not built: the same for Windows/Linux (needs CalDAV write, testable with a mock server) and Google/Microsoft (needs live accounts). Real email sending (SMTP through a connected mailbox, proper meeting-request format) is proposed, not built: it would reverse the "Firstlight never sends mail" rule and needs the user's decision.
+Built, opt-in (default off): the Mac Calendar app, and CalDAV accounts (iCloud, Yahoo, Fastmail, Nextcloud) on every OS; see CLAUDE.md "Writing to the Calendar app". CalDAV write is tested against a mock server only. Not built: Google/Microsoft write (needs live accounts). Real email sending (SMTP through a connected mailbox, proper meeting-request format) is proposed, not built: it would reverse the "Firstlight never sends mail" rule and needs the user's decision.
 
 ## 2. Incremental sync for Google and Microsoft: deliberately not built yet
 

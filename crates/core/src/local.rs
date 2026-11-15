@@ -9,7 +9,8 @@
 
 use crate::invite::{self, IcsExtras};
 use crate::model::*;
-use crate::providers::system::{SysFreq, SysNewEvent, SysRepeat, SysWhen, SystemSource};
+use crate::providers::caldav;
+use crate::providers::system::{CalendarWriter, SysFreq, SysNewEvent, SysRepeat, SysWhen};
 use crate::store::Store;
 use crate::{Error, Result, join};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
@@ -63,13 +64,17 @@ pub struct EventInput {
     pub invitees: Vec<String>,
 }
 
-/// Where an event Firstlight created lives in the Calendar app, when the user chose to save it there.
+/// Where an event Firstlight created lives outside this computer, when the user chose to save it there: in
+/// the Calendar app, or in a CalDAV account.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteRef {
-    /// The Calendar app's identifier for the calendar it was put in.
+    /// The calendar it was put in: the Calendar app's identifier, or (CalDAV) Firstlight's id for the calendar.
     pub calendar_id: String,
-    /// The Calendar app's identifier for the event.
+    /// The store's identifier for the event: the Calendar app's own, or (CalDAV) the event's address.
     pub event_id: String,
+    /// The CalDAV account it lives in. `None` means the Calendar app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -415,19 +420,24 @@ pub fn resolve(store: &Store, id: &str) -> Result<Option<String>> {
     let Some(ev) = store.get_event(id)? else {
         return Ok(None);
     };
-    if !ev
+    let in_system = ev
         .calendar_id
-        .starts_with(&format!("{}:", crate::providers::system::SYSTEM_ACCOUNT_ID))
-    {
-        return Ok(None);
-    }
+        .starts_with(&format!("{}:", crate::providers::system::SYSTEM_ACCOUNT_ID));
+    let account = ev.calendar_id.rsplit_once(':').map(|(a, _)| a);
     let system_id = ev.remote_id.split('#').next().unwrap_or("");
     for (master, json) in store.all_own_events()? {
-        if serde_json::from_str::<Stored>(&json)
+        let Some(r) = serde_json::from_str::<Stored>(&json)
             .ok()
             .and_then(|s| s.remote)
-            .is_some_and(|r| r.event_id == system_id)
-        {
+        else {
+            continue;
+        };
+        let same = match &r.account_id {
+            None => in_system && r.event_id == system_id,
+            // A CalDAV event comes back through sync with the UID we gave it, which is made from its address.
+            Some(a) => Some(a.as_str()) == account && caldav::uid_for(&r.event_id) == ev.ical_uid,
+        };
+        if same {
             return Ok(Some(master));
         }
     }
@@ -471,13 +481,23 @@ fn to_sys(input: &EventInput, base: &Event) -> Result<SysNewEvent> {
     })
 }
 
-/// Adds an event to a calendar in the Calendar app (`id` is `None`), or changes one that Firstlight added
+/// Where an event we saved outside this computer lives (`None` for one kept only here or not ours).
+pub fn remote_of(store: &Store, id: &str) -> Result<Option<RemoteRef>> {
+    let Some(master) = resolve(store, id)? else {
+        return Ok(None);
+    };
+    Ok(load(store, &master)?.and_then(|s| s.remote))
+}
+
+/// Adds an event to a calendar in the Calendar app or a CalDAV account (`id` is `None`), or changes one that Firstlight added
 /// before (then `calendar_id` is ignored: it stays where it is). The Calendar app is changed first; our own
 /// record is only written once that worked, and if writing it fails the new event is taken back out, so
 /// there is never a half-saved event.
+#[allow(clippy::too_many_arguments)] // the writer, its account and the form values are all distinct
 pub fn save_to_calendar(
     store: &mut Store,
-    source: &dyn SystemSource,
+    source: &dyn CalendarWriter,
+    account_id: Option<&str>,
     id: Option<&str>,
     calendar_id: &str,
     input: &EventInput,
@@ -517,6 +537,10 @@ pub fn save_to_calendar(
         remote: Some(RemoteRef {
             calendar_id: target.to_string(),
             event_id: event_id.clone(),
+            account_id: existing
+                .as_ref()
+                .map_or(account_id, |r| r.account_id.as_deref())
+                .map(str::to_string),
         }),
     };
     let wrote = serde_json::to_string(&stored)
@@ -666,7 +690,7 @@ pub fn delete(store: &mut Store, id: &str, now: DateTime<Utc>) -> Result<()> {
 /// deleted it there); the source treats that as done.
 pub fn delete_with(
     store: &mut Store,
-    source: Option<&dyn SystemSource>,
+    source: Option<&dyn CalendarWriter>,
     id: &str,
     now: DateTime<Utc>,
 ) -> Result<()> {

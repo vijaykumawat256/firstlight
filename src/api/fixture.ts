@@ -177,7 +177,7 @@ if (params.has("attention")) {
 let oauthCancelled = false;
 export const DEFAULT_SETTINGS: AppSettings = {
   version: 1,
-  general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null, show_in_dock: true, write_to_calendar_app: params.has("writeon"), join_shortcut: null, tray_next_meeting: false, check_for_updates: true, update_channel: "stable" },
+  general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null, show_in_dock: true, write_to_calendar_app: params.has("writeon"), writable_accounts: [], join_shortcut: null, tray_next_meeting: false, check_for_updates: true, update_channel: "stable" },
   briefing: { show_declined: false, min_gap_minutes: 30, work_start_hour: 9, work_end_hour: 18, early_hour: 8 },
   sections: { tomorrow: true, free_time: true, attention: true },
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },
@@ -210,6 +210,16 @@ const WRITABLE = [
   { id: "fixture-work", name: "Work", source: "Demo account" },
   { id: "fixture-personal", name: "Personal", source: "Demo account" },
 ];
+
+/** What the "Save to" menu offers now: the Calendar app's calendars if allowed, and the changeable calendars of each CalDAV account the user allowed. */
+function writableNow(): { id: string; name: string; source: string }[] {
+  const out = settings.general.write_to_calendar_app ? [...WRITABLE] : [];
+  for (const a of accounts) {
+    if (a.provider !== "caldav" || !settings.general.writable_accounts.includes(a.id)) continue;
+    for (const c of a.calendars) if (!c.read_only) out.push({ id: c.id, name: c.name, source: a.display_name });
+  }
+  return out;
+}
 
 const LOCAL_CAL = "local-events";
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -359,6 +369,22 @@ if (params.has("aion")) {
   settings.ai = { ...settings.ai, enabled: true, consented: "anthropic" };
 }
 if (params.has("mailon")) settings.email = { ...settings.email, enabled: true, apple_mail: true };
+/** A CalDAV account with one calendar the server lets the user change and one it does not. */
+if (params.has("withcaldav")) {
+  accounts.push({
+    id: "caldav-ok",
+    provider: "caldav",
+    display_name: "Fastmail",
+    email: "me@fastmail.example",
+    status: "ok",
+    calendars: [
+      { id: "caldav-ok:work", account_id: "caldav-ok", remote_id: "https://dav.example/cal/work/", name: "Fastmail Work", colour: "orange", visible: true, read_only: false },
+      { id: "caldav-ok:shared", account_id: "caldav-ok", remote_id: "https://dav.example/cal/shared/", name: "Team (read only)", colour: "purple", visible: true, read_only: true },
+    ],
+    last_synced_at: new Date().toISOString(),
+    last_error: null,
+  });
+}
 if (params.has("withgoogle")) {
   accounts.push({
     id: "google-ok",
@@ -450,14 +476,13 @@ export const fixtureBackend: Backend = {
   },
   async createEvent(input, calendarId) {
     if (calendarId) {
-      if (!settings.general.write_to_calendar_app) throw new Error("Turn on “Let Firstlight add events to the Calendar app” in Settings first.");
-      if (!WRITABLE.some((c) => c.id === calendarId)) throw new Error("That calendar can't be added to.");
-      if (params.has("calfail")) throw new Error("The Calendar app couldn't save that. Nothing was changed.");
+      if (!writableNow().some((c) => c.id === calendarId)) throw new Error("That calendar can't be added to.");
+      if (params.has("calfail")) throw new Error("The server couldn't save that. Nothing was changed.");
     }
     return saveFixtureEvent(null, input, calendarId);
   },
   async writableCalendars() {
-    return settings.general.write_to_calendar_app ? structuredClone(WRITABLE) : [];
+    return structuredClone(writableNow());
   },
   async updateEvent(id, input) {
     return saveFixtureEvent(id, input);
@@ -465,7 +490,7 @@ export const fixtureBackend: Backend = {
   async deleteEvent(id) {
     const rec = findRecord(id);
     if (!rec) throw new Error("That event can't be changed here.");
-    if (rec.destination && !settings.general.write_to_calendar_app) throw new Error("Turn on adding events to the Calendar app to delete this one.");
+    if (rec.destination && !writableNow().some((c) => c.id === rec.destination)) throw new Error("Turn on adding events to that calendar to delete this one.");
     ownRecords.splice(ownRecords.indexOf(rec), 1);
   },
   async skipOccurrence(id) {

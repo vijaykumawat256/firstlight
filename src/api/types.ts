@@ -166,6 +166,7 @@ export interface AppSettings {
     global_shortcut: string | null;
     show_in_dock: boolean;
     write_to_calendar_app: boolean;
+    writable_accounts: string[];
     join_shortcut: string | null;
     tray_next_meeting: boolean;
     check_for_updates: boolean;

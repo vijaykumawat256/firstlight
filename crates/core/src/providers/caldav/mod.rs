@@ -18,6 +18,9 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+mod write;
+pub use write::{CaldavWriter, uid_for};
+
 /// Well-known servers, offered as one-tap presets in the UI.
 pub const PRESETS: [(&str, &str, &str); 3] = [
     ("icloud", "iCloud", "https://caldav.icloud.com"),
@@ -57,6 +60,27 @@ fn propfind_body(props: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="utf-8"?><d:propfind {NS}><d:prop>{props}</d:prop></d:propfind>"#
     )
+}
+
+fn load_secret(secrets: &dyn SecretStore, account_id: &str) -> Result<CaldavSecret> {
+    let raw = secrets
+        .get(&CaldavProvider::secret_key(account_id))?
+        .ok_or(Error::AuthRevoked)?;
+    serde_json::from_str(&raw)
+        .map_err(|_| Error::Secret("stored credentials are unreadable".into()))
+}
+
+/// Whether the user's rights on a calendar let Firstlight add, change and remove events. A server that does
+/// not say counts as "no": nothing is written to a calendar that was not shown to allow it.
+fn can_write(privileges: Option<&Node>) -> bool {
+    let Some(set) = privileges else {
+        return false;
+    };
+    let has = |name: &str| {
+        set.children_named("privilege")
+            .any(|p| p.children.iter().any(|c| c.name == name))
+    };
+    has("all") || has("write") || (has("bind") && has("write-content") && has("unbind"))
 }
 
 /// Validates a user-entered server address: https only, no credentials in the URL.
@@ -124,12 +148,7 @@ impl CaldavProvider {
     }
 
     fn load(&self, account_id: &str) -> Result<CaldavSecret> {
-        let raw = self
-            .secrets
-            .get(&Self::secret_key(account_id))?
-            .ok_or(Error::AuthRevoked)?;
-        serde_json::from_str(&raw)
-            .map_err(|_| Error::Secret("stored credentials are unreadable".into()))
+        load_secret(self.secrets.as_ref(), account_id)
     }
 
     fn request(
@@ -251,7 +270,7 @@ impl Provider for CaldavProvider {
             &s,
             &home,
             "1",
-            "<d:resourcetype/><d:displayname/><a:calendar-color/><c:supported-calendar-component-set/>",
+            "<d:resourcetype/><d:displayname/><a:calendar-color/><c:supported-calendar-component-set/><d:current-user-privilege-set/>",
         )?;
         let mut out = Vec::new();
         for r in doc.children_named("response") {
@@ -285,7 +304,7 @@ impl Provider for CaldavProvider {
                 name,
                 colour: colour.to_string(),
                 visible: true,
-                read_only: true,
+                read_only: !can_write(Self::prop(r, "current-user-privilege-set")),
             });
         }
         if out.is_empty() {

@@ -299,6 +299,49 @@ test("a failed Calendar-app save says so and keeps the form", async ({ page }) =
   await page.getByRole("option", { name: /Work/ }).click();
   await sheet.getByLabel("Title").fill("Nope");
   await sheet.getByRole("button", { name: "Add event" }).click();
-  await expect(page.getByText(/Calendar app couldn't save/).first()).toBeVisible();
+  await expect(page.getByText(/couldn't save that/).first()).toBeVisible();
   await expect(sheet).toBeVisible();
+});
+
+test("a CalDAV account is read-only until the user lets Firstlight add events to it", async ({ page }) => {
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/?withcaldav");
+
+  // Nothing is offered before the switch.
+  await page.getByRole("button", { name: "New event" }).click();
+  await expect(page.getByRole("dialog", { name: "New event" }).getByLabel("Title")).toBeVisible();
+  await expect(page.getByText("Save to")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // The switch lives on the account, and is off.
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: /Accounts & calendars/ }).click();
+  const account = page.getByRole("region", { name: "Fastmail" });
+  const sw = account.getByRole("switch", { name: "Add events to Fastmail" });
+  await expect(sw).not.toBeChecked();
+  await sw.click();
+  await expect(sw).toBeChecked();
+
+  // Back to the briefing: the form now offers that account's changeable calendar, not the read-only one.
+  await page.getByRole("button", { name: "Briefing" }).click();
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByRole("combobox", { name: "Save to" }).click();
+  await expect(page.getByRole("option", { name: /Team \(read only\)/ })).toHaveCount(0);
+  await page.getByRole("option", { name: /Fastmail Work/ }).click();
+  await sheet.getByLabel("Title").fill("Piano lesson");
+  await sheet.getByLabel("Start time").fill("18:00");
+  await sheet.getByLabel("End time").fill("19:00");
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  await expect(page.getByRole("button", { name: /^(?!Join|Copy).*Piano lesson/ })).toBeVisible();
+});
+
+test("turning the account switch off again stops the offer", async ({ page }) => {
+  await page.goto("/?withcaldav");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: /Accounts & calendars/ }).click();
+  const sw = page.getByRole("region", { name: "Fastmail" }).getByRole("switch", { name: "Add events to Fastmail" });
+  await sw.click();
+  await sw.click();
+  await expect(sw).not.toBeChecked();
 });

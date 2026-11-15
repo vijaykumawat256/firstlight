@@ -145,7 +145,7 @@ pub fn mailto(recipients: &[String], subject: &str, body: &str) -> String {
 
 // ---- .ics ------------------------------------------------------------------------------
 
-fn escape_text(s: &str) -> String {
+pub(crate) fn escape_text(s: &str) -> String {
     let mut out = String::new();
     for c in s.chars() {
         match c {
@@ -162,7 +162,7 @@ fn escape_text(s: &str) -> String {
 }
 
 /// Folds a line at 75 bytes, on character boundaries, as RFC 5545 requires.
-fn fold(line: &str) -> String {
+pub(crate) fn fold(line: &str) -> String {
     let mut out = String::new();
     let mut len = 0;
     for c in line.chars() {

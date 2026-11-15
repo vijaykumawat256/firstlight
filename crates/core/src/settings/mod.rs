@@ -92,6 +92,9 @@ pub struct GeneralSettings {
     /// Let Firstlight add the events you create to a calendar in the Calendar app (and change or delete the ones
     /// it added). Off by default: Firstlight otherwise only reads your calendars.
     pub write_to_calendar_app: bool,
+    /// CalDAV accounts (by id) the user let Firstlight add events to. Empty by default; each is a separate choice,
+    /// made on that account, and only events Firstlight created there are ever changed or removed.
+    pub writable_accounts: Vec<String>,
     /// Show a Dock icon (macOS) or taskbar button (Windows). Off keeps Firstlight in the menu bar or tray only.
     pub show_in_dock: bool,
     /// A global shortcut that opens the video link of the meeting that is starting or running.
@@ -114,6 +117,7 @@ impl Default for GeneralSettings {
             global_shortcut: None,
             show_in_dock: true,
             write_to_calendar_app: false,
+            writable_accounts: Vec::new(),
             join_shortcut: None,
             tray_next_meeting: false,
             check_for_updates: true,
@@ -545,6 +549,12 @@ impl AppSettings {
             self.general.join_shortcut = None;
         }
 
+        let mut seen = std::collections::HashSet::new();
+        self.general
+            .writable_accounts
+            .retain(|a| !a.is_empty() && a.len() <= 100 && seen.insert(a.clone()));
+        self.general.writable_accounts.truncate(50);
+
         let b = &mut self.briefing;
         b.min_gap_minutes = b.min_gap_minutes.clamp(5, 240);
         b.early_hour = b.early_hour.min(23);
@@ -709,7 +719,9 @@ impl AppSettings {
         };
         let mut imported = Self::from_value(inner);
         // Agreement to send data to an AI service must be given on this computer, never inherited from a file.
-        imported.general.write_to_calendar_app = false; // writing to a calendar is never switched on by a file
+        // Writing to a calendar is never switched on by a file.
+        imported.general.write_to_calendar_app = false;
+        imported.general.writable_accounts.clear();
         imported.ai.consented = None;
         imported.ai.consented_host = None;
         imported.ai.enabled = false;

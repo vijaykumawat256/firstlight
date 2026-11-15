@@ -627,7 +627,7 @@ fn an_event_saved_to_the_calendar_app_is_sent_there_and_not_shown_twice_here() {
     let mut input = timed("Dentist");
     input.reminder_minutes = Some(30);
     input.invitees = vec!["sam@example.com".into()];
-    let e = save_to_calendar(&mut s, &app, None, "EK-CAL", &input, NY, now).unwrap();
+    let e = save_to_calendar(&mut s, &app, None, None, "EK-CAL", &input, NY, now).unwrap();
 
     // The Calendar app got exactly what the form held (no attendees: it cannot add them).
     let saved = app.saved.lock().unwrap();
@@ -670,7 +670,17 @@ fn the_synced_copy_is_recognised_as_ours_and_can_be_edited_and_deleted() {
     let mut s = store();
     let app = FakeCalendarApp::default();
     let now = t("2026-11-14T12:00:00Z");
-    save_to_calendar(&mut s, &app, None, "EK-CAL", &timed("Dentist"), NY, now).unwrap();
+    save_to_calendar(
+        &mut s,
+        &app,
+        None,
+        None,
+        "EK-CAL",
+        &timed("Dentist"),
+        NY,
+        now,
+    )
+    .unwrap();
     let synced = as_synced(&mut s, "EK-1", "Dentist");
     // A different event in the same calendar that Firstlight did not create is not ours.
     let other = as_synced(&mut s, "EK-OTHER", "Someone else's");
@@ -687,6 +697,7 @@ fn the_synced_copy_is_recognised_as_ours_and_can_be_edited_and_deleted() {
     save_to_calendar(
         &mut s,
         &app,
+        None,
         Some(&synced.id),
         "SOMEWHERE-ELSE",
         &edit,
@@ -724,12 +735,12 @@ fn a_failure_in_the_calendar_app_leaves_nothing_half_saved() {
         fail_save: true,
         ..Default::default()
     };
-    assert!(save_to_calendar(&mut s, &broken, None, "EK-CAL", &timed("x"), NY, now).is_err());
+    assert!(save_to_calendar(&mut s, &broken, None, None, "EK-CAL", &timed("x"), NY, now).is_err());
     assert!(s.all_own_events().unwrap().is_empty());
 
     // Deleting fails: the record stays, so it can be tried again.
     let app = FakeCalendarApp::default();
-    save_to_calendar(&mut s, &app, None, "EK-CAL", &timed("keep"), NY, now).unwrap();
+    save_to_calendar(&mut s, &app, None, None, "EK-CAL", &timed("keep"), NY, now).unwrap();
     let synced = as_synced(&mut s, "EK-1", "keep");
     let no_delete = FakeCalendarApp {
         fail_delete: true,
@@ -749,13 +760,13 @@ fn bad_input_never_reaches_the_calendar_app() {
     let app = FakeCalendarApp::default();
     let now = t("2026-11-14T12:00:00Z");
     let mut bad = timed("");
-    assert!(save_to_calendar(&mut s, &app, None, "EK-CAL", &bad, NY, now).is_err());
+    assert!(save_to_calendar(&mut s, &app, None, None, "EK-CAL", &bad, NY, now).is_err());
     bad = timed("x");
     bad.join_url = Some("http://insecure.example.com".into());
-    assert!(save_to_calendar(&mut s, &app, None, "EK-CAL", &bad, NY, now).is_err());
+    assert!(save_to_calendar(&mut s, &app, None, None, "EK-CAL", &bad, NY, now).is_err());
     bad = timed("x");
     bad.end = bad.start.clone();
-    assert!(save_to_calendar(&mut s, &app, None, "EK-CAL", &bad, NY, now).is_err());
+    assert!(save_to_calendar(&mut s, &app, None, None, "EK-CAL", &bad, NY, now).is_err());
     assert!(app.saved.lock().unwrap().is_empty(), "nothing was sent");
     assert!(s.all_own_events().unwrap().is_empty());
 }
@@ -771,6 +782,7 @@ fn only_events_firstlight_created_can_be_changed_in_the_calendar_app() {
         save_to_calendar(
             &mut s,
             &app,
+            None,
             Some(&other.id),
             "EK-CAL",
             &timed("hijack"),
@@ -789,6 +801,7 @@ fn only_events_firstlight_created_can_be_changed_in_the_calendar_app() {
         save_to_calendar(
             &mut s,
             &app,
+            None,
             Some(&local.id),
             "EK-CAL",
             &timed("mine"),
@@ -799,7 +812,17 @@ fn only_events_firstlight_created_can_be_changed_in_the_calendar_app() {
     );
     assert!(app.saved.lock().unwrap().is_empty());
     // And a Calendar-app event cannot be changed through the local-only path.
-    save_to_calendar(&mut s, &app, None, "EK-CAL", &timed("remote"), NY, now).unwrap();
+    save_to_calendar(
+        &mut s,
+        &app,
+        None,
+        None,
+        "EK-CAL",
+        &timed("remote"),
+        NY,
+        now,
+    )
+    .unwrap();
     let synced = as_synced(&mut s, "EK-1", "remote");
     assert!(save(&mut s, Some(&synced.id), &timed("x"), NY, now).is_err());
 }
@@ -815,7 +838,7 @@ fn repeats_alerts_and_all_day_events_are_passed_on_faithfully() {
         interval: 2,
         until: Some("2026-12-31".into()),
     });
-    save_to_calendar(&mut s, &app, None, "EK-CAL", &rep, NY, now).unwrap();
+    save_to_calendar(&mut s, &app, None, None, "EK-CAL", &rep, NY, now).unwrap();
     let allday = EventInput {
         all_day: true,
         start: "2026-12-24".into(),
@@ -824,7 +847,7 @@ fn repeats_alerts_and_all_day_events_are_passed_on_faithfully() {
         reminder_minutes: None,
         ..timed("Holiday")
     };
-    save_to_calendar(&mut s, &app, None, "EK-CAL", &allday, NY, now).unwrap();
+    save_to_calendar(&mut s, &app, None, None, "EK-CAL", &allday, NY, now).unwrap();
     let saved = app.saved.lock().unwrap();
     let r = saved[0].2.repeat.as_ref().unwrap();
     assert_eq!(
@@ -848,7 +871,7 @@ fn events_in_the_calendar_app_are_not_exported_or_reminded_about_twice() {
     let now = t("2026-11-14T12:00:00Z");
     let mut input = timed("In the Calendar app");
     input.reminder_minutes = Some(15);
-    save_to_calendar(&mut s, &app, None, "EK-CAL", &input, NY, now).unwrap();
+    save_to_calendar(&mut s, &app, None, None, "EK-CAL", &input, NY, now).unwrap();
     // Exporting would only make a copy of something already there; the alert lives in the Calendar app.
     assert!(export_all(&s, now).unwrap().is_none());
     assert!(reminder_map(&s).unwrap().is_empty());
@@ -864,7 +887,7 @@ fn events_in_the_calendar_app_are_not_exported_or_reminded_about_twice() {
         interval: 1,
         until: Some("2026-11-24".into()),
     });
-    let e = save_to_calendar(&mut s, &app, None, "EK-CAL", &rep, NY, now).unwrap();
+    let e = save_to_calendar(&mut s, &app, None, None, "EK-CAL", &rep, NY, now).unwrap();
     assert!(skip_occurrence(&mut s, &format!("{CALENDAR_ID}:{}:123", e.remote_id), now).is_err());
 }
 
@@ -880,6 +903,7 @@ fn a_record_that_cannot_be_written_takes_the_new_event_back_out_of_the_calendar_
         &mut s,
         &app,
         None,
+        None,
         "EK-CAL",
         &timed("rollback"),
         NY,
@@ -891,4 +915,103 @@ fn a_record_that_cannot_be_written_takes_the_new_event_back_out_of_the_calendar_
         ["EK-1"],
         "the event it just added was removed again"
     );
+}
+
+/// What the sync brings back for an event saved to a CalDAV calendar: a row in that account's calendar, with
+/// the UID we wrote (made from the event's address).
+fn as_synced_caldav(s: &mut Store, account: &str, event_url: &str, title: &str) -> Event {
+    let acct = Account {
+        id: account.into(),
+        provider: ProviderKind::Caldav,
+        display_name: "Fastmail".into(),
+        email: None,
+        status: AccountStatus::Ok,
+        secret_ref: None,
+        created_at: Utc::now(),
+    };
+    s.upsert_account(&acct).unwrap();
+    let cal = Calendar {
+        id: format!("{account}:abc"),
+        account_id: account.into(),
+        remote_id: "https://dav.example.com/cal/".into(),
+        name: "Work".into(),
+        colour: "blue".into(),
+        visible: true,
+        read_only: false,
+    };
+    s.upsert_calendar(&cal).unwrap();
+    let mut e = build_event(&timed(title), Some("zzz"), NY, Utc::now()).unwrap();
+    e.id = format!(
+        "{}:{}",
+        cal.id,
+        crate::providers::caldav::uid_for(event_url)
+    );
+    e.calendar_id = cal.id.clone();
+    e.remote_id = event_url.into();
+    e.ical_uid = crate::providers::caldav::uid_for(event_url);
+    s.upsert_events(&cal.id, std::slice::from_ref(&e)).unwrap();
+    e
+}
+
+#[test]
+fn a_caldav_event_is_found_again_by_its_uid_and_stays_in_its_own_account() {
+    let mut s = store();
+    let app = FakeCalendarApp::default();
+    let now = t("2026-11-14T12:00:00Z");
+    // The writer here stands in for a CalDAV account (it returns the address of the file it made).
+    let e = save_to_calendar(
+        &mut s,
+        &app,
+        Some("acct1"),
+        None,
+        "acct1:abc",
+        &timed("Dentist"),
+        NY,
+        now,
+    )
+    .unwrap();
+    let url = "EK-1"; // the fake's identifier; for CalDAV this is the file's address
+    let remote = remote_of(&s, &e.id).unwrap().unwrap();
+    assert_eq!(remote.account_id.as_deref(), Some("acct1"));
+    assert_eq!(remote.calendar_id, "acct1:abc");
+
+    // A CalDAV row only matches when the account AND the UID match.
+    let synced = as_synced_caldav(&mut s, "acct1", url, "Dentist");
+    assert_eq!(
+        get(&s, &synced.id).unwrap().unwrap().saved_to.as_deref(),
+        Some("acct1:abc")
+    );
+    let other_account = as_synced_caldav(&mut s, "acct2", url, "Dentist");
+    assert!(
+        resolve(&s, &other_account.id).unwrap().is_none(),
+        "same UID in another account is not ours"
+    );
+    let stranger = as_synced_caldav(
+        &mut s,
+        "acct1",
+        "https://dav.example.com/cal/theirs.ics",
+        "Theirs",
+    );
+    assert!(
+        resolve(&s, &stranger.id).unwrap().is_none(),
+        "an event we did not make is never ours"
+    );
+
+    // An edit keeps the account it was saved to, whatever the caller names.
+    let mut edit = timed("Dentist (moved)");
+    edit.location = None;
+    save_to_calendar(
+        &mut s,
+        &app,
+        Some("acct9"),
+        Some(&synced.id),
+        "elsewhere",
+        &edit,
+        NY,
+        now,
+    )
+    .unwrap();
+    let remote = remote_of(&s, &e.id).unwrap().unwrap();
+    assert_eq!(remote.account_id.as_deref(), Some("acct1"));
+    assert_eq!(remote.calendar_id, "acct1:abc");
 }

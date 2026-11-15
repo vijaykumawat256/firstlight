@@ -6,6 +6,7 @@ import {
   Badge, Button, CALENDAR_COLOURS, Card, Dialog, IconButton, ListGroup, Skeleton, Switch, TextField, Tooltip, calendarColour, useToasts,
 } from "@/design";
 import { useNav } from "@/app/nav";
+import { useSettings } from "@/features/settings/useSettings";
 import { AddAccountSheet } from "./AddAccountSheet";
 import { timeAgo } from "./time";
 
@@ -90,6 +91,36 @@ function Status({ a }: { a: AccountView }) {
   return <p className="text-footnote text-fg-2">Synced {timeAgo(a.last_synced_at)}</p>;
 }
 
+/** Off by default: Firstlight only reads this account until the user lets it add events. */
+function WriteSwitch({ account }: { account: AccountView }) {
+  const { settings: s, update } = useSettings();
+  const writable = account.calendars.some((c) => !c.read_only);
+  if (!s) return null;
+  const on = s.general.writable_accounts.includes(account.id);
+  return (
+    <div className="flex items-start justify-between gap-3 px-1">
+      <div className="min-w-0">
+        <p className="text-subheadline font-medium text-fg">Let Firstlight add events to this account</p>
+        <p className="mt-0.5 text-footnote text-fg-2">
+          {writable
+            ? "Off by default. When on, the New event form can save into this account's calendars, and Firstlight can change or remove only the events it added. Everything already there stays untouched. The server may not send invitations for these."
+            : "The server doesn't let this account's calendars be changed, so there is nothing to turn on."}
+        </p>
+      </div>
+      <Switch
+        label={`Add events to ${account.display_name}`}
+        checked={on && writable}
+        disabled={!writable}
+        onCheckedChange={(v) =>
+          update((d) => {
+            d.general.writable_accounts = v ? [...new Set([...d.general.writable_accounts, account.id])] : d.general.writable_accounts.filter((x) => x !== account.id);
+          })
+        }
+      />
+    </div>
+  );
+}
+
 function AccountCard({ account, onChanged }: { account: AccountView; onChanged: () => void }) {
   const push = useToasts((s) => s.push);
   const [renaming, setRenaming] = useState(false);
@@ -166,6 +197,7 @@ function AccountCard({ account, onChanged }: { account: AccountView; onChanged: 
           <CalendarRow key={c.id} cal={c} onChanged={onChanged} />
         ))}
       </ListGroup>
+      {account.provider === "caldav" && <WriteSwitch account={account} />}
 
       <Dialog
         open={renaming}

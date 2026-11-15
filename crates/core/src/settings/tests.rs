@@ -704,3 +704,31 @@ fn settings_files_saved_before_the_rename_still_import() {
     );
     assert!(AppSettings::import(r#"{"format":"something-else","settings":{}}"#).is_err());
 }
+
+#[test]
+fn writing_to_calendars_is_off_by_default_and_a_file_can_never_turn_it_on() {
+    let d = AppSettings::default();
+    assert!(!d.general.write_to_calendar_app && d.general.writable_accounts.is_empty());
+    let file = r#"{"format":"firstlight-settings","settings":{"general":{"write_to_calendar_app":true,"writable_accounts":["acct1"],"show_in_dock":false}}}"#;
+    let s = AppSettings::import(file).unwrap();
+    assert!(!s.general.write_to_calendar_app);
+    assert!(s.general.writable_accounts.is_empty());
+    assert!(!s.general.show_in_dock, "harmless preferences still import");
+}
+
+#[test]
+fn the_list_of_writable_accounts_is_cleaned_and_capped() {
+    let mut s = AppSettings::default();
+    s.general.writable_accounts = vec![
+        "a".into(),
+        "".into(),
+        "a".into(),
+        "x".repeat(200),
+        "b".into(),
+    ];
+    s.sanitize();
+    assert_eq!(s.general.writable_accounts, ["a", "b"]);
+    s.general.writable_accounts = (0..80).map(|i| format!("id{i}")).collect();
+    s.sanitize();
+    assert_eq!(s.general.writable_accounts.len(), 50);
+}
