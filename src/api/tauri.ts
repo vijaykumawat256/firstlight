@@ -2,11 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, FreeSlot, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
   getBriefing: () => invoke<Briefing>("get_briefing"),
+  findFreeTimes: (minutes, days) => invoke<FreeSlot[]>("find_free_times", { minutes, days }),
   dismissUpNext: () => invoke<void>("dismiss_up_next"),
   openBriefing: () => invoke<void>("open_briefing"),
   onUpNextShown: async (callback) => listen("up-next-shown", () => callback()),

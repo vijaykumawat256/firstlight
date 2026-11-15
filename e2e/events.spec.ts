@@ -400,3 +400,16 @@ test("the review window has no accessibility violations", async ({ page }) => {
   const r = await new AxeBuilder({ page }).analyze();
   expect(r.violations).toEqual([]);
 });
+
+test("Find a time lists free stretches, changes with the length asked, and has no accessibility problems", async ({ page }) => {
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Find a time" }).click();
+  const dialog = page.getByRole("dialog", { name: "Find a time" });
+  await expect(dialog.getByRole("button", { name: /^Copy / }).first()).toBeVisible();
+  const before = await dialog.getByRole("button", { name: /^Copy / }).count();
+  await dialog.getByRole("radio", { name: "2 hours" }).click();
+  await expect.poll(() => dialog.getByRole("button", { name: /^Copy / }).count()).toBeLessThanOrEqual(before);
+  const r = await new AxeBuilder({ page }).analyze();
+  expect(r.violations).toEqual([]);
+});

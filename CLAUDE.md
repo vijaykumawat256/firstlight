@@ -157,3 +157,6 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 
 ## Windows window and tray
 - macOS gets a transparent window with vibrancy (`tauri.conf.json`). Windows uses `tauri.windows.conf.json`, an ordinary opaque window (Mica/transparency could come out invisible on Windows 10 or with some drivers), and `main.tsx` sets `data-platform="windows"` so the page paints its own solid background (`tokens.css`). The tray icon is the coloured 32x32 app icon off macOS: the black template glyph (`tray.png`) disappears on a dark taskbar. None of this has been seen on a real Windows machine.
+
+## Find a time
+- `briefing/slots.rs` (logic crate): free stretches inside working hours (`settings.briefing`), weekdays only, timed shown events block (cancelled/declined/all-day do not), cut at "now", at most 21 days. Command `find_free_times(minutes, days)`; UI `features/events/FindATime.tsx` (hourglass button in the briefing header, copy a stretch as text). Reads calendars only, nothing is sent. The browser fixture has a small TS stand-in (`findFreeTimes` in `fixture.ts`).

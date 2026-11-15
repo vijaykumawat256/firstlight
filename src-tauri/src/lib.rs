@@ -438,6 +438,7 @@ pub fn run() {
         ))
         .invoke_handler(tauri::generate_handler![
             commands::get_events,
+            commands::find_free_times,
             commands::get_calendars,
             commands::list_accounts,
             commands::add_ics_account,

@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, EventInput, ExportResult, ImapPreset, InvitePreview, InviteResult, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, EventInput, ExportResult, FreeSlot, ImapPreset, InvitePreview, InviteResult, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -76,6 +76,8 @@ export interface Backend {
   onSettingsChanged(callback: () => void): Promise<() => void>;
   /** Today and tomorrow, worked out by the briefing engine. */
   getBriefing(): Promise<Briefing>;
+  /** Free stretches in working hours, from now, long enough for `minutes`; weekends skipped. */
+  findFreeTimes(minutes: number, days: number): Promise<FreeSlot[]>;
   /** Hides the small "up next" panel. */
   dismissUpNext(): Promise<void>;
   /** Brings the full briefing window to the front. */

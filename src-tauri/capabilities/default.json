@@ -18,6 +18,7 @@
       ]
     },
     "allow-get-events",
+    "allow-find-free-times",
     "allow-get-calendars",
     "allow-list-accounts",
     "allow-add-ics-account",

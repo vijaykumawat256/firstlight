@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, CalendarX, CloudOff, Plus, RefreshCw, Search, Settings as SettingsIcon } from "lucide-react";
+import { CalendarDays, CalendarX, CloudOff, Hourglass, Plus, RefreshCw, Search, Settings as SettingsIcon } from "lucide-react";
 import { useNav } from "@/app/nav";
 import { useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
@@ -12,6 +12,7 @@ import { EventDetail } from "./EventDetail";
 import { ClearWeek } from "./ClearWeek";
 import { UpcomingDays } from "./UpcomingDays";
 import { EventForm } from "@/features/events/EventForm";
+import { FindATime } from "@/features/events/FindATime";
 import { useSearch } from "@/features/search/store";
 import { InboxSection } from "./InboxSection";
 import { summarise } from "./summary";
@@ -63,6 +64,7 @@ export function BriefingScreen() {
   };
 
   const [adding, setAdding] = useState(false);
+  const [finding, setFinding] = useState(false);
   const b = briefing.data;
   const dayIsEmpty = !!b && b.all_day_today.length + b.past.length + b.remaining.length + b.tomorrow.timed.length + b.tomorrow.all_day.length === 0;
 
@@ -73,6 +75,11 @@ export function BriefingScreen() {
         <Tooltip content="Search (⌘K)">
           <IconButton label="Search" onClick={() => useSearch.getState().setOpen(true)}>
             <Search className="size-[18px]" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip content="Find a time">
+          <IconButton label="Find a time" onClick={() => setFinding(true)}>
+            <Hourglass className="size-[18px]" />
           </IconButton>
         </Tooltip>
         <Tooltip content="New event">
@@ -140,6 +147,7 @@ export function BriefingScreen() {
       </main>
 
       <EventForm open={adding} onOpenChange={setAdding} />
+      {finding && <FindATime onClose={() => setFinding(false)} />}
       <EventDetail event={detail} calendars={calendars.data ?? []} onClose={() => setDetail(null)} onJoin={join} />
     </div>
   );

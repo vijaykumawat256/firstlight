@@ -52,11 +52,13 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
-test("keyboard: tab reaches search, new event, calendar, refresh, then settings, and Enter opens settings", async ({ page }) => {
+test("keyboard: tab reaches search, find a time, new event, calendar, refresh, then settings, and Enter opens settings", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Search" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Find a time" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "New event" })).toBeFocused();
   await page.keyboard.press("Tab");

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-find-free-times"
+description = "Enables the find_free_times command without any pre-configured scope."
+commands.allow = ["find_free_times"]
+
+[[permission]]
+identifier = "deny-find-free-times"
+description = "Denies the find_free_times command without any pre-configured scope."
+commands.deny = ["find_free_times"]

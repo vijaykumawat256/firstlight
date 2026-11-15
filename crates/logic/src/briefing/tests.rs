@@ -405,3 +405,91 @@ fn output_is_deterministic_for_identical_input() {
         "ties break by title then id"
     );
 }
+
+// ---- find a time -------------------------------------------------------------------------
+
+fn slots(events: &[Event], now: DateTime<Utc>, days: i64, minutes: i64) -> Vec<(String, String)> {
+    use super::slots::find_free_slots;
+    find_free_slots(
+        events,
+        day(10),
+        days,
+        minutes,
+        now,
+        LONDON,
+        &BriefingSettings::default(),
+    )
+    .iter()
+    .map(|s| {
+        (
+            s.start.format("%d %H:%M").to_string(),
+            s.end.format("%d %H:%M").to_string(),
+        )
+    })
+    .collect()
+}
+
+#[test]
+fn free_stretches_sit_between_meetings_inside_working_hours() {
+    let r = slots(
+        &[
+            event("a", at(10, 0), at(11, 0)),
+            event("b", at(13, 0), at(14, 0)),
+        ],
+        at(0, 0),
+        1,
+        60,
+    );
+    assert_eq!(
+        r,
+        [
+            ("10 09:00", "10 10:00"),
+            ("10 11:00", "10 13:00"),
+            ("10 14:00", "10 18:00")
+        ]
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+    );
+}
+
+#[test]
+fn a_stretch_shorter_than_asked_is_left_out_and_the_past_is_cut_off() {
+    let r = slots(&[event("a", at(10, 0), at(11, 0))], at(9, 45), 1, 30);
+    // 09:45-10:00 is only 15 minutes; the morning start is cut to "now".
+    assert_eq!(r, vec![("10 11:00".to_string(), "10 18:00".to_string())]);
+}
+
+#[test]
+fn cancelled_declined_and_all_day_events_do_not_block_but_overlaps_merge() {
+    let mut cancelled = event("x", at(9, 0), at(18, 0));
+    cancelled.status = EventStatus::Cancelled;
+    let mut declined = event("y", at(9, 0), at(18, 0));
+    declined.my_response = Response::Declined;
+    let r = slots(
+        &[
+            cancelled,
+            declined,
+            all_day("holiday", 10, 11),
+            event("a", at(10, 0), at(12, 0)),
+            event("b", at(11, 0), at(13, 0)),
+        ],
+        at(0, 0),
+        1,
+        60,
+    );
+    assert_eq!(
+        r,
+        vec![
+            ("10 09:00".to_string(), "10 10:00".to_string()),
+            ("10 13:00".to_string(), "10 18:00".to_string())
+        ]
+    );
+}
+
+#[test]
+fn weekends_are_skipped_and_the_search_is_capped() {
+    // 10 March is a Tuesday: days 10-13 are weekdays, 14-15 the weekend, 16 a Monday.
+    let r = slots(&[], at(0, 0), 7, 60);
+    let days: Vec<&str> = r.iter().map(|(a, _)| &a[..2]).collect();
+    assert_eq!(days, ["10", "11", "12", "13", "16"]);
+    assert!(slots(&[], at(0, 0), 1000, 60).len() <= 15);
+}

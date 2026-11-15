@@ -1388,6 +1388,35 @@ pub async fn get_briefing(
     Ok(build(&events, now, tz, &settings))
 }
 
+/// Free stretches in working hours, from now, long enough for `minutes` (weekends skipped).
+#[tauri::command]
+pub async fn find_free_times(
+    state: State<'_, AppState>,
+    minutes: i64,
+    days: i64,
+) -> CmdResult<Vec<firstlight_core::briefing::slots::Slot>> {
+    use firstlight_core::briefing::{
+        day_bounds,
+        slots::{MAX_DAYS, find_free_slots},
+    };
+    let now = Utc::now();
+    let tz = crate::local_tz();
+    let days = days.clamp(1, MAX_DAYS);
+    let store = lock_store(&state)?;
+    let settings = store.load_settings().briefing;
+    let today = now.with_timezone(&tz).date_naive();
+    let (from, _) = day_bounds(today, tz);
+    let (_, to) = day_bounds(today + Duration::days(days), tz);
+    let events = dedupe(
+        store
+            .events_between(from, to)
+            .map_err(internal("loading events"))?,
+    );
+    Ok(find_free_slots(
+        &events, today, days, minutes, now, tz, &settings,
+    ))
+}
+
 /// Hides the small "up next" panel.
 #[tauri::command]
 pub async fn dismiss_up_next(app: AppHandle) -> CmdResult<()> {

@@ -262,3 +262,10 @@ export interface AppInfo {
 }
 
 export type UpdateStatus = { state: "not_configured" } | { state: "up_to_date" } | { state: "available"; version: string } | { state: "failed" };
+
+/** A free stretch inside working hours (from "Find a time"). */
+export interface FreeSlot {
+  start: string;
+  end: string;
+  minutes: number;
+}

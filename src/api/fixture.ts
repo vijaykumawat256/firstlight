@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, EventInput, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, EventInput, FreeSlot, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -625,6 +625,41 @@ export const fixtureBackend: Backend = {
       workEndHour: b.work_end_hour,
       earlyHour: b.early_hour,
     });
+  },
+  async findFreeTimes(minutes, days) {
+    // A small browser-only stand-in for the Rust finder (crates/logic/src/briefing/slots.rs).
+    const ids = visibleCalendarIds();
+    const b = settings.briefing;
+    const need = Math.min(Math.max(minutes, 5), 720) * 60_000;
+    const now = Date.now();
+    const out: FreeSlot[] = [];
+    const first = new Date();
+    first.setHours(0, 0, 0, 0);
+    const evs = fixtureEvents().filter(
+      (e) => ids.has(e.calendar_id) && e.when.kind === "timed" && e.status !== "cancelled" && e.my_response !== "declined",
+    );
+    for (let i = 0; i < Math.min(Math.max(days, 1), 21); i++) {
+      const day = new Date(first);
+      day.setDate(day.getDate() + i);
+      if (day.getDay() === 0 || day.getDay() === 6) continue;
+      const at = (h: number) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), h).getTime();
+      const close = at(b.work_end_hour);
+      let cursor = Math.max(at(b.work_start_hour), now);
+      const busy: Array<{ s: number; e: number }> = [];
+      for (const ev of evs) {
+        if (ev.when.kind !== "timed") continue;
+        const span = { s: Date.parse(ev.when.start), e: Date.parse(ev.when.end) };
+        if (span.s < close && span.e > cursor) busy.push(span);
+      }
+      busy.sort((x, y) => x.s - y.s);
+      const push = (s: number, e: number) => out.push({ start: new Date(s).toISOString(), end: new Date(e).toISOString(), minutes: Math.round((e - s) / 60_000) });
+      for (const { s, e } of busy) {
+        if (s - cursor >= need) push(cursor, s);
+        cursor = Math.max(cursor, e);
+      }
+      if (close - cursor >= need) push(cursor, close);
+    }
+    return out;
   },
   async dismissUpNext() {},
   async openBriefing() {},

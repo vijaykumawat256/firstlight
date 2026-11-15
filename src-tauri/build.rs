@@ -39,6 +39,7 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "get_events",
+            "find_free_times",
             "get_calendars",
             "list_accounts",
             "add_ics_account",
