@@ -37,6 +37,16 @@ jobs:
           npx playwright install chromium
           npm run e2e
 
+  web-core:
+    # Phase 7 keeps the pure crate buildable for a browser. This fails if someone adds a file/network/database dependency to it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: wasm32-unknown-unknown }
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p firstlight-logic --target wasm32-unknown-unknown
+
   audit:
     runs-on: ubuntu-latest
     steps:

@@ -108,6 +108,11 @@ Use `FIRSTLIGHT_PROFILE=<name>` when running a release build next to your dev da
 - [ ] Erase all data leaves no keychain entries (`security dump-keychain | grep firstlight`)
 - [ ] Update flow (section 3) including a tampered bundle
 - [ ] Windows pass (section 2)
+- [ ] Save an event to the Calendar app (Mac) with the setting on and off; edit and delete it; deny the permission and see the message
+- [ ] CalDAV write on a real server (iCloud, Fastmail, Nextcloud): create, edit, delete, a read-only calendar is not offered, a repeating timed event opens correctly in Apple Calendar, Google Calendar and Outlook (the VTIMEZONE block is untested outside our own reader)
+- [ ] Send an invitation from a real Yahoo and iCloud mailbox: review window text matches what arrives, wrong password message, the 10 per hour limit, nothing sent when the setting is off
+- [ ] Find a time: lengths, weekends skipped, a day with an all-day event, a changed working-hours setting
+- [ ] While a slow CalDAV save is running, the rest of the app (switching days, opening settings) stays responsive
 
 ## 6. Automated gates (run before every release)
 
@@ -116,6 +121,7 @@ cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
 cargo clippy -p firstlight --features updater -- -D warnings
 cargo test --workspace && cargo deny check
 npm run check && npm run e2e
+cargo build -p firstlight-logic --target wasm32-unknown-unknown   # the pure crate must stay buildable for a browser
 npm run licences   # regenerates src/assets/licences.json (see scripts/gen-licences.mjs)
 ```
 

@@ -13,7 +13,7 @@ use crate::secrets::SecretStore;
 use crate::{Error, Result};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use chrono::{DateTime, Duration, NaiveDate, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use reqwest::Url;
 use std::sync::Arc;
@@ -201,10 +201,19 @@ pub(crate) fn event_file(uid: &str, e: &SysNewEvent, tz: Tz, now: DateTime<Utc>)
         "VERSION:2.0".into(),
         "PRODID:-//Firstlight//Calendar//EN".into(),
         "CALSCALE:GREGORIAN".into(),
-        "BEGIN:VEVENT".into(),
+    ];
+    if let (SysWhen::Timed { start, .. }, Some(_)) = (&e.when, &e.repeat) {
+        // The zone's rules travel with the file, so other calendar programs place the series correctly.
+        l.extend(firstlight_logic::tz::vtimezone_lines(
+            tz,
+            start.with_timezone(&tz).year(),
+        ));
+    }
+    l.extend([
+        "BEGIN:VEVENT".to_string(),
         format!("UID:{}", escape_text(uid)),
         format!("DTSTAMP:{}", stamp(now)),
-    ];
+    ]);
     let timed = matches!(e.when, SysWhen::Timed { .. });
     match &e.when {
         SysWhen::Timed { start, end } if e.repeat.is_some() => {

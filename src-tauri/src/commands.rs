@@ -366,15 +366,23 @@ pub async fn update_event(
 /// there too). Events Firstlight did not create can never be removed here.
 #[tauri::command]
 pub async fn delete_event(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
-    {
-        let mut store = lock_store(&state)?;
-        let remote = firstlight_core::local::remote_of(&store, &id).map_err(user_input_error)?;
+    // The slow part (the Calendar app or a server) runs with the store unlocked, so the rest of the app keeps working.
+    let (master, remote, writer) = {
+        let store = lock_store(&state)?;
+        let (master, remote) =
+            firstlight_core::local::prepare_delete(&store, &id).map_err(user_input_error)?;
         // Without permission no writer is handed in, so an event that lives elsewhere is refused.
         let writer: Option<Box<dyn CalendarWriter>> = match &remote {
             Some(r) => writer_for_existing(&state, &store, r).ok(),
             None => None,
         };
-        firstlight_core::local::delete_with(&mut store, writer.as_deref(), &id, Utc::now())
+        (master, remote, writer)
+    };
+    firstlight_core::local::delete_remote(remote.as_ref(), writer.as_deref())
+        .map_err(user_input_error)?;
+    {
+        let mut store = lock_store(&state)?;
+        firstlight_core::local::finish_delete(&mut store, &master, Utc::now())
             .map_err(user_input_error)?;
     }
     state.sync.trigger(Trigger::Manual);
@@ -602,28 +610,40 @@ fn save_calendar_event(
             )
         }
     };
+    let fail = |e: Error| match e {
+        Error::Invalid(m) => m.to_string(),
+        Error::PermissionNeeded => SYSTEM_ACCESS_OFF.to_string(),
+        Error::AuthRevoked => {
+            "Firstlight couldn't sign in to that account. Reconnect it in Settings, then try again."
+                .to_string()
+        }
+        Error::Offline => format!("{place} couldn't be reached. Nothing was changed."),
+        Error::Provider(m) if account.is_some() => {
+            format!("{place} couldn't save that ({m}). Nothing was changed.")
+        }
+        _ => format!("{place} couldn't save that. Nothing was changed."),
+    };
+    let (tz, now) = (crate::local_tz(), Utc::now());
+    // Check under the lock, write to the Calendar app or server with the store free (it can take up to 30 s),
+    // then record the result under the lock again.
+    let prepared = {
+        let store = lock_store(state)?;
+        firstlight_core::local::prepare_save(&store, id, &calendar_id, &event, tz, now)
+            .map_err(fail)?
+    };
+    let event_id = prepared.write(writer.as_ref(), tz).map_err(fail)?;
     let saved = {
         let mut store = lock_store(state)?;
-        firstlight_core::local::save_to_calendar(
+        firstlight_core::local::commit_save(
             &mut store,
             writer.as_ref(),
             account.as_deref(),
-            id,
-            &calendar_id,
-            &event,
-            crate::local_tz(),
-            Utc::now(),
+            prepared,
+            event_id,
+            tz,
+            now,
         )
-        .map_err(|e| match e {
-            Error::Invalid(m) => m.to_string(),
-            Error::PermissionNeeded => SYSTEM_ACCESS_OFF.to_string(),
-            Error::AuthRevoked => "Firstlight couldn't sign in to that account. Reconnect it in Settings, then try again.".to_string(),
-            Error::Offline => format!("{place} couldn't be reached. Nothing was changed."),
-            Error::Provider(m) if account.is_some() => {
-                format!("{place} couldn't save that ({m}). Nothing was changed.")
-            }
-            _ => format!("{place} couldn't save that. Nothing was changed."),
-        })?
+        .map_err(fail)?
     };
     // Bring the saved event back through the normal sync so it appears like any other event.
     state.sync.trigger(Trigger::Manual);

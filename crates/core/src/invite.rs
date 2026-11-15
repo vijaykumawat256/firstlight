@@ -203,6 +203,7 @@ pub fn ics(event: &Event, x: &IcsExtras) -> String {
         "CALSCALE:GREGORIAN".into(),
         "METHOD:PUBLISH".into(),
     ];
+    lines.extend(zone_blocks(std::iter::once((event, x))));
     lines.extend(vevent(event, x));
     lines.push("END:VCALENDAR".into());
     lines
@@ -222,6 +223,7 @@ pub fn ics_many(events: &[(Event, IcsExtras)]) -> String {
         "CALSCALE:GREGORIAN".into(),
         "METHOD:PUBLISH".into(),
     ];
+    lines.extend(zone_blocks(events.iter().map(|(e, x)| (e, x))));
     for (event, x) in events {
         lines.extend(vevent(event, x));
     }
@@ -232,6 +234,23 @@ pub fn ics_many(events: &[(Event, IcsExtras)]) -> String {
         .collect::<Vec<_>>()
         .join("\r\n")
         + "\r\n"
+}
+
+/// A `VTIMEZONE` for each zone a repeating timed event is written in (`TZID=...`), once each, so any
+/// calendar program places the series correctly across daylight saving.
+fn zone_blocks<'a>(events: impl Iterator<Item = (&'a Event, &'a IcsExtras<'a>)>) -> Vec<String> {
+    let mut seen: Vec<(Tz, i32)> = Vec::new();
+    let mut out = Vec::new();
+    for (event, x) in events {
+        if let (When::Timed { start, .. }, Some(_)) = (&event.when, &x.rrule) {
+            let key = (x.tz, chrono::Datelike::year(&start.with_timezone(&x.tz)));
+            if !seen.contains(&key) {
+                seen.push(key);
+                out.extend(firstlight_logic::tz::vtimezone_lines(key.0, key.1));
+            }
+        }
+    }
+    out
 }
 
 /// The lines of one `VEVENT`, unfolded.

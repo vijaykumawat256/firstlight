@@ -100,6 +100,30 @@ fn an_all_day_event_ends_the_day_after_its_last_day() {
     assert!(!f.contains("VALARM"), "alerts are for timed events only");
 }
 
+#[test]
+fn a_repeating_timed_event_carries_its_zone_rules_and_others_do_not() {
+    let mut e = timed();
+    e.repeat = Some(SysRepeat {
+        freq: SysFreq::Weekly,
+        interval: 1,
+        until: None,
+    });
+    let f = event_file("firstlight-1", &e, NY, t("2026-11-14T12:00:00Z"));
+    let (vtz, vev) = (f.find("BEGIN:VTIMEZONE"), f.find("BEGIN:VEVENT"));
+    assert!(
+        vtz.is_some() && vtz < vev,
+        "zone rules come before the event: {f}"
+    );
+    assert!(
+        f.contains("TZID:America/New_York\r\n")
+            && f.contains("RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU"),
+        "{f}"
+    );
+    assert!(
+        !event_file("firstlight-1", &timed(), NY, t("2026-11-14T12:00:00Z")).contains("VTIMEZONE")
+    );
+}
+
 /// What we write must read back as the same event through the same reader the sync uses.
 #[test]
 fn what_we_write_reads_back_the_same_through_the_sync_reader() {

@@ -493,17 +493,25 @@ pub fn remote_of(store: &Store, id: &str) -> Result<Option<RemoteRef>> {
 /// before (then `calendar_id` is ignored: it stays where it is). The Calendar app is changed first; our own
 /// record is only written once that worked, and if writing it fails the new event is taken back out, so
 /// there is never a half-saved event.
-#[allow(clippy::too_many_arguments)] // the writer, its account and the form values are all distinct
-pub fn save_to_calendar(
-    store: &mut Store,
-    source: &dyn CalendarWriter,
-    account_id: Option<&str>,
+/// Everything worked out about a save before the Calendar app or server is touched. Made under the store
+/// lock, so the (slow) network write in between can happen without holding it.
+pub struct PreparedSave {
+    existing: Option<RemoteRef>,
+    base: Event,
+    clean_input: EventInput,
+    sys: SysNewEvent,
+    target: String,
+}
+
+/// Step 1 of a save: check everything and work out what to write. Changes nothing.
+pub fn prepare_save(
+    store: &Store,
     id: Option<&str>,
     calendar_id: &str,
     input: &EventInput,
     tz: Tz,
     now: DateTime<Utc>,
-) -> Result<Event> {
+) -> Result<PreparedSave> {
     let (master, existing) = match id {
         None => (None, None),
         Some(id) => {
@@ -523,21 +531,48 @@ pub fn save_to_calendar(
     let sys = to_sys(&clean_input, &base)?;
     let target = existing
         .as_ref()
-        .map_or(calendar_id, |r| r.calendar_id.as_str());
-    let event_id = source.save_event(
+        .map_or(calendar_id, |r| r.calendar_id.as_str())
+        .to_string();
+    Ok(PreparedSave {
+        existing,
+        base,
+        clean_input,
+        sys,
         target,
-        existing.as_ref().map(|r| r.event_id.as_str()),
-        &sys,
-        tz,
-    )?;
+    })
+}
+
+impl PreparedSave {
+    /// Step 2: the write to the Calendar app or server. Needs no store, so no lock need be held.
+    pub fn write(&self, source: &dyn CalendarWriter, tz: Tz) -> Result<String> {
+        source.save_event(
+            &self.target,
+            self.existing.as_ref().map(|r| r.event_id.as_str()),
+            &self.sys,
+            tz,
+        )
+    }
+}
+
+/// Step 3: record the event now that the write worked. If recording fails, a new event is taken back out.
+pub fn commit_save(
+    store: &mut Store,
+    source: &dyn CalendarWriter,
+    account_id: Option<&str>,
+    p: PreparedSave,
+    event_id: String,
+    tz: Tz,
+    now: DateTime<Utc>,
+) -> Result<Event> {
     let stored = Stored {
-        input: clean_input,
+        input: p.clean_input,
         tz: tz.name().to_string(),
         skipped: vec![],
         remote: Some(RemoteRef {
-            calendar_id: target.to_string(),
+            calendar_id: p.target.clone(),
             event_id: event_id.clone(),
-            account_id: existing
+            account_id: p
+                .existing
                 .as_ref()
                 .map_or(account_id, |r| r.account_id.as_deref())
                 .map(str::to_string),
@@ -545,15 +580,36 @@ pub fn save_to_calendar(
     };
     let wrote = serde_json::to_string(&stored)
         .map_err(|_| Error::Invalid("That event couldn't be saved."))
-        .and_then(|json| store.put_own_event(&base.remote_id, &json))
+        .and_then(|json| store.put_own_event(&p.base.remote_id, &json))
         .and_then(|_| refresh(store, now));
     if let Err(e) = wrote {
-        if existing.is_none() {
+        if p.existing.is_none() {
             let _ = source.delete_event(&event_id); // take back what was just added
         }
         return Err(e);
     }
-    Ok(base)
+    Ok(p.base)
+}
+
+/// Adds an event to a calendar in the Calendar app or a CalDAV account (`id` is `None`), or changes one that Firstlight added
+/// before (then `calendar_id` is ignored: it stays where it is). The Calendar app is changed first; our own
+/// record is only written once that worked, and if writing it fails the new event is taken back out, so
+/// there is never a half-saved event. (The app itself runs the three steps separately so the network write
+/// holds no lock; this runs them together.)
+#[allow(clippy::too_many_arguments)] // the writer, its account and the form values are all distinct
+pub fn save_to_calendar(
+    store: &mut Store,
+    source: &dyn CalendarWriter,
+    account_id: Option<&str>,
+    id: Option<&str>,
+    calendar_id: &str,
+    input: &EventInput,
+    tz: Tz,
+    now: DateTime<Utc>,
+) -> Result<Event> {
+    let p = prepare_save(store, id, calendar_id, input, tz, now)?;
+    let event_id = p.write(source, tz)?;
+    commit_save(store, source, account_id, p, event_id, tz, now)
 }
 
 /// The record for the edit form. `id` may be the event or any one occurrence of a series.
@@ -694,14 +750,35 @@ pub fn delete_with(
     id: &str,
     now: DateTime<Utc>,
 ) -> Result<()> {
+    let (master, remote) = prepare_delete(store, id)?;
+    delete_remote(remote.as_ref(), source)?;
+    finish_delete(store, &master, now)
+}
+
+/// Step 1 of a delete: which record, and where else it lives. Changes nothing.
+pub fn prepare_delete(store: &Store, id: &str) -> Result<(String, Option<RemoteRef>)> {
     let master = resolve(store, id)?.ok_or(Error::Invalid("That event can't be changed here."))?;
-    if let Some(remote) = load(store, &master)?.and_then(|s| s.remote) {
+    let remote = load(store, &master)?.and_then(|s| s.remote);
+    Ok((master, remote))
+}
+
+/// Step 2: remove the copy in the Calendar app or on the server. Needs no store, so no lock.
+pub fn delete_remote(
+    remote: Option<&RemoteRef>,
+    source: Option<&dyn CalendarWriter>,
+) -> Result<()> {
+    if let Some(remote) = remote {
         let source = source.ok_or(Error::Invalid(
             "Turn on adding events to the Calendar app to delete this one.",
         ))?;
         source.delete_event(&remote.event_id)?;
     }
-    store.delete_own_event(&master)?;
+    Ok(())
+}
+
+/// Step 3: forget our record of it.
+pub fn finish_delete(store: &mut Store, master: &str, now: DateTime<Utc>) -> Result<()> {
+    store.delete_own_event(master)?;
     refresh(store, now)
 }
 
