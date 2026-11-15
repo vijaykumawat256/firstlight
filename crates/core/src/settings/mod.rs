@@ -87,6 +87,8 @@ pub struct GeneralSettings {
     pub time_format: TimeFormat,
     /// A global shortcut that shows or hides the briefing, e.g. `CmdOrCtrl+Shift+Space`.
     pub global_shortcut: Option<String>,
+    /// Show a Dock icon (macOS) or taskbar button (Windows). Off keeps Firstlight in the menu bar or tray only.
+    pub show_in_dock: bool,
     /// A global shortcut that opens the video link of the meeting that is starting or running.
     pub join_shortcut: Option<String>,
     /// Show the next meeting next to the menu-bar icon. Off by default: titles in a menu bar are visible to
@@ -105,6 +107,7 @@ impl Default for GeneralSettings {
             week_start: WeekStart::Auto,
             time_format: TimeFormat::Auto,
             global_shortcut: None,
+            show_in_dock: true,
             join_shortcut: None,
             tray_next_meeting: false,
             check_for_updates: true,

@@ -973,6 +973,7 @@ fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdR
     s.email.imap = stored.email.imap;
     s.sanitize();
     // Try the shortcut first: if the system refuses it, nothing is saved and the user is told why.
+    crate::apply_dock(app, s.general.show_in_dock);
     crate::apply_shortcut(
         app,
         s.general.global_shortcut.as_deref(),

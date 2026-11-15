@@ -33,7 +33,7 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - macOS `sed -i` needs `-i ''`; prefer the Edit tool.
 - `cargo add` fails silently-ish if the crate has no `lib.rs` yet.
 - Tray icon is a template image (`icons/tray.png`); app icon source is `icons/source-1024.png` (regenerate with `npx tauri icon`).
-- App runs as a macOS Accessory app (no Dock icon). Quit from the tray menu.
+- The app shows in the Dock (macOS) and the taskbar (Windows) by default (`general.show_in_dock`, applied by `apply_dock`: macOS switches the activation policy between Regular and Accessory, other systems toggle the taskbar button); with it off it lives in the menu bar or tray only. Clicking the Dock icon reopens the window (`RunEvent::Reopen`). Closing the window only hides it; Cmd+Q or the tray's Quit really quits.
 
 ## Phase 2 notes
 - Providers: `crates/core/src/providers/{fixture,ics,caldav,google,microsoft}`; add new ones to `src-tauri/src/providers.rs`.
@@ -141,3 +141,6 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 ## Full screen and wake
 - `src-tauri/src/fullscreen.rs`: macOS reads the on-screen window list (no permission needed) and calls a window full screen when a layer-0 window that is not ours exactly covers a display (a maximised window stops below the menu bar, so it never matches); the pure `covers_a_display` is unit-tested. `live_probe` (ignored) proves the window list is actually read on a real Mac. Windows uses `SHQueryUserNotificationState` (type-checked in a scratch crate only). Wired into the unlock decision when `unlock.skip_when_fullscreen` is on (Settings, When it appears).
 - Wake fallback (`unlock.rs`): `NSWorkspaceDidWakeNotification`; if no real `screenIsUnlocked` follows within 20 s, the wake counts as an unlock. Pure logic tested; the real sleep/wake has never been observed (cannot be done from a test).
+
+## Windows window and tray
+- macOS gets a transparent window with vibrancy (`tauri.conf.json`). Windows uses `tauri.windows.conf.json`, an ordinary opaque window (Mica/transparency could come out invisible on Windows 10 or with some drivers), and `main.tsx` sets `data-platform="windows"` so the page paints its own solid background (`tokens.css`). The tray icon is the coloured 32x32 app icon off macOS: the black template glyph (`tray.png`) disappears on a dark taskbar. None of this has been seen on a real Windows machine.

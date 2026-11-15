@@ -169,7 +169,7 @@ if (params.has("attention")) {
 let oauthCancelled = false;
 export const DEFAULT_SETTINGS: AppSettings = {
   version: 1,
-  general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null, join_shortcut: null, tray_next_meeting: false, check_for_updates: true, update_channel: "stable" },
+  general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null, show_in_dock: true, join_shortcut: null, tray_next_meeting: false, check_for_updates: true, update_channel: "stable" },
   briefing: { show_declined: false, min_gap_minutes: 30, work_start_hour: 9, work_end_hour: 18, early_hour: 8 },
   sections: { tomorrow: true, free_time: true, attention: true },
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },

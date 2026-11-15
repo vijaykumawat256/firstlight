@@ -251,6 +251,10 @@ body {
 }
 
 /* Inside the desktop shell with the system theme, let the window's vibrancy material show through. */
+:root[data-shell="tauri"][data-platform="windows"]:not([data-theme="light"]):not([data-theme="dark"]) body {
+  /* Windows windows are opaque: nothing is painted behind the page, so the page paints its own background. */
+  background: var(--bg);
+}
 :root[data-shell="tauri"]:not([data-theme="light"]):not([data-theme="dark"]) body {
   background: transparent;
 }

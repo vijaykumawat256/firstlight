@@ -663,3 +663,29 @@ fn an_imported_file_never_carries_agreement_for_any_provider() {
     assert_eq!(s.ai.provider, AiProvider::Anthropic);
     assert_eq!(s.general.sync_interval_minutes, 15);
 }
+
+#[test]
+fn firstlight_shows_in_the_dock_or_taskbar_unless_turned_off() {
+    let d = AppSettings::default();
+    assert!(d.general.show_in_dock, "a normal app by default");
+    // A settings file from before this option existed keeps the default.
+    assert!(
+        parse(r#"{"general":{"sync_interval_minutes":15}}"#)
+            .general
+            .show_in_dock
+    );
+    assert!(
+        !parse(r#"{"general":{"show_in_dock":false}}"#)
+            .general
+            .show_in_dock
+    );
+    // It survives an export and import (a harmless preference).
+    let mut s = AppSettings::default();
+    s.general.show_in_dock = false;
+    assert!(
+        !AppSettings::import(&s.export())
+            .unwrap()
+            .general
+            .show_in_dock
+    );
+}

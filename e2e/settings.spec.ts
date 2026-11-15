@@ -341,3 +341,14 @@ test("your own events can be exported, and the button says so when there are non
   await page.getByRole("button", { name: "Export…" }).click();
   await expect(page.getByText("1 event exported").first()).toBeVisible();
 });
+
+test("showing in the Dock or taskbar is on by default and can be turned off", async ({ page }) => {
+  await openSection(page, "General");
+  const sw = page.getByRole("switch", { name: "Show in the Dock or taskbar" });
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText(/menu bar or system tray only/)).toBeVisible();
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+});

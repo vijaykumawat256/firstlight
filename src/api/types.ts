@@ -155,6 +155,7 @@ export interface AppSettings {
     week_start: WeekStart;
     time_format: TimeFormat;
     global_shortcut: string | null;
+    show_in_dock: boolean;
     join_shortcut: string | null;
     tray_next_meeting: boolean;
     check_for_updates: boolean;

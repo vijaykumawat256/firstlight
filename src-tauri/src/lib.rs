@@ -92,6 +92,27 @@ pub(crate) fn navigation_allowed(url: &tauri::Url) -> bool {
     }
 }
 
+/// Shows or hides Firstlight's Dock icon (macOS) or taskbar button (Windows). The menu-bar or tray icon is
+/// always there, so with this off the app is still reachable.
+pub(crate) fn apply_dock(app: &AppHandle, show: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let policy = if show {
+                tauri::ActivationPolicy::Regular
+            } else {
+                tauri::ActivationPolicy::Accessory
+            };
+            let _ = handle.set_activation_policy(policy);
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
+        let _ = w.set_skip_taskbar(!show);
+    }
+}
+
 /// Shows the main window, or hides it if it is already in front. Used by the global shortcut.
 fn toggle_main(app: &AppHandle) {
     match app.get_webview_window(MAIN_WINDOW) {
@@ -310,10 +331,15 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         ],
     )?;
 
+    // macOS: a black "template" glyph the system recolours for light and dark menu bars. Elsewhere there is no
+    // such recolouring (a black glyph disappears on a dark Windows taskbar), so use the coloured app icon.
+    #[cfg(target_os = "macos")]
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
+    #[cfg(not(target_os = "macos"))]
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
     TrayIconBuilder::with_id("main")
         .icon(icon)
-        .icon_as_template(true)
+        .icon_as_template(cfg!(target_os = "macos"))
         .tooltip("Firstlight")
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -478,8 +504,9 @@ pub fn run() {
                 crash_reports::install_hook(dir, env!("CARGO_PKG_VERSION"));
             }
 
+            // A normal app (Dock icon) until the saved setting is read below.
             #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            app.set_activation_policy(tauri::ActivationPolicy::Regular);
 
             // Database key lives only in the OS keychain.
             // An optional profile gives a second, separate copy of the data (own keychain entries and database),
@@ -551,6 +578,7 @@ pub fn run() {
                 .map(|st| st.load_settings())
                 .unwrap_or_default();
             crash_reports::set_enabled(startup_settings.privacy.crash_reports);
+            apply_dock(app.handle(), startup_settings.general.show_in_dock);
             if let Err(e) = apply_shortcut(
                 app.handle(),
                 startup_settings.general.global_shortcut.as_deref(),
@@ -604,8 +632,17 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Firstlight");
+        .build(tauri::generate_context!())
+        .expect("error while building Firstlight")
+        .run(|app, event| {
+            // Clicking the Dock icon brings the window back (it only ever hides when closed).
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                show_main(app);
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }
 
 #[cfg(test)]

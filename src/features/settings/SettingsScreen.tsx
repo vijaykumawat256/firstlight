@@ -165,6 +165,9 @@ export function SettingsScreen() {
                   ]}
                 />
               </SettingRow>
+              <SettingRow title="Show in the Dock or taskbar" description="Off keeps Firstlight in the menu bar or system tray only. You can always open it from there or with your shortcut.">
+                <Switch label="Show in the Dock or taskbar" checked={s.general.show_in_dock} onCheckedChange={(v) => update((d) => void (d.general.show_in_dock = v))} />
+              </SettingRow>
               <SettingRow title="Show or hide the briefing" description="A shortcut that works from any app.">
                 <ShortcutRecorder value={s.general.global_shortcut} onChange={(v) => update((d) => void (d.general.global_shortcut = v))} />
               </SettingRow>
