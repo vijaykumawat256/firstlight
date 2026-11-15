@@ -78,6 +78,7 @@ struct Raw {
     url: Option<String>,
     conference: Option<String>,
     organizer: Option<String>,
+    attendees: Vec<Attendee>,
     response: Response,
     rrule: Option<String>,
     rdates: Vec<Moment>,
@@ -203,6 +204,50 @@ fn mailto(v: &str) -> String {
         .trim_start_matches("mailto:")
         .trim_start_matches("MAILTO:")
         .to_ascii_lowercase()
+}
+
+/// How an `ATTENDEE`'s `PARTSTAT` reads as an answer.
+fn answer(partstat: Option<&str>) -> Response {
+    match partstat.map(str::to_ascii_uppercase).as_deref() {
+        Some("ACCEPTED") => Response::Accepted,
+        Some("DECLINED") => Response::Declined,
+        Some("TENTATIVE") => Response::Tentative,
+        Some("NEEDS-ACTION") => Response::NeedsAction,
+        _ => Response::None,
+    }
+}
+
+/// The people on an event: its organiser first, then each person invited. Rooms and equipment are not people.
+fn guest_list(props: &[Prop], organizer_addr: Option<&str>) -> Vec<Attendee> {
+    let mut out: Vec<Attendee> = Vec::new();
+    if let Some(org) = props.iter().find(|p| p.name == "ORGANIZER") {
+        let email = organizer_addr
+            .map(str::to_string)
+            .unwrap_or_else(|| mailto(&org.value));
+        add_guest(
+            &mut out,
+            &email,
+            org.param("CN").map(unescape).as_deref(),
+            Response::None,
+            true,
+        );
+    }
+    for p in props.iter().filter(|p| p.name == "ATTENDEE") {
+        if matches!(
+            p.param("CUTYPE").map(str::to_ascii_uppercase).as_deref(),
+            Some("RESOURCE" | "ROOM")
+        ) {
+            continue;
+        }
+        add_guest(
+            &mut out,
+            &p.value,
+            p.param("CN").map(unescape).as_deref(),
+            answer(p.param("PARTSTAT")),
+            false,
+        );
+    }
+    out
 }
 
 fn to_raw(props: &[Prop], opts: &ParseOptions) -> Option<Raw> {
@@ -343,6 +388,7 @@ fn to_raw(props: &[Prop], opts: &ParseOptions) -> Option<Raw> {
             })
             .map(|p| p.value.trim().to_string()),
         organizer,
+        attendees: guest_list(props, organizer_addr.as_deref()),
         response,
         rrule: props
             .iter()
@@ -417,6 +463,7 @@ fn build(raw: &Raw, calendar_id: &str, at: Moment, instance: bool) -> Event {
         recurrence_master_id: instance.then(|| raw.uid.clone()),
         updated_at: raw.sequence_updated,
         also_in: Vec::new(),
+        attendees: raw.attendees.clone(),
     }
 }
 

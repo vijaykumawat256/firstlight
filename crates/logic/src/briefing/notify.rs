@@ -321,6 +321,7 @@ mod tests {
             recurrence_master_id: None,
             updated_at: Utc::now(),
             also_in: vec![],
+            attendees: vec![],
         }
     }
 

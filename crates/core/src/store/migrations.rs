@@ -70,6 +70,8 @@ const MIGRATIONS: &[&str] = &[
         id TEXT PRIMARY KEY,
         json TEXT NOT NULL
      );",
+    // 4: the guest list of an event, as the calendar reported it (JSON; names and addresses stay in the encrypted file)
+    "ALTER TABLE events ADD COLUMN attendees TEXT;",
 ];
 
 pub fn run(conn: &mut Connection) -> Result<()> {

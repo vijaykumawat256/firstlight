@@ -4,6 +4,14 @@ export type When =
   | { kind: "timed"; start: string; end: string; tzid: string | null }
   | { kind: "all_day"; start: string; end: string };
 
+/** Someone on an event's guest list, with their answer. */
+export interface Attendee {
+  email: string;
+  name: string | null;
+  response: Response;
+  organizer: boolean;
+}
+
 export type EventStatus = "confirmed" | "tentative" | "cancelled";
 export type Response = "accepted" | "declined" | "tentative" | "needs_action" | "none";
 
@@ -24,6 +32,8 @@ export interface CalEvent {
   updated_at: string;
   /** Other calendars holding the same meeting (merged by the backend). */
   also_in: string[];
+  /** The guest list, when the calendar gives one. */
+  attendees: Attendee[];
 }
 
 export interface CalendarInfo {

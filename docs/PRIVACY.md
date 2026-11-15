@@ -8,7 +8,7 @@ Firstlight has **no server, no account and no analytics**. It runs entirely on y
 
 ## What is stored on your computer
 
-- **Your events**, so the briefing appears instantly. They are kept in a database that is encrypted on disk. The key to that database lives only in your computer's keychain (macOS Keychain, Windows Credential Manager).
+- **Your events**, so the briefing appears instantly. They are kept in a database that is encrypted on disk. The key to that database lives only in your computer's keychain (macOS Keychain, Windows Credential Manager). For events from your calendars this includes the guest list the calendar reports (names, addresses and whether each person accepted), so the event can show who is on it. It is stored in the same encrypted database, shown only to you, never put in an AI request, and removed with the account or with Erase all data.
 - **Your settings.** They contain no passwords, links or tokens, so a backup of your settings is always safe to keep.
 - **A short activity log** (counts and error types, for example "synced 2 calendars"). It never contains event titles, names, addresses, links or message text.
 - **Optionally, a crash report.** Only if you switch this on. It says which version stopped and where in the code, and nothing else. It stays on your computer; you can read it, copy it, or delete it.

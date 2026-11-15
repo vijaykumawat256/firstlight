@@ -270,6 +270,50 @@ fn parse_when(start: &Value, end: &Value) -> Option<When> {
     })
 }
 
+/// The guest list: the organiser, then everyone invited (rooms and other resources are not people).
+fn guests(item: &Value) -> Vec<Attendee> {
+    let answer = |s: Option<&str>| match s {
+        Some("accepted") => Response::Accepted,
+        Some("declined") => Response::Declined,
+        Some("tentative") => Response::Tentative,
+        Some("needsAction") => Response::NeedsAction,
+        _ => Response::None,
+    };
+    let mut out = Vec::new();
+    if let Some(org) = item.get("organizer")
+        && let Some(email) = str_of(org, "email")
+    {
+        add_guest(
+            &mut out,
+            email,
+            str_of(org, "displayName"),
+            Response::None,
+            true,
+        );
+    }
+    for a in item
+        .get("attendees")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if a.get("resource").and_then(Value::as_bool) == Some(true) {
+            continue;
+        }
+        if let Some(email) = str_of(a, "email") {
+            let org = a.get("organizer").and_then(Value::as_bool) == Some(true);
+            add_guest(
+                &mut out,
+                email,
+                str_of(a, "displayName"),
+                answer(str_of(a, "responseStatus")),
+                org,
+            );
+        }
+    }
+    out
+}
+
 fn map_event(item: &Value, calendar_id: &str) -> Option<Event> {
     let id = str_of(item, "id")?;
     let when = parse_when(item.get("start")?, item.get("end")?)?;
@@ -337,6 +381,7 @@ fn map_event(item: &Value, calendar_id: &str) -> Option<Event> {
             .map(|d| d.with_timezone(&Utc))
             .unwrap_or_default(),
         also_in: Vec::new(),
+        attendees: guests(item),
     })
 }
 

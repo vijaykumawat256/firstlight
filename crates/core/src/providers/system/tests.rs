@@ -72,6 +72,7 @@ fn ev(id: &str, title: &str, start: DateTime<Utc>, end: DateTime<Utc>) -> SysEve
         is_recurring: false,
         tzid: Some("Europe/London".into()),
         modified: Some(1_700_000_000),
+        attendees: vec![],
     }
 }
 

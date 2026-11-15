@@ -53,6 +53,7 @@ fn ev(cal: &str, remote: &str, hour: u32) -> Event {
         recurrence_master_id: None,
         updated_at: Utc::now(),
         also_in: vec![],
+        attendees: vec![],
     }
 }
 

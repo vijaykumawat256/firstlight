@@ -252,3 +252,33 @@ test.describe("week ahead", () => {
     await expect(page.getByRole("switch", { name: "Week preview on Sundays" })).toHaveCount(0);
   });
 });
+
+// ---- guest lists --------------------------------------------------------------------------
+
+test.describe("guest lists", () => {
+  test.use({ reducedMotion: "reduce" });
+
+  test("an event from a calendar shows who is on it and how each person answered", async ({ page }) => {
+    const { default: AxeBuilder } = await import("@axe-core/playwright");
+    await page.clock.install({ time: todayAt(9, 30) });
+    await page.goto("/");
+    await page.getByRole("button", { name: /^Design review/ }).first().click();
+    const people = page.getByRole("region", { name: "People" });
+    await expect(people.getByRole("heading")).toHaveText("5 people: 1 accepted, 1 maybe, 1 declined, 1 waiting");
+    const row = (name: string) => people.getByRole("listitem").filter({ hasText: name });
+    await expect(row("Priya Shah")).toContainText("Organiser");
+    await expect(row("Sam Lee")).toContainText("No reply yet");
+    await expect(row("kim@example.com")).toContainText("Declined");
+    await expect(row("Lee Park")).toContainText("Maybe");
+    const r = await new AxeBuilder({ page }).analyze();
+    expect(r.violations).toEqual([]);
+  });
+
+  test("an event with no guest list shows no People section, and your own events never do", async ({ page }) => {
+    await page.clock.install({ time: todayAt(9, 30) });
+    await page.goto("/");
+    await page.getByRole("button", { name: /^Team standup/ }).first().click();
+    await expect(page.getByRole("dialog", { name: "Team standup" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "People" })).toHaveCount(0);
+  });
+});

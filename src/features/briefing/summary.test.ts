@@ -6,6 +6,7 @@ const ev = (id: string, title = id): CalEvent => ({
   when: { kind: "timed", start: "2026-03-10T14:00:00Z", end: "2026-03-10T15:00:00Z", tzid: null },
   location: null, description: null, join_url: null, status: "confirmed", my_response: "accepted",
   organizer: null, recurrence_master_id: null, updated_at: "2026-01-01T00:00:00Z", also_in: [],
+    attendees: [],
 });
 const item = (id: string, start: string, end: string): BriefingItem => ({ event: ev(id), start, end });
 

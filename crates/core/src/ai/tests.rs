@@ -35,6 +35,7 @@ fn event(id: &str, title: &str, start: DateTime<Utc>, mins: i64) -> Event {
         recurrence_master_id: None,
         updated_at: Utc::now(),
         also_in: vec![],
+        attendees: vec![],
     }
 }
 
@@ -710,4 +711,23 @@ fn the_reply_is_returned_untouched_so_the_plan_checker_sees_it_whole() {
         || Some(Box::new(Echo) as Box<dyn Summariser>),
     );
     assert_eq!(out.as_deref(), Some("```json\n{\"kind\":\"none\"}\n```"));
+}
+
+#[test]
+fn guest_lists_never_reach_the_prompt() {
+    let mut e = event("a", "Design review", now() + Duration::minutes(60), 60);
+    add_guest(
+        &mut e.attendees,
+        "secret.person@example.com",
+        Some("Secret Person"),
+        Response::Accepted,
+        false,
+    );
+    let b = briefing(&[e]);
+    let p = build_prompt(&b, None, LONDON, false);
+    let sent = p.disclosure().to_lowercase();
+    assert!(
+        !sent.contains("secret") && !sent.contains("example.com"),
+        "{sent}"
+    );
 }

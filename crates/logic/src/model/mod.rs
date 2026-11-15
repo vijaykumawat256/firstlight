@@ -210,6 +210,72 @@ pub enum When {
     },
 }
 
+/// Most people stored for one event; a mailing-list invitation can name thousands.
+pub const MAX_ATTENDEES: usize = 100;
+
+/// Someone on an event's guest list, as the calendar reports it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attendee {
+    pub email: String,
+    pub name: Option<String>,
+    /// Their answer to the invitation (`None` when the calendar doesn't say).
+    pub response: Response,
+    pub organizer: bool,
+}
+
+/// Adds a person to a guest list, the same way for every calendar. An address that isn't a plain address is left
+/// out, so is anything past [`MAX_ATTENDEES`]; the same address twice is one entry (the organiser is often listed
+/// again among the people invited: that entry keeps the organiser flag and takes the answer they gave).
+pub fn add_guest(
+    list: &mut Vec<Attendee>,
+    email: &str,
+    name: Option<&str>,
+    response: Response,
+    organizer: bool,
+) {
+    let email = email
+        .trim()
+        .trim_start_matches("mailto:")
+        .trim_start_matches("MAILTO:")
+        .to_ascii_lowercase();
+    let name = name
+        .map(|n| {
+            n.chars()
+                .filter(|c| !c.is_control())
+                .take(100)
+                .collect::<String>()
+                .trim()
+                .to_string()
+        })
+        .filter(|n| !n.is_empty());
+    if let Some(seen) = list.iter_mut().find(|a| a.email == email) {
+        if seen.response == Response::None {
+            seen.response = response;
+        }
+        seen.organizer |= organizer;
+        seen.name = seen.name.take().or(name);
+        return;
+    }
+    let plain = email.len() <= 254
+        && email.contains('@')
+        && !email.chars().any(|c| c.is_control() || c.is_whitespace());
+    if plain && list.len() < MAX_ATTENDEES {
+        list.push(Attendee {
+            email,
+            name,
+            response,
+            organizer,
+        });
+    }
+}
+
+// Names and addresses are private: Debug output (and so logs) never shows them.
+impl fmt::Debug for Attendee {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Attendee").finish_non_exhaustive()
+    }
+}
+
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Event {
     pub id: String,
@@ -230,6 +296,9 @@ pub struct Event {
     /// Other calendars containing the same meeting; filled by `dedupe`, never stored.
     #[serde(default)]
     pub also_in: Vec<String>,
+    /// The guest list, when the calendar gives one (at most [`MAX_ATTENDEES`]).
+    #[serde(default)]
+    pub attendees: Vec<Attendee>,
 }
 
 // Event content is private. Debug output (and therefore logs) shows IDs only.
@@ -283,6 +352,7 @@ mod tests {
             recurrence_master_id: None,
             updated_at: Utc::now(),
             also_in: vec![],
+            attendees: vec![],
         };
         let out = format!("{ev:?}");
         for secret in ["Secret", "Boardroom", "confidential", "boss@"] {
@@ -310,5 +380,65 @@ mod tests {
             assert_eq!(Response::parse(r.as_str()), Some(r));
         }
         assert_eq!(ProviderKind::parse("nope"), None);
+    }
+
+    #[test]
+    fn guests_are_cleaned_merged_and_capped() {
+        let mut l = Vec::new();
+        add_guest(
+            &mut l,
+            " mailto:Priya@Example.com ",
+            Some("  Priya\u{7}  "),
+            Response::None,
+            true,
+        );
+        add_guest(
+            &mut l,
+            "PRIYA@example.com",
+            Some("Other"),
+            Response::Accepted,
+            false,
+        );
+        assert_eq!(l.len(), 1, "one entry per address");
+        assert_eq!(
+            (
+                l[0].email.as_str(),
+                l[0].name.as_deref(),
+                l[0].response,
+                l[0].organizer
+            ),
+            ("priya@example.com", Some("Priya"), Response::Accepted, true)
+        );
+        for bad in [
+            "",
+            "nobody",
+            "a b@c.com",
+            "x@y.com\r\nBcc: z@y.com",
+            &format!("{}@x.com", "a".repeat(260)),
+        ] {
+            add_guest(&mut l, bad, None, Response::None, false);
+        }
+        assert_eq!(l.len(), 1, "only plain addresses are kept");
+        for i in 0..300 {
+            add_guest(&mut l, &format!("p{i}@x.com"), None, Response::None, false);
+        }
+        assert_eq!(l.len(), MAX_ATTENDEES);
+    }
+
+    #[test]
+    fn names_and_addresses_never_show_in_debug_output() {
+        let mut l = Vec::new();
+        add_guest(
+            &mut l,
+            "secret.person@example.com",
+            Some("Secret Person"),
+            Response::Accepted,
+            false,
+        );
+        let shown = format!("{:?}", l);
+        assert!(
+            !shown.contains("secret") && !shown.contains("Secret"),
+            "{shown}"
+        );
     }
 }

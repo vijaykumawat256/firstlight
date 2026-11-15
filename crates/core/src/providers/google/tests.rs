@@ -330,3 +330,31 @@ fn oauth_config_requests_read_only_calendar_access() {
     );
     assert!(c.auth_url.starts_with("https://") && c.token_url.starts_with("https://"));
 }
+
+#[test]
+fn the_guest_list_has_the_organiser_then_each_person_with_their_answer_and_no_rooms() {
+    let item: Value = serde_json::from_str(
+        r#"{"id":"g","summary":"x","start":{"dateTime":"2026-03-10T10:00:00Z"},"end":{"dateTime":"2026-03-10T11:00:00Z"},
+        "organizer":{"email":"Priya@x.com","displayName":"Priya"},
+        "attendees":[
+          {"email":"priya@x.com","responseStatus":"accepted","organizer":true},
+          {"email":"sam@x.com","displayName":"Sam","responseStatus":"needsAction"},
+          {"email":"kim@x.com","responseStatus":"declined"},
+          {"email":"room4@resource.calendar.google.com","resource":true,"responseStatus":"accepted"}]}"#,
+    )
+    .unwrap();
+    let e = map_event(&item, "cal").unwrap();
+    let rows: Vec<_> = e
+        .attendees
+        .iter()
+        .map(|a| (a.email.as_str(), a.name.as_deref(), a.response, a.organizer))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("priya@x.com", Some("Priya"), Response::Accepted, true),
+            ("sam@x.com", Some("Sam"), Response::NeedsAction, false),
+            ("kim@x.com", None, Response::Declined, false),
+        ]
+    );
+}

@@ -14,6 +14,7 @@ use firstlight_core::{Error, Result};
 mod mac {
     use super::*;
     use block2::{DynBlock, RcBlock};
+    use firstlight_core::model::{Attendee, Response, add_guest};
     use firstlight_core::providers::system::{SysCalendarKind, SysResponse, SysStatus};
     use firstlight_core::providers::system::{SysFreq, SysWhen};
     use objc2::AnyThread;
@@ -21,8 +22,8 @@ mod mac {
     use objc2::runtime::{Bool, NSObjectProtocol};
     use objc2_event_kit::{
         EKAlarm, EKAuthorizationStatus, EKCalendarType, EKEntityType, EKEvent, EKEventStatus,
-        EKEventStore, EKParticipantStatus, EKRecurrenceEnd, EKRecurrenceFrequency,
-        EKRecurrenceRule, EKSpan,
+        EKEventStore, EKParticipantStatus, EKParticipantType, EKRecurrenceEnd,
+        EKRecurrenceFrequency, EKRecurrenceRule, EKSpan,
     };
     use objc2_foundation::{NSArray, NSDate, NSError, NSString, NSTimeZone, NSURL};
     use std::sync::mpsc;
@@ -88,6 +89,60 @@ mod mac {
         SysResponse::Other
     }
 
+    /// The address of a participant: EventKit gives it as a `mailto:` link.
+    fn email_of(p: &objc2_event_kit::EKParticipant) -> Option<String> {
+        unsafe { p.URL().absoluteString().map(|s| s.to_string()) }
+    }
+
+    /// The guest list: the organiser, then each person (rooms and equipment are left out).
+    fn guests_of(ev: &EKEvent) -> Vec<Attendee> {
+        let mut out = Vec::new();
+        unsafe {
+            if let Some(o) = ev.organizer()
+                && let Some(email) = email_of(&o)
+            {
+                add_guest(
+                    &mut out,
+                    &email,
+                    o.name().map(|n| n.to_string()).as_deref(),
+                    Response::None,
+                    true,
+                );
+            }
+            let Some(list) = ev.attendees() else {
+                return out;
+            };
+            for a in list.iter() {
+                let kind = a.participantType();
+                if kind == EKParticipantType::Room || kind == EKParticipantType::Resource {
+                    continue;
+                }
+                let s = a.participantStatus();
+                let response = if s == EKParticipantStatus::Pending {
+                    Response::NeedsAction
+                } else if s == EKParticipantStatus::Accepted {
+                    Response::Accepted
+                } else if s == EKParticipantStatus::Declined {
+                    Response::Declined
+                } else if s == EKParticipantStatus::Tentative {
+                    Response::Tentative
+                } else {
+                    Response::None
+                };
+                if let Some(email) = email_of(&a) {
+                    add_guest(
+                        &mut out,
+                        &email,
+                        a.name().map(|n| n.to_string()).as_deref(),
+                        response,
+                        false,
+                    );
+                }
+            }
+        }
+        out
+    }
+
     fn map_event(ev: &EKEvent) -> Option<SysEvent> {
         unsafe {
             let start = secs(&ev.startDate())?;
@@ -128,6 +183,7 @@ mod mac {
                     .lastModifiedDate()
                     .and_then(|d| secs(&d))
                     .map(|d| d.timestamp()),
+                attendees: guests_of(ev),
             })
         }
     }

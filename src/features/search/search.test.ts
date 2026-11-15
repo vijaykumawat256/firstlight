@@ -21,6 +21,7 @@ function ev(id: string, title: string, start: string, end: string, extra: Partia
     recurrence_master_id: null,
     updated_at: "2026-11-01T00:00:00Z",
     also_in: [],
+    attendees: [],
     ...extra,
   };
 }

@@ -193,6 +193,8 @@ fn map_event(r: RawEvent) -> SysEvent {
         is_recurring: r.recurring,
         tzid: None,
         modified: (r.modified > 0).then_some(r.modified),
+        // Outlook keeps addresses in a form that needs Exchange to resolve; the guest list is left out for now.
+        attendees: vec![],
     }
 }
 

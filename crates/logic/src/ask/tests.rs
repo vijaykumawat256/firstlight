@@ -33,6 +33,7 @@ fn event(id: &str, title: &str, place: Option<&str>, start: DateTime<Utc>, hours
         recurrence_master_id: None,
         updated_at: Utc::now(),
         also_in: vec![],
+        attendees: vec![],
     }
 }
 

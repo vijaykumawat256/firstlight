@@ -73,6 +73,7 @@ export function fixtureEvents(base: Date = new Date()): CalEvent[] {
     recurrence_master_id: null,
     updated_at: "2023-11-14T22:13:20Z",
     also_in: [],
+    attendees: [],
     ...extra,
   });
 
@@ -88,6 +89,13 @@ export function fixtureEvents(base: Date = new Date()): CalEvent[] {
       location: "Room 4B",
       join_url: "https://zoom.example.com/j/123456789",
       organizer: "Priya",
+      attendees: [
+        { email: "priya@example.com", name: "Priya Shah", response: "accepted", organizer: true },
+        { email: "sam@example.com", name: "Sam Lee", response: "needs_action", organizer: false },
+        { email: "kim@example.com", name: null, response: "declined", organizer: false },
+        { email: "lee@example.com", name: "Lee Park", response: "tentative", organizer: false },
+        { email: "alex@example.com", name: "Alex", response: "accepted", organizer: false },
+      ],
     }),
     ev("design-review-last-week", "fixture-work", "Design review", -7, [10, 30], [11, 30], {
       organizer: "Priya",
@@ -277,6 +285,7 @@ function expandOwn(id: string, input: EventInput, calendar?: string): CalEvent[]
     recurrence_master_id: suffix ? key : null,
     updated_at: new Date().toISOString(),
     also_in: [],
+    attendees: [],
   });
   const lastDay = (() => {
     const end = new Date(`${input.end}T00:00:00`);

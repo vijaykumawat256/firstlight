@@ -17,6 +17,7 @@ import { api, errorMessage, type CalEvent, type CalendarInfo, type OwnEvent } fr
 import { EventForm } from "@/features/events/EventForm";
 import { InviteDialog, useInviteSenders } from "@/features/events/InviteDialog";
 import { Badge, Button, Sheet, calendarColour, useToasts } from "@/design";
+import { Guests } from "./Guests";
 import { MeetingPrep } from "./MeetingPrep";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { eventLink, isLinkOnly } from "./links";
@@ -406,6 +407,7 @@ export function EventDetail({
                 )}
               </div>
             )}
+            {!own && <Guests people={event.attendees} />}
             <MeetingPrep event={event} />
             {event.description && (
               // Event text is untrusted: shown as plain text only, never as HTML.

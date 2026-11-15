@@ -256,6 +256,45 @@ fn moment(v: &Value) -> Option<(NaiveDateTime, Option<chrono_tz::Tz>, DateTime<U
     Some((naive, zone, utc))
 }
 
+/// The guest list: the organiser, then everyone invited (rooms and equipment are not people).
+fn guests(item: &Value) -> Vec<Attendee> {
+    let answer = |s: Option<&str>| match s {
+        Some("accepted") => Response::Accepted,
+        Some("tentativelyAccepted") => Response::Tentative,
+        Some("declined") => Response::Declined,
+        Some("notResponded") => Response::NeedsAction,
+        _ => Response::None, // the organiser, or no answer
+    };
+    let mut out = Vec::new();
+    if let Some(a) = item.pointer("/organizer/emailAddress")
+        && let Some(email) = str_of(a, "address")
+    {
+        add_guest(&mut out, email, str_of(a, "name"), Response::None, true);
+    }
+    for a in item
+        .get("attendees")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if str_of(a, "type") == Some("resource") {
+            continue;
+        }
+        if let Some(addr) = a.get("emailAddress")
+            && let Some(email) = str_of(addr, "address")
+        {
+            add_guest(
+                &mut out,
+                email,
+                str_of(addr, "name"),
+                answer(a.pointer("/status/response").and_then(Value::as_str)),
+                false,
+            );
+        }
+    }
+    out
+}
+
 fn map_event(item: &Value, calendar_id: &str) -> Option<Event> {
     let id = str_of(item, "id")?;
     let (s_naive, s_zone, s_utc) = moment(item.get("start")?)?;
@@ -332,6 +371,7 @@ fn map_event(item: &Value, calendar_id: &str) -> Option<Event> {
             .map(|d| d.with_timezone(&Utc))
             .unwrap_or_default(),
         also_in: Vec::new(),
+        attendees: guests(item),
     })
 }
 

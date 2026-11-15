@@ -35,6 +35,7 @@ fn event(id: &str, start: DateTime<Utc>, end: DateTime<Utc>) -> Event {
         recurrence_master_id: None,
         updated_at: Utc::now(),
         also_in: vec![],
+        attendees: vec![],
     }
 }
 

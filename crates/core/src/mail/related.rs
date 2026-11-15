@@ -97,6 +97,7 @@ mod tests {
             recurrence_master_id: None,
             updated_at: s,
             also_in: vec![],
+            attendees: vec![],
         }
     }
 

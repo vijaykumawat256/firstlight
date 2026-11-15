@@ -106,6 +106,7 @@ mod tests {
             recurrence_master_id: None,
             updated_at: t("2026-11-01T00:00:00Z"),
             also_in: vec![],
+            attendees: vec![],
         }
     }
 

@@ -195,6 +195,7 @@ pub fn build_event(
         recurrence_master_id: None,
         updated_at: now,
         also_in: vec![],
+        attendees: vec![],
     })
 }
 

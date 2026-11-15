@@ -84,6 +84,8 @@ pub struct SysEvent {
     pub tzid: Option<String>,
     /// When the store last changed it, if known (Unix seconds).
     pub modified: Option<i64>,
+    /// The guest list, when the store gives one.
+    pub attendees: Vec<Attendee>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -324,6 +326,7 @@ fn map_event(e: SysEvent, calendar_id: &str, tz: Tz) -> Event {
             .and_then(|t| DateTime::from_timestamp(t, 0))
             .unwrap_or_default(),
         also_in: Vec::new(),
+        attendees: e.attendees,
     }
 }
 

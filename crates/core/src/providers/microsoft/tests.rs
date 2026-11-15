@@ -302,3 +302,32 @@ fn config_is_a_public_client_with_read_only_scopes() {
         "no write scopes"
     );
 }
+
+#[test]
+fn microsoft_guest_lists_skip_resources_and_read_each_answer() {
+    let item: Value = serde_json::from_str(
+        r#"{"id":"m","subject":"x","isAllDay":false,
+        "start":{"dateTime":"2026-03-10T10:00:00.0000000","timeZone":"UTC"},"end":{"dateTime":"2026-03-10T11:00:00.0000000","timeZone":"UTC"},
+        "organizer":{"emailAddress":{"name":"Priya","address":"priya@x.com"}},
+        "attendees":[
+          {"type":"required","status":{"response":"accepted"},"emailAddress":{"name":"Priya","address":"priya@x.com"}},
+          {"type":"optional","status":{"response":"tentativelyAccepted"},"emailAddress":{"name":"Sam","address":"Sam@x.com"}},
+          {"type":"required","status":{"response":"notResponded"},"emailAddress":{"address":"kim@x.com"}},
+          {"type":"resource","status":{"response":"accepted"},"emailAddress":{"name":"Room 4","address":"room4@x.com"}}]}"#,
+    )
+    .unwrap();
+    let e = map_event(&item, "cal").unwrap();
+    let rows: Vec<_> = e
+        .attendees
+        .iter()
+        .map(|a| (a.email.as_str(), a.response, a.organizer))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("priya@x.com", Response::Accepted, true),
+            ("sam@x.com", Response::Tentative, false),
+            ("kim@x.com", Response::NeedsAction, false),
+        ]
+    );
+}

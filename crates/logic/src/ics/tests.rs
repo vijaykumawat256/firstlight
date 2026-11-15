@@ -669,3 +669,79 @@ fn all_day_repeat_with_a_date_until_expands_fully() {
         "UNTIL is inclusive"
     );
 }
+
+// ---- guest lists --------------------------------------------------------------------------
+
+fn guests(vevent_lines: &str) -> Vec<Attendee> {
+    let text = format!(
+        "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:g1\r\nDTSTART:20260310T100000Z\r\nDTEND:20260310T110000Z\r\nSUMMARY:x\r\n{vevent_lines}END:VEVENT\r\nEND:VCALENDAR\r\n"
+    );
+    let opts = ParseOptions {
+        calendar_id: "c",
+        default_tz: chrono_tz::UTC,
+        window: crate::window::Window {
+            from: "2026-03-01T00:00:00Z".parse().unwrap(),
+            to: "2026-04-01T00:00:00Z".parse().unwrap(),
+        },
+        my_email: None,
+    };
+    events_from_ics(&text, &opts).unwrap().remove(0).attendees
+}
+
+#[test]
+fn the_guest_list_has_the_organiser_first_then_each_person_with_their_answer() {
+    let g = guests(
+        "ORGANIZER;CN=Priya Shah:mailto:Priya@Example.com\r\n\
+         ATTENDEE;CN=Priya Shah;PARTSTAT=ACCEPTED:mailto:priya@example.com\r\n\
+         ATTENDEE;CN=Sam;PARTSTAT=NEEDS-ACTION:mailto:sam@example.com\r\n\
+         ATTENDEE;PARTSTAT=DECLINED:mailto:kim@example.com\r\n\
+         ATTENDEE;PARTSTAT=TENTATIVE;CN=Lee:mailto:lee@example.com\r\n",
+    );
+    let line = |a: &Attendee| (a.email.clone(), a.name.clone(), a.response, a.organizer);
+    assert_eq!(g.len(), 4, "the organiser listed again is one entry");
+    assert_eq!(
+        line(&g[0]),
+        (
+            "priya@example.com".into(),
+            Some("Priya Shah".into()),
+            Response::Accepted,
+            true
+        )
+    );
+    assert_eq!(
+        line(&g[1]),
+        (
+            "sam@example.com".into(),
+            Some("Sam".into()),
+            Response::NeedsAction,
+            false
+        )
+    );
+    assert_eq!(
+        line(&g[2]),
+        ("kim@example.com".into(), None, Response::Declined, false)
+    );
+    assert_eq!(g[3].response, Response::Tentative);
+}
+
+#[test]
+fn rooms_and_entries_without_an_address_are_not_people_and_the_list_is_capped() {
+    let g = guests(
+        "ATTENDEE;CUTYPE=ROOM;CN=Room 4:mailto:room4@example.com\r\n\
+         ATTENDEE;CN=Everyone:urn:group\r\n\
+         ATTENDEE:mailto:ok@example.com\r\n",
+    );
+    assert_eq!(
+        g.iter().map(|a| a.email.as_str()).collect::<Vec<_>>(),
+        ["ok@example.com"]
+    );
+    let many: String = (0..300)
+        .map(|i| format!("ATTENDEE:mailto:p{i}@example.com\r\n"))
+        .collect();
+    assert_eq!(guests(&many).len(), MAX_ATTENDEES);
+}
+
+#[test]
+fn an_event_with_no_guests_has_an_empty_list() {
+    assert!(guests("").is_empty());
+}

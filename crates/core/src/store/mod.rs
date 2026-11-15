@@ -163,7 +163,7 @@ impl Store {
         let mut st = self.conn.prepare(
             "SELECT e.id, e.calendar_id, e.remote_id, e.ical_uid, e.title, e.all_day, e.start_utc, e.end_utc,
                     e.start_tzid, e.start_date, e.end_date, e.location, e.description, e.join_url,
-                    e.status, e.my_response, e.organizer, e.recurrence_master_id, e.updated_at
+                    e.status, e.my_response, e.organizer, e.recurrence_master_id, e.updated_at, e.attendees
              FROM events e JOIN calendars c ON c.id = e.calendar_id
              WHERE c.visible = 1
              ORDER BY COALESCE(e.start_utc, CAST(strftime('%s', e.start_date) AS INTEGER)), e.title, e.id",
@@ -309,7 +309,7 @@ pub struct SyncInfo {
 const EVENT_COLUMNS: &str =
     "e.id, e.calendar_id, e.remote_id, e.ical_uid, e.title, e.all_day, e.start_utc, e.end_utc,
                     e.start_tzid, e.start_date, e.end_date, e.location, e.description, e.join_url,
-                    e.status, e.my_response, e.organizer, e.recurrence_master_id, e.updated_at";
+                    e.status, e.my_response, e.organizer, e.recurrence_master_id, e.updated_at, e.attendees";
 
 /// One row of `EVENT_COLUMNS` as an [`Event`].
 fn event_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
@@ -343,7 +343,19 @@ fn event_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
         recurrence_master_id: r.get(17)?,
         updated_at: DateTime::from_timestamp(r.get(18)?, 0).unwrap_or_default(),
         also_in: Vec::new(),
+        attendees: r
+            .get::<_, Option<String>>(19)?
+            .and_then(|j| serde_json::from_str(&j).ok())
+            .unwrap_or_default(),
     })
+}
+
+/// The guest list as stored: JSON, or nothing when there is none.
+fn attendees_json(a: &[Attendee]) -> Option<String> {
+    if a.is_empty() {
+        return None;
+    }
+    serde_json::to_string(&a[..a.len().min(MAX_ATTENDEES)]).ok()
 }
 
 fn insert_event(conn: &Connection, e: &Event) -> Result<()> {
@@ -368,8 +380,8 @@ fn insert_event(conn: &Connection, e: &Event) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO events (id, calendar_id, remote_id, ical_uid, title, all_day,
             start_utc, end_utc, start_tzid, start_date, end_date, location, description,
-            join_url, status, my_response, organizer, recurrence_master_id, updated_at)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)",
+            join_url, status, my_response, organizer, recurrence_master_id, updated_at, attendees)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)",
         params![
             e.id,
             e.calendar_id,
@@ -389,7 +401,8 @@ fn insert_event(conn: &Connection, e: &Event) -> Result<()> {
             e.my_response.as_str(),
             e.organizer,
             e.recurrence_master_id,
-            e.updated_at.timestamp()
+            e.updated_at.timestamp(),
+            attendees_json(&e.attendees),
         ],
     )?;
     Ok(())
@@ -677,6 +690,38 @@ mod tests {
             s.replace_events(&c.id, &r.changed).unwrap();
         }
         s
+    }
+
+    #[test]
+    fn a_guest_list_survives_the_database_and_an_event_without_one_reads_as_empty() {
+        let mut s = seeded();
+        let mut e = s
+            .events_between(
+                Utc.with_ymd_and_hms(2026, 3, 1, 0, 0, 0).unwrap(),
+                Utc.with_ymd_and_hms(2026, 4, 1, 0, 0, 0).unwrap(),
+            )
+            .unwrap()
+            .remove(0);
+        assert!(e.attendees.is_empty(), "the fixture has no guest list");
+        let mut list = Vec::new();
+        add_guest(
+            &mut list,
+            "Priya@Example.com",
+            Some("Priya"),
+            Response::Accepted,
+            true,
+        );
+        add_guest(
+            &mut list,
+            "sam@example.com",
+            None,
+            Response::NeedsAction,
+            false,
+        );
+        e.attendees = list.clone();
+        let cal = e.calendar_id.clone();
+        s.upsert_events(&cal, std::slice::from_ref(&e)).unwrap();
+        assert_eq!(s.get_event(&e.id).unwrap().unwrap().attendees, list);
     }
 
     #[test]
