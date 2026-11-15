@@ -21,6 +21,7 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Design gallery (dev only): `http://localhost:1420/#/gallery`
 
 ## Layout and rules
+- `crates/logic` (`firstlight-logic`): the pure part (model, ics, briefing, tz, join, dedupe, xml, contain, error, `Window`). No files, network, database or OS, so it builds to WebAssembly: `cargo build -p firstlight-logic --target wasm32-unknown-unknown` must keep working (Phase 7 step 1, done). `firstlight-core` re-exports these modules under their old paths (`crate::model` etc.), so imports did not change. New pure code goes in logic; anything that touches a file, socket, keychain or database stays in core. Its `rusqlite` feature (on in core) only adds `From<rusqlite::Error>`.
 - `crates/core`: no Tauri imports, ever. Sync `Provider` trait (call from worker threads).
 - `src-tauri`: thin shell. New command = add to `build.rs` list, `capabilities/default.json` (`allow-<name>`), `generate_handler!`, `src/api`.
 - UI talks to the outside only through `src/api` (`Backend`). `fixture.ts` is browser-only fake data mirroring the Rust fixture.

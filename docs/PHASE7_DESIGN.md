@@ -116,7 +116,7 @@ SECURITY.md gets a new section for each of the above when the code lands.
 
 ## 14. Delivery plan (if approved)
 
-1. Split `crates/core` into `core-logic` (WASM-capable) and the desktop-only layer; no behaviour change; all current tests keep passing. **Value on its own and risk-free, so it can start first.**
+1. Split `crates/core` into `core-logic` (WASM-capable) and the desktop-only layer; no behaviour change; all current tests keep passing. **Value on its own and risk-free, so it can start first.** *Done (2026-11-15): `crates/logic`, builds for `wasm32-unknown-unknown`, all tests unchanged. Still to do for the browser: `ics`/`briefing` are in, but own-event expansion (`local.rs`), invitations (`invite.rs`) and unlock rules still sit in core because they touch the store or settings.*
 2. Encryption library and test vectors (vault, wraps, record encryption); a model checker for the enrolment and rotation flows.
 3. Sync server for accounts, devices and ciphertext records; the "server dump reveals nothing" test.
 4. Desktop: account creation, enrolment, revocation, rotation, recovery; behind a setting that is off by default.

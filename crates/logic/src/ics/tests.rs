@@ -649,7 +649,10 @@ fn all_day_repeat_with_a_date_until_expands_fully() {
     let opts = ParseOptions {
         calendar_id: "t",
         default_tz: chrono_tz::UTC,
-        window: crate::sync::default_window(now),
+        window: crate::window::Window {
+            from: now - chrono::Duration::days(30),
+            to: now + chrono::Duration::days(90),
+        },
         my_email: None,
     };
     let days: Vec<String> = events_from_ics(text, &opts)

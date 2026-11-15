@@ -5,7 +5,6 @@
 
 use crate::Result;
 use crate::model::{Account, Calendar, Event, ProviderKind};
-use chrono::{DateTime, Utc};
 
 pub mod caldav;
 pub mod fixture;
@@ -21,12 +20,7 @@ pub struct Capabilities {
     pub needs_polling: bool,
 }
 
-/// The time range a sync should cover.
-#[derive(Debug, Clone, Copy)]
-pub struct Window {
-    pub from: DateTime<Utc>,
-    pub to: DateTime<Utc>,
-}
+pub use firstlight_logic::window::Window;
 
 #[derive(Debug)]
 pub struct SyncResult {

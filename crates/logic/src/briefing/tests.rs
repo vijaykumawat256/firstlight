@@ -405,19 +405,3 @@ fn output_is_deterministic_for_identical_input() {
         "ties break by title then id"
     );
 }
-
-#[test]
-fn works_on_the_fixture_dataset() {
-    use crate::providers::fixture::FixtureProvider;
-    let p = FixtureProvider::new(day(10), LONDON);
-    let b = run(&p.events(), at(9, 30));
-    assert!(!b.conflicts.is_empty(), "design review overlaps the 1:1");
-    assert_eq!(b.all_day_today.len(), 1);
-    assert!(b.tomorrow.early_start, "the 06:45 flight");
-    assert!(
-        b.remaining
-            .iter()
-            .all(|i| is_shown(&i.event, &BriefingSettings::default()))
-    );
-    assert_eq!(b.needs_response.len(), 1);
-}

@@ -28,6 +28,7 @@ pub enum Error {
     SyncTokenExpired,
 }
 
+#[cfg(feature = "rusqlite")]
 impl From<rusqlite::Error> for Error {
     fn from(e: rusqlite::Error) -> Self {
         // rusqlite errors can echo SQL text but never row contents.

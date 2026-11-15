@@ -5,22 +5,17 @@
 //! behind a web front end (see PLAN.md, section 3).
 
 pub mod ai;
-pub mod briefing;
-pub mod contain;
 pub mod crash;
-pub mod dedupe;
 pub mod erase;
-pub mod error;
+#[cfg(test)]
+mod fixture_briefing;
 #[cfg(test)]
 mod fuzz;
 pub mod http;
-pub mod ics;
 pub mod invite;
-pub mod join;
 pub mod legacy;
 pub mod local;
 pub mod mail;
-pub mod model;
 pub mod oauth;
 pub mod profile;
 pub mod providers;
@@ -28,9 +23,8 @@ pub mod secrets;
 pub mod settings;
 pub mod store;
 pub mod sync;
-pub mod tz;
 pub mod updates;
-pub mod xml;
 
-pub use error::{Error, Result};
+pub use firstlight_logic::{Error, Result};
+pub use firstlight_logic::{briefing, contain, dedupe, error, ics, join, model, tz, xml};
 pub use sync::SyncReport;

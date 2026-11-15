@@ -6,7 +6,7 @@
 //! skipped rather than failing the whole feed.
 
 use crate::model::*;
-use crate::providers::Window;
+use crate::window::Window;
 use crate::{Error, Result, join, tz};
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Utc};
 use chrono_tz::Tz;
