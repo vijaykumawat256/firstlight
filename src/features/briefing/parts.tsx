@@ -1,9 +1,9 @@
 import { AlertTriangle, CalendarCheck, Clock, Copy, MapPin, Video } from "lucide-react";
 import clsx from "clsx";
 import type { Briefing, BriefingItem, CalEvent, NextUp } from "@/api";
-import { Badge, Button, Card, IconButton, ListGroup, SectionHeader, calendarColour, useToasts } from "@/design";
+import { Badge, Button, Card, IconButton, ListGroup, SectionHeader, Tooltip, calendarColour, useToasts } from "@/design";
 import { copyLink } from "./copyLink";
-import { placeLabel } from "./links";
+import { eventLink, placeLabel } from "./links";
 import { formatCountdown, formatDuration, formatTime } from "./format";
 import { timeRange } from "./summary";
 
@@ -43,14 +43,18 @@ export function UpNextCard({ next, now, colourOf, onJoin, onOpen }: { next: Next
               <span className="truncate">{next.event.location}</span>
             </p>
           )}
-          {next.event.join_url && (
+          {(next.event.join_url || eventLink(next.event)) && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button variant="primary" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(next.event.join_url!)}>
-                Join
-              </Button>
-              <Button variant="secondary" leading={<Copy className="size-4" aria-hidden />} onClick={() => void copyLink(next.event.join_url!, push)}>
-                Copy link
-              </Button>
+              {next.event.join_url && (
+                <Button variant="primary" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(next.event.join_url!)}>
+                  Join
+                </Button>
+              )}
+              <Tooltip content="Copy link">
+                <IconButton label="Copy link" onClick={() => void copyLink(eventLink(next.event)!, push)}>
+                  <Copy className="size-4" />
+                </IconButton>
+              </Tooltip>
             </div>
           )}
         </div>
@@ -103,9 +107,10 @@ export function AttentionSection({ b }: { b: Briefing }) {
 
 /* ------------------------------------------------------------- Timeline */
 
-function TimelineRow({ item, colourOf, dim, conflicted, onOpen, onJoin }: { item: BriefingItem; colourOf: ColourOf; dim?: boolean; conflicted?: boolean; onOpen: Open; onJoin?: (url: string) => void }) {
+export function TimelineRow({ item, colourOf, dim, conflicted, onOpen, onJoin }: { item: BriefingItem; colourOf: ColourOf; dim?: boolean; conflicted?: boolean; onOpen: Open; onJoin?: (url: string) => void }) {
   const push = useToasts((t) => t.push);
-  const link = item.event.join_url;
+  const link = eventLink(item.event);
+  const joinUrl = item.event.join_url;
   // Past events are quieter through colour, not opacity: fading text would drop it below readable contrast.
   return (
     <li className="flex items-stretch">
@@ -125,13 +130,16 @@ function TimelineRow({ item, colourOf, dim, conflicted, onOpen, onJoin }: { item
           {item.event.status === "tentative" && <Badge tone="neutral">Tentative</Badge>}
         </div>
       </button>
-      {link && onJoin && !dim && (
-        // Beside the row, not inside it: a button cannot sit inside a button.
+      {link && !dim && (
+        // Beside the row, not inside it: a button cannot sit inside a button. Join only for a recognised
+        // meeting link; any link can be copied.
         <div className="flex shrink-0 items-center gap-1 pr-3">
-          <Button size="sm" variant="secondary" aria-label={`Join ${item.event.title}`} leading={<Video className="size-3.5" aria-hidden />} onClick={() => onJoin(link)}>
-            Join
-          </Button>
-          <IconButton label={`Copy meeting link for ${item.event.title}`} onClick={() => void copyLink(link, push)}>
+          {joinUrl && onJoin && (
+            <Button size="sm" variant="secondary" aria-label={`Join ${item.event.title}`} leading={<Video className="size-3.5" aria-hidden />} onClick={() => onJoin(joinUrl)}>
+              Join
+            </Button>
+          )}
+          <IconButton label={`Copy link for ${item.event.title}`} onClick={() => void copyLink(link, push)}>
             <Copy className="size-4" />
           </IconButton>
         </div>

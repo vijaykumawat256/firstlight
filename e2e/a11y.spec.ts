@@ -138,6 +138,16 @@ for (const scheme of ["light", "dark"] as const) {
       await scan(page, "public holidays");
     });
 
+    test("the briefing with the coming days open", async ({ page }) => {
+      await page.clock.install({ time: at(9, 30) });
+      await page.goto("/");
+      await page.getByRole("button", { name: "Show the next 7 days" }).click();
+      await expect(page.getByRole("region", { name: "Coming up" }).getByRole("button", { name: /Planning offsite/ })).toBeVisible();
+      // Let the cards finish fading in: scanning mid-fade measures blended colours, not the real ones.
+      await page.waitForTimeout(800);
+      await scan(page, "briefing with coming days");
+    });
+
     test("the up-next panel", async ({ page }) => {
       await page.setViewportSize({ width: 360, height: 148 });
       await page.clock.install({ time: at(9, 30) });

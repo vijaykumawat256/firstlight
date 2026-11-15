@@ -16,8 +16,9 @@ import { useState } from "react";
 import { api, errorMessage, type CalEvent, type CalendarInfo, type OwnEvent } from "@/api";
 import { EventForm, OWN_CALENDAR_ID } from "@/features/events/EventForm";
 import { InviteDialog } from "@/features/events/InviteDialog";
-import { Badge, Button, Sheet, calendarColour, useToasts } from "@/design";
+import { Badge, Button, IconButton, Sheet, calendarColour, useToasts } from "@/design";
 import { copyLink } from "./copyLink";
+import { eventLink } from "./links";
 import { formatDate, formatTime } from "./format";
 
 const RESPONSE: Record<CalEvent["my_response"], string | null> = {
@@ -179,22 +180,23 @@ export function EventDetail({
               )}
               {event.recurrence_master_id && <Badge>Repeats</Badge>}
             </div>
-            {event.join_url && (
+            {eventLink(event) && (
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="primary"
-                  leading={<Video className="size-4" aria-hidden />}
-                  onClick={() => onJoin(event.join_url!)}
+                {event.join_url && (
+                  <Button
+                    variant="primary"
+                    leading={<Video className="size-4" aria-hidden />}
+                    onClick={() => onJoin(event.join_url!)}
+                  >
+                    Join
+                  </Button>
+                )}
+                <IconButton
+                  label="Copy link"
+                  onClick={() => void copyLink(eventLink(event)!, push)}
                 >
-                  Join
-                </Button>
-                <Button
-                  variant="secondary"
-                  leading={<Copy className="size-4" aria-hidden />}
-                  onClick={() => void copyLink(event.join_url!, push)}
-                >
-                  Copy link
-                </Button>
+                  <Copy className="size-4" />
+                </IconButton>
               </div>
             )}
             <dl className="flex flex-col gap-3 text-body">

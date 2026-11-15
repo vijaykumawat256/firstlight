@@ -10,6 +10,7 @@ import { AttentionSection, ClearDay, TodaySection, TomorrowSection, UpNextCard }
 import { useSettings } from "@/features/settings/useSettings";
 import { EventDetail } from "./EventDetail";
 import { ClearWeek } from "./ClearWeek";
+import { UpcomingDays } from "./UpcomingDays";
 import { EventForm } from "@/features/events/EventForm";
 import { useSearch } from "@/features/search/store";
 import { InboxSection } from "./InboxSection";
@@ -132,6 +133,7 @@ export function BriefingScreen() {
             {sections.attention && <AttentionSection b={b} />}
             <TodaySection b={b} now={now} colourOf={colourOf} onOpen={setDetail} onJoin={join} showFreeTime={sections.free_time} />
             {sections.tomorrow && <TomorrowSection b={b} colourOf={colourOf} onOpen={setDetail} />}
+            <UpcomingDays colourOf={colourOf} onOpen={setDetail} onJoin={join} />
             {settings?.email.enabled && <InboxSection />}
           </div>
         )}

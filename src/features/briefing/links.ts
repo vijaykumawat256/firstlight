@@ -39,3 +39,19 @@ export function placeLabel(location: string | null): string | null {
   const name = videoServiceName(t);
   return name ? `${name} link` : location;
 }
+
+const LINK_RE = /https?:\/\/[^\s<>"')\]]+/i;
+
+/** The first web address in some text, without the full stop or comma a sentence puts after it. */
+export function firstLink(text: string | null | undefined): string | null {
+  const m = text ? LINK_RE.exec(text) : null;
+  return m ? m[0].replace(/[.,;:!?]+$/, "") : null;
+}
+
+/**
+ * Any link an event carries: the meeting link, otherwise the first address in its place or notes.
+ * Copying it is always safe (nothing is opened); only a recognised meeting link gets a Join button.
+ */
+export function eventLink(e: { join_url: string | null; location: string | null; description: string | null }): string | null {
+  return e.join_url ?? firstLink(e.location) ?? firstLink(e.description);
+}

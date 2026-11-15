@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeLabel, videoServiceName } from "./links";
+import { eventLink, firstLink, placeLabel, videoServiceName } from "./links";
 
 describe("videoServiceName", () => {
   it("names the common services, including company sub-domains", () => {
@@ -25,5 +25,25 @@ describe("placeLabel", () => {
     expect(placeLabel("Visit https://example.com for details")).toBe("Visit https://example.com for details");
     expect(placeLabel(null)).toBeNull();
     expect(placeLabel("")).toBeNull();
+  });
+});
+
+describe("firstLink", () => {
+  it("finds the first address and drops sentence punctuation after it", () => {
+    expect(firstLink("Docs: https://example.com/spec.")).toBe("https://example.com/spec");
+    expect(firstLink("see (https://example.com/a?b=1), then http://other.test")).toBe("https://example.com/a?b=1");
+    expect(firstLink("no link here")).toBeNull();
+    expect(firstLink(null)).toBeNull();
+    expect(firstLink("")).toBeNull();
+  });
+});
+
+describe("eventLink", () => {
+  const base = { join_url: null, location: null, description: null };
+  it("prefers the meeting link, then the place, then the notes", () => {
+    expect(eventLink({ ...base, join_url: "https://zoom.us/j/1", location: "https://a.test", description: "https://b.test" })).toBe("https://zoom.us/j/1");
+    expect(eventLink({ ...base, location: "https://a.test/room", description: "https://b.test" })).toBe("https://a.test/room");
+    expect(eventLink({ ...base, description: "Agenda: https://b.test/agenda" })).toBe("https://b.test/agenda");
+    expect(eventLink(base)).toBeNull();
   });
 });

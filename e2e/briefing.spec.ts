@@ -110,9 +110,9 @@ test("every upcoming meeting with a link has its own Join and Copy buttons in th
   await expect(joins).toHaveCount(3);
   await expect(today.getByRole("button", { name: "Join Team standup" })).toBeVisible();
   await expect(today.getByRole("button", { name: "Join Design review" })).toBeVisible();
-  await expect(today.getByRole("button", { name: /^Copy meeting link for /})).toHaveCount(3);
+  await expect(today.getByRole("button", { name: /^Copy link for /})).toHaveCount(3);
 
-  await today.getByRole("button", { name: "Copy meeting link for Team standup" }).click();
+  await today.getByRole("button", { name: "Copy link for Team standup" }).click();
   await expect(page.getByText("Meeting link copied").first()).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://meet.example.com/standup");
 
@@ -129,4 +129,65 @@ test("meetings that are already over have no Join button", async ({ page }) => {
   await expect(today.getByRole("button", { name: "Join Design review" })).toBeVisible();
   await expect(today.getByRole("button", { name: /Join Team standup/ })).toHaveCount(0);
   await expect(today.getByRole("button", { name: /Join Roadmap planning/ })).toHaveCount(0);
+});
+
+test("copy is an icon, and any link on an event can be copied; only a meeting link gets Join", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.clock.install({ time: todayAt(9, 30) });
+  await page.goto("/");
+  // The up-next card: Join is a button, copy is just an icon.
+  const card = page.getByLabel("Up next");
+  await expect(card.getByRole("button", { name: "Join", exact: true })).toBeVisible();
+  const icon = card.getByRole("button", { name: "Copy link" });
+  await expect(icon).toBeVisible();
+  await expect(icon).toHaveText("");
+
+  // An event with an ordinary web address in its notes (not a video service) has copy but no Join.
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByLabel("Title").fill("Review the spec");
+  await sheet.getByLabel("Start time").fill("16:00");
+  await sheet.getByLabel("End time").fill("16:30");
+  await sheet.getByLabel("Notes").fill("Agenda: https://example.com/spec.");
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  const today = page.getByRole("region", { name: "Today" });
+  await expect(today.getByRole("button", { name: "Copy link for Review the spec" })).toBeVisible();
+  await expect(today.getByRole("button", { name: "Join Review the spec" })).toHaveCount(0);
+  await today.getByRole("button", { name: "Copy link for Review the spec" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://example.com/spec");
+
+  // The detail view has the same icon.
+  await today.getByRole("button", { name: /^4:00 PM Review the spec/ }).click();
+  const detail = page.getByRole("dialog", { name: "Review the spec" });
+  await expect(detail.getByRole("button", { name: "Copy link" })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Join" })).toHaveCount(0);
+});
+
+test("the briefing can show the days after tomorrow, a week at a time", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.clock.install({ time: todayAt(9, 30) });
+  await page.goto("/");
+  await expect(page.getByRole("region", { name: "Coming up" })).toHaveCount(0);
+  await expect(page.getByText("Planning offsite")).toHaveCount(0); // two days away: not shown yet
+
+  await page.getByRole("button", { name: "Show the next 7 days" }).click();
+  const coming = page.getByRole("region", { name: "Coming up" });
+  await expect(coming).toContainText("the 7 days after tomorrow");
+  await expect(coming.getByRole("button", { name: /Planning offsite/ })).toBeVisible();
+  await expect(coming.getByRole("button", { name: /Gym/ })).toBeVisible();
+  // Days with nothing on are left out, and rows there have the same link buttons.
+  await expect(coming.getByRole("button", { name: "Join Board prep" })).toBeVisible();
+  await expect(coming.getByRole("button", { name: "Copy link for Board prep" })).toBeVisible();
+  await coming.getByRole("button", { name: "Copy link for Board prep" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://meet.google.com/abc-defg-hij");
+
+  await coming.getByRole("button", { name: "Show 7 more days" }).click();
+  await expect(coming).toContainText("the 14 days after tomorrow");
+  await coming.getByRole("button", { name: "Hide" }).click();
+  await expect(page.getByRole("region", { name: "Coming up" })).toHaveCount(0);
+
+  // Opening an event from there shows its details.
+  await page.getByRole("button", { name: "Show the next 7 days" }).click();
+  await page.getByRole("region", { name: "Coming up" }).getByRole("button", { name: /Planning offsite/ }).click();
+  await expect(page.getByRole("dialog", { name: "Planning offsite" })).toBeVisible();
 });
