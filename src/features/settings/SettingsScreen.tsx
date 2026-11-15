@@ -402,7 +402,7 @@ export function SettingsScreen() {
               </SettingRow>
             </Group>
 
-            {sysCal.data?.supported && (
+            {sysCal.data?.supported && sysCal.data.writable && (
               <Group title="Your calendars">
                 <SettingRow
                   title="Let Firstlight add events to the Calendar app"

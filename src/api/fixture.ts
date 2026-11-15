@@ -795,7 +795,7 @@ export const fixtureBackend: Backend = {
     oauthCancelled = true;
   },
   async systemCalendarStatus() {
-    return { supported: !params.has("nosystem"), access: params.has("denied") ? "denied" : "not_determined" } as const;
+    return { supported: !params.has("nosystem"), name: params.has("outlook") ? "Outlook" : "Calendar app", writable: !params.has("outlook"), mail_app: !params.has("outlook"), access: params.has("denied") ? "denied" : "not_determined" } as const;
   },
   async addSystemAccount() {
     if (params.has("denied")) throw new Error("Calendar access is turned off for Firstlight. Open System Settings, switch Firstlight on under Calendars, then try again.");

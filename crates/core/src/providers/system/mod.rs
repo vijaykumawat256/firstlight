@@ -5,6 +5,8 @@
 //! to Firstlight events, and the rules around all-day dates. The operating-system half implements
 //! [`SystemSource`] in the desktop shell.
 
+pub mod outlook;
+
 use super::{Capabilities, Provider, SyncResult, Window, short_hash};
 use crate::model::*;
 use crate::{Error, Result, join};
@@ -131,6 +133,14 @@ fn cannot_write() -> Error {
 
 /// What the operating-system layer must provide. Implemented per platform in the shell.
 pub trait SystemSource: Send + Sync {
+    /// What the person calls it: "Calendar app" on a Mac, "Outlook" on Windows.
+    fn name(&self) -> &'static str {
+        "Calendar app"
+    }
+    /// Whether Firstlight can add events here (the Calendar app yes; Outlook is read-only for now).
+    fn writable(&self) -> bool {
+        true
+    }
     fn access(&self) -> Access;
     /// Shows the permission prompt if the user has not been asked; blocks until they answer.
     fn request_access(&self) -> Result<Access>;

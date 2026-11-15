@@ -262,3 +262,24 @@ test("public holidays are added with one tap and are an ordinary read-only calen
   await page.getByRole("main").getByRole("button", { name: /^Accounts & calendars/ }).click();
   await expect(page.getByRole("region", { name: "Holidays: United Kingdom" })).toBeVisible();
 });
+
+test("on Windows the computer's own calendars are offered as Outlook, read-only", async ({ page }) => {
+  await page.goto("/?fresh&outlook");
+  await page.getByRole("button", { name: "Add a calendar" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a calendar" });
+  await expect(dialog.getByText("Outlook on this computer")).toBeVisible();
+  await expect(dialog.getByText("Calendar app on this computer")).toHaveCount(0);
+  await dialog.getByText("Outlook on this computer").click();
+  const outlook = page.getByRole("dialog", { name: "Outlook" });
+  await expect(outlook.getByText(/classic Outlook/)).toBeVisible();
+  await expect(outlook.getByText(/new Outlook can't be read/)).toBeVisible();
+  await expect(outlook.getByRole("button", { name: "Connect Outlook" })).toBeVisible();
+  await expect(outlook.getByText(/Open System Settings/)).toHaveCount(0);
+});
+
+test("with Outlook the Calendar-app write switch and the Mail-app source are not offered", async ({ page }) => {
+  await page.goto("/?outlook");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^Privacy & data/ }).click();
+  await expect(page.getByText("Let Firstlight add events to the Calendar app")).toHaveCount(0);
+});

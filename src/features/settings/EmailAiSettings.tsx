@@ -63,7 +63,7 @@ export function EmailGroup() {
         <>
           {nothingChosen && <SettingRow title="Choose where to read email from" description="Connect the Mail app or one of your accounts below." />}
 
-          {system.data?.supported && (
+          {system.data?.supported && system.data.mail_app && (
             <SettingRow title="Mail app" description={e.apple_mail ? "Reading unread mail from the Mail app on this Mac." : "macOS will ask you to allow Firstlight to control Mail."}>
               {e.apple_mail ? (
                 <Switch label="Read the Mail app" checked onCheckedChange={() => update((d) => void (d.email.apple_mail = false))} />

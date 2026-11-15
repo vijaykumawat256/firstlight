@@ -1311,6 +1311,12 @@ pub async fn add_oauth_account(
 #[derive(serde::Serialize)]
 pub struct SystemStatus {
     supported: bool,
+    /// What the person calls it here: "Calendar app" or "Outlook".
+    name: &'static str,
+    /// Whether events can be added here (not for Outlook yet).
+    writable: bool,
+    /// Whether the Mac's Mail app can be offered as a mail source.
+    mail_app: bool,
     /// "granted" | "not_determined" | "denied" | "restricted" | "unsupported"
     access: &'static str,
 }
@@ -1331,6 +1337,9 @@ pub async fn system_calendar_status(state: State<'_, AppState>) -> CmdResult<Sys
     let access = state.deps.system.access();
     Ok(SystemStatus {
         supported: access != Access::Unsupported,
+        name: state.deps.system.name(),
+        writable: state.deps.system.writable(),
+        mail_app: cfg!(target_os = "macos"),
         access: access_name(access),
     })
 }
@@ -1357,11 +1366,12 @@ pub async fn add_system_account(
         Access::NotDetermined => return Err("The permission prompt wasn't answered. Try again.".into()),
         Access::Denied => return Err("Calendar access is turned off for Firstlight. Open System Settings, switch Firstlight on under Calendars, then try again.".into()),
         Access::Restricted => return Err("This Mac's settings don't allow apps to read calendars.".into()),
+        Access::Unsupported if cfg!(windows) => return Err("Firstlight reads classic Outlook, and it isn't installed here. The new Outlook can't be read; connect that account with “Sign in with Microsoft” instead.".into()),
         Access::Unsupported => return Err("The Calendar app can't be used here. It needs macOS 14 or later.".into()),
     }
     let new = NewAccount {
         kind: ProviderKind::System,
-        name: "Calendar app".into(),
+        name: state.deps.system.name().into(),
         email: None,
         secret_ref: None,
         secret_value: None,

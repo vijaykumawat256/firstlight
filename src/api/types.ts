@@ -119,6 +119,12 @@ export type SystemAccess = "granted" | "not_determined" | "denied" | "restricted
 
 export interface SystemStatus {
   supported: boolean;
+  /** What it is called on this computer: "Calendar app" (Mac) or "Outlook" (Windows). */
+  name: string;
+  /** Whether events can be added there (not to Outlook yet). */
+  writable: boolean;
+  /** Whether the Mac's Mail app can be a mail source. */
+  mail_app: boolean;
   access: SystemAccess;
 }
 

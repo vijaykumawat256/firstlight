@@ -115,7 +115,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
     <Sheet
       open={open}
       onOpenChange={close}
-      title={step === "choose" ? "Add a calendar" : step === "system" ? "Calendar app" : step === "holidays" ? "Public holidays" : step === "ics" ? "Calendar link" : step === "oauth" ? `Sign in with ${OAUTH_LABEL[oauthProvider]}` : "iCloud, Yahoo and others"}
+      title={step === "choose" ? "Add a calendar" : step === "system" ? (system.data?.name ?? "Calendar app") : step === "holidays" ? "Public holidays" : step === "ics" ? "Calendar link" : step === "oauth" ? `Sign in with ${OAUTH_LABEL[oauthProvider]}` : "iCloud, Yahoo and others"}
       description={step === "choose" ? "Choose how to connect." : step === "system" ? "Use the calendars already on this computer." : step === "holidays" ? "Choose a country. Its holidays appear alongside your events." : step === "ics" ? "Paste the address of a published calendar." : step === "oauth" ? "Firstlight only asks to view your calendar." : "Sign in with an app password."}
       footer={
         step === "system" ? (
@@ -124,7 +124,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
               Back
             </Button>
             <Button variant="primary" onClick={() => sys.mutate()} disabled={sys.isPending}>
-              {sys.isPending ? "Waiting for permission…" : system.data?.access === "denied" ? "Check again" : "Allow access"}
+              {sys.isPending ? (system.data?.name === "Outlook" ? "Reading Outlook…" : "Waiting for permission…") : system.data?.access === "denied" ? "Check again" : system.data?.name === "Outlook" ? "Connect Outlook" : "Allow access"}
             </Button>
           </>
         ) : step === "oauth" ? (
@@ -164,8 +164,8 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
             <ListGroup>
               <Choice
                 icon={<Laptop />}
-                title="Calendar app on this computer"
-                subtitle="Everything already in Calendar: iCloud, Gmail, Outlook, Yahoo…"
+                title={system.data.name === "Outlook" ? "Outlook on this computer" : "Calendar app on this computer"}
+                subtitle={system.data.name === "Outlook" ? "Every account already in Outlook: Microsoft 365, Exchange, Gmail, IMAP…" : "Everything already in Calendar: iCloud, Gmail, Outlook, Yahoo…"}
                 onClick={() => setStep("system")}
               />
             </ListGroup>
@@ -229,15 +229,30 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
               {errorMessage(sys.error)}
             </p>
           )}
-          <p className="text-body text-fg">
-            Firstlight will read the calendars in your Calendar app, so any account you've added to this computer shows up here with no extra sign-in.
-          </p>
-          <ul className="flex flex-col gap-1.5 text-body text-fg-2">
-            <li>• macOS will ask you to allow access. Choose <span className="font-medium text-fg">Allow Full Access</span>.</li>
-            <li>• Firstlight only reads. It never changes or deletes events.</li>
-            <li>• Birthdays and subscribed calendars start hidden; you can turn them on.</li>
-          </ul>
-          {(sys.isError || system.data?.access === "denied") && (
+          {system.data?.name === "Outlook" ? (
+            <>
+              <p className="text-body text-fg">
+                Firstlight will read the calendars in Outlook on this computer, so every account you've added there shows up with no extra sign-in.
+              </p>
+              <ul className="flex flex-col gap-1.5 text-body text-fg-2">
+                <li>• This works with the classic Outlook. Outlook may open in the background the first time.</li>
+                <li>• Firstlight only reads. It never changes or deletes events.</li>
+                <li>• The new Outlook can't be read this way. Connect that account with Sign in with Microsoft instead.</li>
+              </ul>
+            </>
+          ) : (
+            <>
+              <p className="text-body text-fg">
+                Firstlight will read the calendars in your Calendar app, so any account you've added to this computer shows up here with no extra sign-in.
+              </p>
+              <ul className="flex flex-col gap-1.5 text-body text-fg-2">
+                <li>• macOS will ask you to allow access. Choose <span className="font-medium text-fg">Allow Full Access</span>.</li>
+                <li>• Firstlight only reads unless you turn on adding events in Settings.</li>
+                <li>• Birthdays and subscribed calendars start hidden; you can turn them on.</li>
+              </ul>
+            </>
+          )}
+          {system.data?.name !== "Outlook" && (sys.isError || system.data?.access === "denied") && (
             <button type="button" onClick={() => void api.openPrivacySettings("calendars")} className="flex items-center gap-1.5 self-start text-body text-accent hover:underline">
               Open System Settings <ExternalLink className="size-3.5" aria-hidden />
             </button>

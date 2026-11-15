@@ -27,5 +27,8 @@ For every step: note **what you did, what you expected, what happened**, and a s
 ## C. Windows (about 30 minutes, on a Windows PC)
 Install the Windows installer from the GitHub release / workflow artifact. Check: it starts; the window is readable (light and dark); the tray icon is visible on a dark taskbar; closing the window keeps it in the tray; lock (Win+L) then unlock shows the briefing; notifications appear; add an ICS or CalDAV account; Find a time and New event work. Note any crash text.
 
+## C2. Classic Outlook on Windows (needs a PC with classic Outlook and an account in it)
+Add a calendar -> "Outlook on this computer" -> Connect Outlook. Expect: Outlook may open in the background; your calendars (one per account) appear; today's events match Outlook, including a repeating meeting, an all-day event, a cancelled meeting and one you have not answered. Check the times against Outlook, in two time zones if you can. Then: with Outlook closed, press Refresh; add a meeting in Outlook and see it after the next refresh. If you use the new Outlook instead, the tile should be absent and "Sign in with Microsoft" is the way. Send me any error text.
+
 ## D. Release (your side)
 Apple Developer account, Windows signing certificate, update key and hosting (`docs/RELEASE.md` sections 1 to 3), Google verification for Gmail access, an outside security review, and a legal read of `docs/PRIVACY.md`.

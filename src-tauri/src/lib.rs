@@ -4,11 +4,14 @@
 
 mod commands;
 mod crash_reports;
+#[cfg(not(windows))]
 mod eventkit;
 mod fullscreen;
 mod keychain;
 mod mail_ai;
 mod notifier;
+#[cfg(windows)]
+mod outlook_win;
 mod providers;
 mod scheduler;
 mod unlock;
@@ -566,6 +569,10 @@ pub fn run() {
                 http: Arc::new(ReqwestClient::new().map_err(|e| e.to_string())?),
                 secrets: Arc::new(keychain),
                 oauth: providers::OAuthConfigs::from_build(),
+                // The computer's own calendars: the Calendar app on a Mac, classic Outlook on Windows.
+                #[cfg(windows)]
+                system: Arc::new(outlook_win::source()),
+                #[cfg(not(windows))]
                 system: Arc::new(eventkit::EventKitSource),
                 ai_http: Arc::new(
                     ReqwestClient::with_options(
