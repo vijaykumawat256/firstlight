@@ -2,6 +2,7 @@
 //! `firstlight-core` re-exports these modules under their old paths, so nothing else changed.
 //! Kept free of anything a browser cannot run, so it can be built to WebAssembly later (docs/PHASE7_DESIGN.md).
 
+pub mod ask;
 pub mod briefing;
 pub mod contain;
 pub mod dedupe;

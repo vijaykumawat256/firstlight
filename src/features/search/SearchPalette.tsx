@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Search } from "lucide-react";
+import { CalendarDays, Search, Sparkles } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
 import { useNav } from "@/app/nav";
@@ -7,6 +7,7 @@ import { Dialog, useToasts } from "@/design";
 import { EventDetail } from "@/features/briefing/EventDetail";
 import { formatDate, formatTime } from "@/features/briefing/format";
 import { startOfLocalDay } from "@/features/calendar/layout";
+import { AskAnswer } from "./AskAnswer";
 import { parseJump, searchEvents } from "./search";
 import { useSearch } from "./store";
 
@@ -14,7 +15,7 @@ const DAY = 86_400_000;
 
 const startOf = (e: CalEvent): Date => (e.when.kind === "all_day" ? new Date(`${e.when.start}T00:00:00`) : new Date(e.when.start));
 
-type Row = { kind: "day"; date: Date } | { kind: "event"; event: CalEvent };
+type Row = { kind: "ask"; question: string } | { kind: "day"; date: Date } | { kind: "event"; event: CalEvent };
 
 /** Press ⌘K (Ctrl+K) anywhere: find an event by name or place, or type a date to jump to that day. */
 export function SearchHost() {
@@ -24,6 +25,7 @@ export function SearchHost() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [detail, setDetail] = useState<CalEvent | null>(null);
+  const [asked, setAsked] = useState<string | null>(null);
   const listId = useId();
 
   useEffect(() => {
@@ -51,22 +53,35 @@ export function SearchHost() {
     },
   });
   const calendars = useQuery({ queryKey: ["calendars"], queryFn: () => api.getCalendars(), enabled: open });
+  const ai = useQuery({ queryKey: ["ai-status"], queryFn: () => api.aiStatus(), enabled: open });
   const colours = useMemo(() => new Map((calendars.data ?? []).map((c) => [c.id, c.name])), [calendars.data]);
 
   const now = new Date();
   const rows: Row[] = useMemo(() => {
     const jump = parseJump(query, new Date());
     const found = searchEvents(events.data ?? [], query, new Date());
-    return [...(jump ? [{ kind: "day" as const, date: jump }] : []), ...found.map((event) => ({ kind: "event" as const, event }))];
-  }, [events.data, query]);
+    // A question needs AI to be on and agreed to. It looks like one when it has a few words or ends with "?".
+    const words = query.trim().split(/\s+/).filter(Boolean).length;
+    const canAsk = !!ai.data?.enabled && ai.data.consented && (words >= 3 || query.trim().endsWith("?"));
+    return [
+      ...(canAsk ? [{ kind: "ask" as const, question: query.trim() }] : []),
+      ...(jump ? [{ kind: "day" as const, date: jump }] : []),
+      ...found.map((event) => ({ kind: "event" as const, event })),
+    ];
+  }, [events.data, query, ai.data]);
 
   const close = () => {
     setOpen(false);
+    setAsked(null);
     setQuery("");
     setActive(0);
   };
   const choose = (row: Row | undefined) => {
     if (!row) return;
+    if (row.kind === "ask") {
+      setAsked(row.question);
+      return;
+    }
     close();
     if (row.kind === "day") openCalendar("day", row.date);
     else setDetail(row.event);
@@ -76,6 +91,16 @@ export function SearchHost() {
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())} title="Search" description="Find an event by name or place, or type a date such as “friday” or “24 dec”.">
+        {asked ? (
+          <AskAnswer
+            question={asked}
+            onBack={() => setAsked(null)}
+            onOpen={(e) => {
+              close();
+              setDetail(e);
+            }}
+          />
+        ) : (
         <div className="flex flex-col gap-3 pb-2">
           <div className="flex items-center gap-2 rounded-card bg-fill px-3">
             <Search className="size-4 shrink-0 text-fg-2" aria-hidden />
@@ -121,7 +146,7 @@ export function SearchHost() {
             <ul id={listId} role="listbox" aria-label={query.trim() ? "Results" : "Coming up"} className="flex max-h-72 flex-col overflow-y-auto">
               {rows.map((r, i) => (
                 <li
-                  key={r.kind === "day" ? "day" : r.event.id}
+                  key={r.kind === "ask" ? "ask" : r.kind === "day" ? "day" : r.event.id}
                   id={`${listId}-${i}`}
                   role="option"
                   aria-selected={i === active}
@@ -129,7 +154,12 @@ export function SearchHost() {
                   onClick={() => choose(r)}
                   className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-card px-3 py-2 ${i === active ? "bg-fill" : ""}`}
                 >
-                  {r.kind === "day" ? (
+                  {r.kind === "ask" ? (
+                    <>
+                      <Sparkles className="size-4 shrink-0 text-accent" aria-hidden />
+                      <span className="min-w-0 truncate text-headline text-fg">Ask: {r.question}</span>
+                    </>
+                  ) : r.kind === "day" ? (
                     <>
                       <CalendarDays className="size-4 shrink-0 text-accent" aria-hidden />
                       <span className="min-w-0 text-headline text-fg">Go to {formatDate(r.date)}</span>
@@ -149,6 +179,7 @@ export function SearchHost() {
             </ul>
           )}
         </div>
+        )}
       </Dialog>
       <EventDetail event={detail} calendars={calendars.data ?? []} onClose={() => setDetail(null)} onJoin={join} />
     </>

@@ -858,6 +858,90 @@ pub async fn forget_ai_key(app: AppHandle, state: State<'_, AppState>) -> CmdRes
     })
 }
 
+// ---- ask your calendar -----------------------------------------------------------------
+
+const ASK_LIMIT_PER_HOUR: usize = 30;
+static ASKED: std::sync::Mutex<Vec<Instant>> = std::sync::Mutex::new(Vec::new());
+
+fn within_ask_limit() -> bool {
+    let Ok(mut asked) = ASKED.lock() else {
+        return false;
+    };
+    asked.retain(|t| t.elapsed() < StdDuration::from_secs(3600));
+    if asked.len() >= ASK_LIMIT_PER_HOUR {
+        return false;
+    }
+    asked.push(Instant::now());
+    true
+}
+
+#[derive(Serialize)]
+pub struct AskReply {
+    /// AI is off, or the person has not agreed for this provider.
+    enabled: bool,
+    /// The question was about the calendar and the AI's plan was usable.
+    understood: bool,
+    /// "limit" | "ai" when something went wrong; nothing else is ever said about why.
+    problem: Option<&'static str>,
+    answer: Option<firstlight_core::ask::Answer>,
+}
+
+fn reply(enabled: bool, understood: bool, problem: Option<&'static str>) -> AskReply {
+    AskReply {
+        enabled,
+        understood,
+        problem,
+        answer: None,
+    }
+}
+
+/// Answers a question about the calendar. Only the question (with today's date and the time zone) goes to the AI,
+/// which answers with a small plan; the plan is checked and run here against the stored events, so no event ever
+/// leaves the computer. Nothing is remembered.
+#[tauri::command]
+pub async fn ask_calendar(state: State<'_, AppState>, question: String) -> CmdResult<AskReply> {
+    use firstlight_core::ai::{ask_if_enabled, build_ask_prompt};
+    use firstlight_core::ask::{Understood, answer, parse_plan};
+    let settings = lock_store(&state)?.load_settings();
+    if !settings.ai.enabled || settings.ai.consented != Some(settings.ai.provider) {
+        return Ok(reply(false, false, None));
+    }
+    let question = question.trim();
+    if question.is_empty() {
+        return Ok(reply(true, false, None));
+    }
+    if !within_ask_limit() {
+        return Ok(reply(true, false, Some("limit")));
+    }
+    let (now, tz) = (Utc::now(), crate::local_tz());
+    let today = now.with_timezone(&tz).date_naive();
+    let prompt = build_ask_prompt(question, today, tz);
+    let summariser = make_summariser(&state, &settings);
+    let ai = settings.ai.clone();
+    let raw =
+        tauri::async_runtime::spawn_blocking(move || ask_if_enabled(&ai, || prompt, || summariser))
+            .await
+            .ok()
+            .flatten();
+    let Some(raw) = raw else {
+        return Ok(reply(true, false, Some("ai")));
+    };
+    let plan = match parse_plan(&raw, today) {
+        Some(Understood::Plan(p)) => p,
+        _ => return Ok(reply(true, false, None)),
+    };
+    let (from, _) = day_bounds(plan.from, tz);
+    let (_, to) = day_bounds(plan.to, tz);
+    let events = dedupe(
+        lock_store(&state)?
+            .events_between(from, to)
+            .map_err(internal("loading events"))?,
+    );
+    let mut out = reply(true, true, None);
+    out.answer = Some(answer(&plan, &events, now, tz, &settings.briefing));
+    Ok(out)
+}
+
 /// A short AI summary of the day, or `None` (AI off, or anything went wrong). Never an error: the
 /// briefing already has its own summary and carries on without this.
 #[tauri::command]

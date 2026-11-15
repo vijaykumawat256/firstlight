@@ -15,6 +15,8 @@ For every step: note **what you did, what you expected, what happened**, and a s
 6. **Mac Calendar app**: Settings → Privacy & data → "Let Firstlight add events to the Calendar app". Click Allow on the system prompt (and try Deny once in a second run). Create, edit and delete an event; check it in Calendar.app.
 7. **Apple Mail digest**: Settings → Email → Apple Mail; click Allow on the Automation prompt. Expect unread and important senders.
 
+8. **Ask your calendar** (needs AI on with your key): press Cmd/Ctrl+K, type "when is my next dentist appointment", choose the Ask row. Try also: "when am I free for 2 hours on Thursday", "what do I have next Tuesday", "show everything with Sam this month", "what is the weather" (should say it can't). Check the dates under the answer match what you meant (models can misread "next week"), and that the answer is right against your real calendar. Also try it with a local model.
+
 ## B. Needs you at the machine (about 30 minutes)
 1. Notifications show as "Firstlight". Click one: the app comes forward. Press Snooze 10 min: it returns.
 2. Menu-bar text (Settings → General): shows the next meeting; "Meeting" when titles are hidden.

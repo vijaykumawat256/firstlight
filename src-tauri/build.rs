@@ -91,6 +91,7 @@ fn main() {
             "disable_ai",
             "forget_ai_key",
             "get_ai_summary",
+            "ask_calendar",
             "get_settings",
             "set_settings",
             "export_settings",

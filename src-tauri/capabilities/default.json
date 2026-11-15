@@ -73,6 +73,7 @@
     "allow-disable-ai",
     "allow-forget-ai-key",
     "allow-get-ai-summary",
+    "allow-ask-calendar",
     "allow-get-app-info",
     "allow-check-for-update",
     "allow-install-update",

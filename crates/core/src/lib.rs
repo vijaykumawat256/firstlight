@@ -26,5 +26,5 @@ pub mod sync;
 pub mod updates;
 
 pub use firstlight_logic::{Error, Result};
-pub use firstlight_logic::{briefing, contain, dedupe, error, ics, join, model, tz, xml};
+pub use firstlight_logic::{ask, briefing, contain, dedupe, error, ics, join, model, tz, xml};
 pub use sync::SyncReport;

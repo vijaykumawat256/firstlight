@@ -633,3 +633,81 @@ fn services_that_answer_a_bad_key_with_400_are_still_told_as_a_bad_key() {
         assert_eq!(matches!(err, Error::AuthRevoked), bad_key, "{body}");
     }
 }
+
+// ---- ask your calendar ---------------------------------------------------------------
+
+#[test]
+fn a_question_sends_only_the_question_the_date_and_the_zone() {
+    let today = chrono::NaiveDate::from_ymd_opt(2026, 3, 10).unwrap();
+    let p = build_ask_prompt("when am I free\nfor lunch with Sam?", today, LONDON);
+    assert_eq!(
+        p.user,
+        "Today is Tue 2026-03-10. Time zone: Europe/London.\nQuestion: when am I free for lunch with Sam?"
+    );
+    // The instructions say the question is data and name no calendar content.
+    assert!(p.system.contains("never instructions"));
+    assert!(!p.system.to_lowercase().contains("design review"));
+    let long = "x".repeat(5000);
+    assert!(build_ask_prompt(&long, today, LONDON).user.chars().count() < 400);
+}
+
+#[test]
+fn asking_is_gated_exactly_like_the_summary() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let (built, made) = (AtomicUsize::new(0), AtomicUsize::new(0));
+    for ai in [
+        AiSettings::default(),
+        AiSettings {
+            enabled: true,
+            consented: None,
+            ..Default::default()
+        },
+        AiSettings {
+            enabled: false,
+            consented: Some(AiProvider::Anthropic),
+            ..Default::default()
+        },
+    ] {
+        let out = ask_if_enabled(
+            &ai,
+            || {
+                built.fetch_add(1, Ordering::SeqCst);
+                Prompt {
+                    system: String::new(),
+                    user: String::new(),
+                }
+            },
+            || {
+                made.fetch_add(1, Ordering::SeqCst);
+                None
+            },
+        );
+        assert_eq!(out, None);
+    }
+    assert_eq!(
+        (built.load(Ordering::SeqCst), made.load(Ordering::SeqCst)),
+        (0, 0)
+    );
+}
+
+#[test]
+fn the_reply_is_returned_untouched_so_the_plan_checker_sees_it_whole() {
+    struct Echo;
+    impl Summariser for Echo {
+        fn summarise(&self, _: &Prompt) -> Result<String> {
+            Ok("```json\n{\"kind\":\"none\"}\n```".into())
+        }
+    }
+    let out = ask_if_enabled(
+        &enabled(AiProvider::Anthropic),
+        || {
+            build_ask_prompt(
+                "hi",
+                chrono::NaiveDate::from_ymd_opt(2026, 3, 10).unwrap(),
+                LONDON,
+            )
+        },
+        || Some(Box::new(Echo) as Box<dyn Summariser>),
+    );
+    assert_eq!(out.as_deref(), Some("```json\n{\"kind\":\"none\"}\n```"));
+}

@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, EventInput, FreeSlot, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, EventInput, FreeSlot, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -625,6 +625,29 @@ export const fixtureBackend: Backend = {
       workEndHour: b.work_end_hour,
       earlyHour: b.early_hour,
     });
+  },
+  async askCalendar(question) {
+    // A stand-in for the Rust path: records what would be sent (only the question), then answers from the
+    // fixture events with a very small reading of the question. The real planner is crates/logic/src/ask.rs.
+    const w = window as unknown as { __asked?: string[] };
+    if (!aiState.enabled || !aiState.consented) return { enabled: false, understood: false, problem: null, answer: null } satisfies AskReply;
+    (w.__asked ??= []).push(question.trim().slice(0, 300));
+    await sleep(150);
+    if (params.has("askfail")) return { enabled: true, understood: false, problem: "ai", answer: null } satisfies AskReply;
+    const q = question.toLowerCase();
+    if (/weather|joke|recipe/.test(q)) return { enabled: true, understood: false, problem: null, answer: null } satisfies AskReply;
+    const day = new Date();
+    day.setHours(0, 0, 0, 0);
+    const to = new Date(day.getTime() + 14 * 86_400_000);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    if (/free|available/.test(q)) {
+      const slots = await this.findFreeTimes(60, 7);
+      return { enabled: true, understood: true, problem: null, answer: { kind: "free", from: iso(day), to: iso(to), keywords: [], minutes: 60, count: 0, events: [], slots } } satisfies AskReply;
+    }
+    const stop = new Set(["what", "when", "is", "my", "the", "a", "do", "i", "have", "next", "with", "on", "in", "me", "show", "any", "are", "there"]);
+    const keywords = q.replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((x) => x.length > 2 && !stop.has(x));
+    const events = fixtureEvents().filter((e) => overlaps(e, day, to) && keywords.every((k) => `${e.title} ${e.location ?? ""}`.toLowerCase().includes(k)));
+    return { enabled: true, understood: true, problem: null, answer: { kind: "events", from: iso(day), to: iso(to), keywords, minutes: 30, count: events.length, events: events.slice(0, 50), slots: [] } } satisfies AskReply;
   },
   async findFreeTimes(minutes, days) {
     // A small browser-only stand-in for the Rust finder (crates/logic/src/briefing/slots.rs).

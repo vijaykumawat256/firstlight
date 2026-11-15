@@ -307,6 +307,7 @@ function PreviewDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title="What is sent" description="This is the complete text sent each time the summary refreshes." footer={<Button onClick={() => onOpenChange(false)}>Close</Button>}>
       <PreviewBox enabled={open} />
+      <p className="mt-2 text-footnote text-fg-2">When you type a question into Search and choose Ask, only that question, today’s date and your time zone are sent, never your events. The answer is worked out on this computer.</p>
     </Dialog>
   );
 }
@@ -478,6 +479,7 @@ function ConsentBody({ onOpenChange, onDone }: { onOpenChange: (o: boolean) => v
         <div>
           <p className="mb-1.5 text-footnote font-medium text-fg-2">Exactly what will be sent</p>
           <PreviewBox enabled />
+          <p className="mt-2 text-footnote text-fg-2">When you type a question into Search and choose Ask, only that question, today’s date and your time zone are sent, never your events. The answer is worked out on this computer.</p>
         </div>
 
         <TextField label="Model" value={shownModel} onChange={(e) => setModel(e.target.value)} hint={provider === "local" ? undefined : "Model names change over time. If this one is no longer offered, the check below says so."} spellCheck={false} autoComplete="off" />

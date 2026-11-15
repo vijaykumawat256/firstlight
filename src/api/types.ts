@@ -269,6 +269,28 @@ export interface AppInfo {
 
 export type UpdateStatus = { state: "not_configured" } | { state: "up_to_date" } | { state: "available"; version: string } | { state: "failed" };
 
+/** The answer to a question about the calendar, worked out on this computer from the stored events. */
+export interface CalendarAnswer {
+  kind: "events" | "free";
+  from: string;
+  to: string;
+  keywords: string[];
+  minutes: number;
+  /** How many events matched; `events` holds at most 50. */
+  count: number;
+  events: CalEvent[];
+  slots: FreeSlot[];
+}
+
+export interface AskReply {
+  /** AI is off, or not agreed to. */
+  enabled: boolean;
+  /** The question was about the calendar and could be run. */
+  understood: boolean;
+  problem: "limit" | "ai" | null;
+  answer: CalendarAnswer | null;
+}
+
 /** A free stretch inside working hours (from "Find a time"). */
 export interface FreeSlot {
   start: string;

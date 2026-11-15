@@ -493,6 +493,7 @@ pub fn run() {
             mail_ai::disable_ai,
             mail_ai::forget_ai_key,
             mail_ai::get_ai_summary,
+            mail_ai::ask_calendar,
             commands::get_settings,
             commands::set_settings,
             commands::export_settings,
