@@ -229,6 +229,12 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
               {errorMessage(sys.error)}
             </p>
           )}
+          {sys.isPending && system.data?.name === "Outlook" && (
+            <div role="status" className="flex items-center gap-3 rounded-card bg-fill px-3 py-2.5">
+              <div className="size-5 shrink-0 animate-spin rounded-full border-2 border-fill-strong border-t-accent" aria-hidden />
+              <p className="text-body text-fg">Reading your calendars from Outlook. This can take up to a minute the first time.</p>
+            </div>
+          )}
           {system.data?.name === "Outlook" ? (
             <>
               <p className="text-body text-fg">
