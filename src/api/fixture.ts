@@ -26,12 +26,20 @@ function isoDate(d: Date): string {
 }
 
 /** Events added in the browser fixture: the record the user typed, like the real app keeps. */
-const ownRecords: { id: string; input: EventInput; skipped?: string[] }[] = [];
+const ownRecords: { id: string; input: EventInput; skipped?: string[]; destination?: string }[] = [];
+
+/** The id an event gets: local ones keep the record's id; one saved into a calendar looks like a synced one. */
+const eventPrefix = (r: { id: string; destination?: string }) => (r.destination ? `${r.destination}:ek-${r.id.slice("local-events:".length)}` : r.id);
+
+/** The record behind any event id (a local one, or the synced copy of one saved into a calendar). */
+function findRecord(eventId: string) {
+  return ownRecords.find((r) => eventId === r.id || eventId === eventPrefix(r) || eventId.startsWith(`${eventPrefix(r)}:`));
+}
 
 /** The dated events those records produce (repeats run 120 days ahead, like the real app's window). */
 function ownEvents(): CalEvent[] {
   const out: CalEvent[] = [];
-  for (const rec of ownRecords) out.push(...expandOwn(rec.id, rec.input).filter((e) => !rec.skipped?.includes(e.remote_id.split(":")[1] ?? "")));
+  for (const rec of ownRecords) out.push(...expandOwn(rec.id, rec.input, rec.destination).filter((e) => !rec.skipped?.includes(e.remote_id.split(":")[1] ?? "")));
   return out;
 }
 
@@ -169,7 +177,7 @@ if (params.has("attention")) {
 let oauthCancelled = false;
 export const DEFAULT_SETTINGS: AppSettings = {
   version: 1,
-  general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null, show_in_dock: true, join_shortcut: null, tray_next_meeting: false, check_for_updates: true, update_channel: "stable" },
+  general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null, show_in_dock: true, write_to_calendar_app: params.has("writeon"), join_shortcut: null, tray_next_meeting: false, check_for_updates: true, update_channel: "stable" },
   briefing: { show_declined: false, min_gap_minutes: 30, work_start_hour: 9, work_end_hour: 18, early_hour: 8 },
   sections: { tomorrow: true, free_time: true, attention: true },
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },
@@ -196,6 +204,12 @@ function customHost(address: string): string | null {
     return null;
   }
 }
+
+/** The Calendar-app calendars the fixture lets events be added to. */
+const WRITABLE = [
+  { id: "fixture-work", name: "Work", source: "Demo account" },
+  { id: "fixture-personal", name: "Personal", source: "Demo account" },
+];
 
 const LOCAL_CAL = "local-events";
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -230,11 +244,12 @@ function checkOwn(input: EventInput): EventInput {
   return { ...input, title, invitees };
 }
 
-function expandOwn(id: string, input: EventInput): CalEvent[] {
+function expandOwn(id: string, input: EventInput, calendar?: string): CalEvent[] {
   const key = id.slice(LOCAL_CAL.length + 1);
+  const prefix = eventPrefix({ id, destination: calendar });
   const base = (when: CalEvent["when"], suffix: string | null): CalEvent => ({
-    id: suffix ? `${id}:${suffix}` : id,
-    calendar_id: LOCAL_CAL,
+    id: suffix ? `${prefix}:${suffix}` : prefix,
+    calendar_id: calendar ?? LOCAL_CAL,
     remote_id: suffix ? `${key}:${suffix}` : key,
     ical_uid: `${key}@firstlight.local`,
     title: input.title,
@@ -281,15 +296,16 @@ function expandOwn(id: string, input: EventInput): CalEvent[] {
   return out;
 }
 
-function saveFixtureEvent(id: string | null, input: EventInput): CalEvent {
+function saveFixtureEvent(id: string | null, input: EventInput, destination?: string): CalEvent {
   const clean = checkOwn(input);
-  const master = id ? `${LOCAL_CAL}:${id.slice(LOCAL_CAL.length + 1).split(":")[0]}` : null;
-  if (master && !ownRecords.some((r) => r.id === master)) throw new Error("That event can't be changed here.");
-  const recordId = master ?? `${LOCAL_CAL}:own${ownRecords.length + 1}-${Date.now()}`;
+  const existing = id ? findRecord(id) : undefined;
+  if (id && !existing) throw new Error("That event can't be changed here.");
+  const recordId = existing?.id ?? `${LOCAL_CAL}:own${ownRecords.length + 1}-${Date.now()}`;
+  const where = existing ? existing.destination : destination; // an event stays where it was saved
   const at = ownRecords.findIndex((r) => r.id === recordId);
-  if (at >= 0) ownRecords[at] = { id: recordId, input: clean, skipped: ownRecords[at]!.skipped };
-  else ownRecords.push({ id: recordId, input: clean });
-  if (!accounts.some((a) => a.id === "local-account")) {
+  if (at >= 0) ownRecords[at] = { id: recordId, input: clean, skipped: ownRecords[at]!.skipped, destination: where };
+  else ownRecords.push({ id: recordId, input: clean, destination: where });
+  if (!where && !accounts.some((a) => a.id === "local-account")) {
     accounts.push({
       id: "local-account",
       provider: "local",
@@ -301,7 +317,7 @@ function saveFixtureEvent(id: string | null, input: EventInput): CalEvent {
       last_error: null,
     });
   }
-  return expandOwn(recordId, clean)[0]!;
+  return expandOwn(recordId, clean, where)[0]!;
 }
 
 const visibleCalendarIds = () =>
@@ -432,35 +448,44 @@ export const fixtureBackend: Backend = {
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
   },
-  async createEvent(input) {
-    return saveFixtureEvent(null, input);
+  async createEvent(input, calendarId) {
+    if (calendarId) {
+      if (!settings.general.write_to_calendar_app) throw new Error("Turn on “Let Firstlight add events to the Calendar app” in Settings first.");
+      if (!WRITABLE.some((c) => c.id === calendarId)) throw new Error("That calendar can't be added to.");
+      if (params.has("calfail")) throw new Error("The Calendar app couldn't save that. Nothing was changed.");
+    }
+    return saveFixtureEvent(null, input, calendarId);
+  },
+  async writableCalendars() {
+    return settings.general.write_to_calendar_app ? structuredClone(WRITABLE) : [];
   },
   async updateEvent(id, input) {
     return saveFixtureEvent(id, input);
   },
   async deleteEvent(id) {
-    const master = `${LOCAL_CAL}:${id.slice(LOCAL_CAL.length + 1).split(":")[0]}`;
-    const i = ownRecords.findIndex((r) => r.id === master);
-    if (i < 0) throw new Error("That event can't be changed here.");
-    ownRecords.splice(i, 1);
+    const rec = findRecord(id);
+    if (!rec) throw new Error("That event can't be changed here.");
+    if (rec.destination && !settings.general.write_to_calendar_app) throw new Error("Turn on adding events to the Calendar app to delete this one.");
+    ownRecords.splice(ownRecords.indexOf(rec), 1);
   },
   async skipOccurrence(id) {
-    const [master, key] = [`${LOCAL_CAL}:${id.slice(LOCAL_CAL.length + 1).split(":")[0]}`, id.split(":")[2]];
-    const rec = ownRecords.find((r) => r.id === master);
+    const rec = findRecord(id);
+    const key = id.split(":")[2];
+    if (rec?.destination) throw new Error("Single days can't be removed from an event in the Calendar app yet.");
     if (!rec || !key || !rec.input.repeat) throw new Error("Only one day of a repeating event can be removed.");
     rec.skipped = [...new Set([...(rec.skipped ?? []), key])];
   },
   async exportOwnEvents() {
-    if (ownRecords.length === 0) throw new Error("You haven't added any events of your own yet.");
-    return { path: "/Users/you/Downloads/firstlight-events.ics", count: ownRecords.length };
+    const local = ownRecords.filter((r) => !r.destination);
+    if (local.length === 0) throw new Error("You haven't added any events of your own yet.");
+    return { path: "/Users/you/Downloads/firstlight-events.ics", count: local.length };
   },
   async getSystemAccent() {
     return params.get("sysaccent");
   },
   async getOwnEvent(id) {
-    const master = `${LOCAL_CAL}:${id.slice(LOCAL_CAL.length + 1).split(":")[0]}`;
-    const rec = ownRecords.find((r) => r.id === master);
-    return rec ? structuredClone(rec) : null;
+    const rec = findRecord(id);
+    return rec ? { id: rec.id, input: structuredClone(rec.input), saved_to: rec.destination ?? null } : null;
   },
   async prepareInvite(id, recipients, openMail) {
     await sleep(150);

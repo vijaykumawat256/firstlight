@@ -84,6 +84,51 @@ pub struct SysEvent {
     pub modified: Option<i64>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SysFreq {
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
+}
+
+/// How an event Firstlight adds repeats: every `interval` days, weeks, months or years, up to an optional last day.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SysRepeat {
+    pub freq: SysFreq,
+    pub interval: u32,
+    /// The last day it can happen (local date, inclusive).
+    pub until: Option<NaiveDate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SysWhen {
+    Timed {
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    },
+    /// Local dates; `last` is the final day (inclusive).
+    AllDay { first: NaiveDate, last: NaiveDate },
+}
+
+/// An event Firstlight asks the Calendar app to keep. Only what the form collects: no attendees (the
+/// Calendar app cannot add people to an event from outside; "Send invitation" is how they are told).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SysNewEvent {
+    pub title: String,
+    pub when: SysWhen,
+    pub location: Option<String>,
+    pub url: Option<String>,
+    pub notes: Option<String>,
+    pub repeat: Option<SysRepeat>,
+    /// An alert this many minutes before the start (timed events only).
+    pub alarm_minutes: Option<u32>,
+}
+
+fn cannot_write() -> Error {
+    Error::Invalid("Adding events to the Calendar app isn't available on this computer.")
+}
+
 /// What the operating-system layer must provide. Implemented per platform in the shell.
 pub trait SystemSource: Send + Sync {
     fn access(&self) -> Access;
@@ -97,6 +142,23 @@ pub trait SystemSource: Send + Sync {
         from: DateTime<Utc>,
         to: DateTime<Utc>,
     ) -> Result<Vec<SysEvent>>;
+
+    /// Creates an event in `calendar_id`, or (with `existing`) replaces what an event Firstlight created before
+    /// holds, and returns the store's identifier for it. A repeating event is changed as a whole.
+    fn save_event(
+        &self,
+        _calendar_id: &str,
+        _existing: Option<&str>,
+        _event: &SysNewEvent,
+        _tz: Tz,
+    ) -> Result<String> {
+        Err(cannot_write())
+    }
+
+    /// Removes an event Firstlight created (all of it, if it repeats).
+    fn delete_event(&self, _event_id: &str) -> Result<()> {
+        Err(cannot_write())
+    }
 }
 
 pub struct SystemProvider {

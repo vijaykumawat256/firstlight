@@ -51,6 +51,7 @@
     "allow-enable-account-mail",
     "allow-ai-keys",
     "allow-sign-in-openrouter",
+    "allow-writable-calendars",
     "allow-get-own-event",
     "allow-export-own-events",
     "allow-skip-event-occurrence",

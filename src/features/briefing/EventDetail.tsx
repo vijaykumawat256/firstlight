@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage, type CalEvent, type CalendarInfo, type OwnEvent } from "@/api";
-import { EventForm, OWN_CALENDAR_ID } from "@/features/events/EventForm";
+import { EventForm } from "@/features/events/EventForm";
 import { InviteDialog } from "@/features/events/InviteDialog";
 import { Badge, Button, Sheet, calendarColour, useToasts } from "@/design";
 import { CopyLinkButton } from "./CopyLinkButton";
@@ -115,14 +115,17 @@ export function EventDetail({
         tone: "danger",
       }),
   });
-  const own = event?.calendar_id === OWN_CALENDAR_ID;
-  // What you typed for your own events (repeat rule, reminder, invitees); other calendars' events have none.
+  // What you typed for events Firstlight created (here, or saved into the Calendar app); events that came
+  // from a connected calendar have no such record and can never be changed from here.
   const record = useQuery({
     queryKey: ["own-event", event?.id],
     queryFn: () => api.getOwnEvent(event!.id),
-    enabled: own,
+    enabled: event !== null,
   });
+  const own = !!record.data;
   const info = record.data?.input;
+  const savedTo = record.data?.saved_to ?? null;
+  const savedCalendar = savedTo ? calendars.find((c) => c.remote_id === savedTo)?.name : undefined;
   const series = !!event?.recurrence_master_id;
   /** This one day's details as a separate, non-repeating event for the form. */
   const editOne = () => {
@@ -137,7 +140,7 @@ export function EventDetail({
       start: w.start,
       end: last ? `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}` : w.end,
     };
-    setDetachTarget({ id: event.id, own: { id: "", input } });
+    setDetachTarget({ id: event.id, own: { id: "", input, saved_to: null } });
     onClose();
   };
   const edit = useMutation({
@@ -251,8 +254,17 @@ export function EventDetail({
                 </div>
               )}
             </dl>
-            {own && info && (info.repeat || info.reminder_minutes || info.invitees.length > 0) && (
+            {own && info && (info.repeat || info.reminder_minutes || info.invitees.length > 0 || savedTo) && (
               <dl className="flex flex-col gap-3 text-body">
+                {savedTo && (
+                  <div className="flex gap-3">
+                    <CalendarIcon className="mt-0.5 size-4 shrink-0 text-fg-2" aria-hidden />
+                    <dt className="sr-only">Saved in</dt>
+                    <dd className="text-fg">
+                      Saved in your Calendar app{savedCalendar ? ` (${savedCalendar})` : ""}. Deleting it here deletes it there too.
+                    </dd>
+                  </div>
+                )}
                 {info.repeat && (
                   <div className="flex gap-3">
                     <Repeat className="mt-0.5 size-4 shrink-0 text-fg-2" aria-hidden />
@@ -286,7 +298,7 @@ export function EventDetail({
                 >
                   {series ? "Edit all" : "Edit"}
                 </Button>
-                {series && info && (
+                {series && info && !savedTo && (
                   <Button
                     variant="secondary"
                     leading={<Pencil className="size-4" aria-hidden />}
@@ -326,7 +338,7 @@ export function EventDetail({
                   </>
                 ) : (
                   <>
-                    {series && (
+                    {series && !savedTo && (
                       <Button
                         variant="plain"
                         leading={<Trash2 className="size-4" aria-hidden />}

@@ -59,6 +59,15 @@ export interface EventInput {
 export interface OwnEvent {
   id: string;
   input: EventInput;
+  /** The Calendar app's calendar it was saved to; null if it lives only on this computer. */
+  saved_to: string | null;
+}
+
+/** A calendar in the Calendar app that events can be added to. */
+export interface WritableCalendar {
+  id: string;
+  name: string;
+  source: string;
 }
 
 export interface ExportResult {
@@ -156,6 +165,7 @@ export interface AppSettings {
     time_format: TimeFormat;
     global_shortcut: string | null;
     show_in_dock: boolean;
+    write_to_calendar_app: boolean;
     join_shortcut: string | null;
     tray_next_meeting: boolean;
     check_for_updates: boolean;

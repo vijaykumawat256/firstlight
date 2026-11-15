@@ -258,3 +258,47 @@ test("one day of a repeating event can be removed or changed on its own", async 
   await expect(one.getByRole("button", { name: "Delete this day" })).toHaveCount(0);
   await expect(one.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
 });
+
+test("Calendar-app saving is off by default: no 'Save to' choice", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await expect(sheet.getByLabel("Title")).toBeVisible();
+  await expect(sheet.getByText("Save to")).toHaveCount(0);
+});
+
+test("with the setting on, an event can be saved to a calendar, and changes follow it", async ({ page }) => {
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/?writeon");
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByRole("combobox", { name: "Save to" }).click();
+  await page.getByRole("option", { name: /Work/ }).click();
+  await sheet.getByLabel("Title").fill("Eye test");
+  await sheet.getByLabel("Start time").fill("17:00");
+  await sheet.getByLabel("End time").fill("17:30");
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  const row = page.getByRole("button", { name: /^(?!Join|Copy).*Eye test/ });
+  await expect(row).toBeVisible();
+
+  await row.click();
+  const detail = page.getByRole("dialog", { name: "Eye test" });
+  await expect(detail).toContainText("Calendar app");
+  await detail.getByRole("button", { name: "Edit" }).click();
+  const edit = page.getByRole("dialog", { name: "Edit event" });
+  await edit.getByLabel("Title").fill("Eye test (moved)");
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("button", { name: /^(?!Join|Copy).*Eye test \(moved\)/ })).toBeVisible();
+});
+
+test("a failed Calendar-app save says so and keeps the form", async ({ page }) => {
+  await page.goto("/?writeon&calfail");
+  await page.getByRole("button", { name: "New event" }).click();
+  const sheet = page.getByRole("dialog", { name: "New event" });
+  await sheet.getByRole("combobox", { name: "Save to" }).click();
+  await page.getByRole("option", { name: /Work/ }).click();
+  await sheet.getByLabel("Title").fill("Nope");
+  await sheet.getByRole("button", { name: "Add event" }).click();
+  await expect(page.getByText(/Calendar app couldn't save/).first()).toBeVisible();
+  await expect(sheet).toBeVisible();
+});

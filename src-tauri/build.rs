@@ -69,6 +69,7 @@ fn main() {
             "enable_account_mail",
             "ai_keys",
             "sign_in_openrouter",
+            "writable_calendars",
             "get_own_event",
             "export_own_events",
             "skip_event_occurrence",

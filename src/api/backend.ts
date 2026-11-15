@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, EventInput, ExportResult, ImapPreset, InviteResult, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, EventInput, ExportResult, ImapPreset, InviteResult, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -15,7 +15,10 @@ export interface Backend {
   /** Asks Google/Microsoft for permission to read this account's mail, then turns it on. */
   enableAccountMail(accountId: string): Promise<AppSettings>;
   /** Add, change or remove an event of your own (stored only on this computer). */
-  createEvent(input: EventInput): Promise<CalEvent>;
+  /** With `calendarId` (one of `writableCalendars`) the event is saved into that Calendar-app calendar. */
+  createEvent(input: EventInput, calendarId?: string): Promise<CalEvent>;
+  /** The calendars events can be added to: empty unless the setting is on and access was allowed. */
+  writableCalendars(): Promise<WritableCalendar[]>;
   getOwnEvent(id: string): Promise<OwnEvent | null>;
   /** Saves everything you added as one calendar file in Downloads. */
   exportOwnEvents(): Promise<ExportResult>;

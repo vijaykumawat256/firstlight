@@ -5,7 +5,9 @@
 //! non-thread-safe Objective-C object is shared between threads.
 
 use chrono::{DateTime, Utc};
-use firstlight_core::providers::system::{Access, SysCalendar, SysEvent, SystemSource};
+use firstlight_core::providers::system::{
+    Access, SysCalendar, SysEvent, SysNewEvent, SystemSource,
+};
 use firstlight_core::{Error, Result};
 
 #[cfg(target_os = "macos")]
@@ -13,13 +15,16 @@ mod mac {
     use super::*;
     use block2::{DynBlock, RcBlock};
     use firstlight_core::providers::system::{SysCalendarKind, SysResponse, SysStatus};
+    use firstlight_core::providers::system::{SysFreq, SysWhen};
+    use objc2::AnyThread;
     use objc2::rc::autoreleasepool;
     use objc2::runtime::{Bool, NSObjectProtocol};
     use objc2_event_kit::{
-        EKAuthorizationStatus, EKCalendarType, EKEntityType, EKEvent, EKEventStatus, EKEventStore,
-        EKParticipantStatus,
+        EKAlarm, EKAuthorizationStatus, EKCalendarType, EKEntityType, EKEvent, EKEventStatus,
+        EKEventStore, EKParticipantStatus, EKRecurrenceEnd, EKRecurrenceFrequency,
+        EKRecurrenceRule, EKSpan,
     };
-    use objc2_foundation::{NSArray, NSDate, NSError, NSString};
+    use objc2_foundation::{NSArray, NSDate, NSError, NSString, NSTimeZone, NSURL};
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -203,6 +208,134 @@ mod mac {
                 };
                 let events = unsafe { store.eventsMatchingPredicate(&predicate) };
                 Ok(events.iter().filter_map(|e| map_event(&e)).collect())
+            })
+        }
+
+        /// Creates or replaces an event Firstlight added. Needs the same full access that reading needs, and
+        /// the calendar must accept changes. A repeating event is replaced as a whole (this and all later days,
+        /// from its first day).
+        fn save_event(
+            &self,
+            calendar_id: &str,
+            existing: Option<&str>,
+            e: &SysNewEvent,
+            tz: chrono_tz::Tz,
+        ) -> Result<String> {
+            if status() != Access::Granted {
+                return Err(Error::PermissionNeeded);
+            }
+            autoreleasepool(|_| {
+                let store = unsafe { EKEventStore::new() };
+                let Some(cal) =
+                    (unsafe { store.calendarWithIdentifier(&NSString::from_str(calendar_id)) })
+                else {
+                    return Err(Error::Provider("calendar not found".into()));
+                };
+                if !unsafe { cal.allowsContentModifications() } {
+                    return Err(Error::Invalid("That calendar can't be added to."));
+                }
+                let ev = match existing {
+                    Some(id) => unsafe { store.eventWithIdentifier(&NSString::from_str(id)) }
+                        .ok_or_else(|| {
+                            Error::Provider("the event is no longer in the Calendar app".into())
+                        })?,
+                    None => unsafe { EKEvent::eventWithEventStore(&store) },
+                };
+                let ns = |s: &str| NSString::from_str(s);
+                let date =
+                    |d: DateTime<Utc>| NSDate::dateWithTimeIntervalSince1970(d.timestamp() as f64);
+                unsafe {
+                    ev.setCalendar(Some(&cal));
+                    ev.setTitle(Some(&ns(&e.title)));
+                    match &e.when {
+                        SysWhen::Timed { start, end } => {
+                            ev.setAllDay(false);
+                            ev.setTimeZone(NSTimeZone::timeZoneWithName(&ns(tz.name())).as_deref());
+                            ev.setStartDate(Some(&date(*start)));
+                            ev.setEndDate(Some(&date(*end)));
+                        }
+                        SysWhen::AllDay { first, last } => {
+                            ev.setAllDay(true);
+                            ev.setTimeZone(None);
+                            let at = |d: chrono::NaiveDate, h, m, s| {
+                                firstlight_core::tz::local_to_utc(
+                                    tz,
+                                    d.and_hms_opt(h, m, s).unwrap_or_default(),
+                                )
+                            };
+                            ev.setStartDate(Some(&date(at(*first, 0, 0, 0))));
+                            ev.setEndDate(Some(&date(at(*last, 23, 59, 59))));
+                        }
+                    }
+                    ev.setLocation(e.location.as_deref().map(ns).as_deref());
+                    ev.setNotes(e.notes.as_deref().map(ns).as_deref());
+                    ev.setURL(
+                        e.url
+                            .as_deref()
+                            .and_then(|u| NSURL::URLWithString(&ns(u)))
+                            .as_deref(),
+                    );
+                    // Repeat: replaced as a whole, so an edit can change or remove it.
+                    ev.setRecurrenceRules(None);
+                    if let Some(r) = &e.repeat {
+                        let freq = match r.freq {
+                            SysFreq::Daily => EKRecurrenceFrequency::Daily,
+                            SysFreq::Weekly => EKRecurrenceFrequency::Weekly,
+                            SysFreq::Monthly => EKRecurrenceFrequency::Monthly,
+                            SysFreq::Yearly => EKRecurrenceFrequency::Yearly,
+                        };
+                        let end = r.until.map(|d| {
+                            let last_moment = firstlight_core::tz::local_to_utc(
+                                tz,
+                                d.and_hms_opt(23, 59, 59).unwrap_or_default(),
+                            );
+                            EKRecurrenceEnd::recurrenceEndWithEndDate(&date(last_moment))
+                        });
+                        let rule = EKRecurrenceRule::initRecurrenceWithFrequency_interval_end(
+                            EKRecurrenceRule::alloc(),
+                            freq,
+                            r.interval as isize,
+                            end.as_deref(),
+                        );
+                        ev.setRecurrenceRules(Some(&NSArray::from_retained_slice(&[rule])));
+                    }
+                    ev.setAlarms(None);
+                    if let Some(m) = e.alarm_minutes {
+                        let alarm = EKAlarm::alarmWithRelativeOffset(-(f64::from(m)) * 60.0);
+                        ev.setAlarms(Some(&NSArray::from_retained_slice(&[alarm])));
+                    }
+                }
+                let span = if existing.is_some() {
+                    EKSpan::FutureEvents
+                } else {
+                    EKSpan::ThisEvent
+                };
+                unsafe { store.saveEvent_span_error(&ev, span) }.map_err(|_| {
+                    Error::Provider("the Calendar app could not save the event".into())
+                })?;
+                unsafe { ev.eventIdentifier() }
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| {
+                        Error::Provider("the Calendar app did not name the event".into())
+                    })
+            })
+        }
+
+        /// Removes an event Firstlight added, with every repeat. Already gone counts as done.
+        fn delete_event(&self, event_id: &str) -> Result<()> {
+            if status() != Access::Granted {
+                return Err(Error::PermissionNeeded);
+            }
+            autoreleasepool(|_| {
+                let store = unsafe { EKEventStore::new() };
+                let Some(ev) =
+                    (unsafe { store.eventWithIdentifier(&NSString::from_str(event_id)) })
+                else {
+                    return Ok(());
+                };
+                unsafe { store.removeEvent_span_error(&ev, EKSpan::FutureEvents) }.map_err(|_| {
+                    Error::Provider("the Calendar app could not remove the event".into())
+                })
             })
         }
     }

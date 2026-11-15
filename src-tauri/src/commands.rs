@@ -323,14 +323,19 @@ pub async fn remove_account(state: State<'_, AppState>, id: String) -> CmdResult
         .map_err(internal("removing the account"))
 }
 
-/// Adds an event of the user's own. It is stored only on this computer.
+/// Adds an event of the user's own. With `calendar_id` (one of `writable_calendars`) it is saved into that
+/// calendar in the Calendar app, which needs the setting to be on; otherwise it stays only on this computer.
 #[tauri::command]
 pub async fn create_event(
     app: AppHandle,
     state: State<'_, AppState>,
     event: firstlight_core::local::EventInput,
+    calendar_id: Option<String>,
 ) -> CmdResult<Event> {
-    save_own_event(&app, &state, None, event)
+    match calendar_id {
+        None => save_own_event(&app, &state, None, event),
+        Some(cal) => save_calendar_event(&app, &state, None, &cal, event),
+    }
 }
 
 #[tauri::command]
@@ -340,18 +345,134 @@ pub async fn update_event(
     id: String,
     event: firstlight_core::local::EventInput,
 ) -> CmdResult<Event> {
-    save_own_event(&app, &state, Some(&id), event)
+    // An event saved in the Calendar app is changed there; one kept only here is changed here.
+    let saved_to = {
+        let store = lock_store(&state)?;
+        firstlight_core::local::get(&store, &id)
+            .map_err(user_input_error)?
+            .and_then(|o| o.saved_to)
+    };
+    match saved_to {
+        Some(cal) => save_calendar_event(&app, &state, Some(&id), &cal, event),
+        None => save_own_event(&app, &state, Some(&id), event),
+    }
 }
 
-/// Removes one of the user's own events. Events from connected calendars can never be removed here.
+/// Removes one of the user's own events (and, if it was saved in the Calendar app, from there too). Events
+/// Firstlight did not create can never be removed here.
 #[tauri::command]
 pub async fn delete_event(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    let allowed = calendar_writing_allowed(&state).is_ok();
     {
         let mut store = lock_store(&state)?;
-        firstlight_core::local::delete(&mut store, &id, Utc::now()).map_err(user_input_error)?;
+        // Without the setting the Calendar app is not handed in, so an event that lives there is refused.
+        let source: Option<&dyn firstlight_core::providers::system::SystemSource> =
+            allowed.then(|| state.deps.system.as_ref());
+        firstlight_core::local::delete_with(&mut store, source, &id, Utc::now())
+            .map_err(user_input_error)?;
     }
+    state.sync.trigger(Trigger::Manual);
     let _ = app.emit("events-changed", ());
     Ok(())
+}
+
+/// Whether Firstlight may write to the Calendar app right now: the user turned it on, and the system
+/// allowed access to calendars. Both are checked at the moment of every write.
+fn calendar_writing_allowed(state: &AppState) -> CmdResult<()> {
+    use firstlight_core::providers::system::Access;
+    if !lock_store(state)?
+        .load_settings()
+        .general
+        .write_to_calendar_app
+    {
+        return Err(
+            "Turn on “Let Firstlight add events to the Calendar app” in Settings first.".into(),
+        );
+    }
+    if state.deps.system.access() != Access::Granted {
+        return Err("Allow Firstlight to use your calendars in System Settings first.".into());
+    }
+    Ok(())
+}
+
+/// A calendar in the Calendar app that events can be added to.
+#[derive(serde::Serialize)]
+pub struct WritableCalendar {
+    id: String,
+    name: String,
+    source: String,
+}
+
+fn writable_list(state: &AppState) -> CmdResult<Vec<WritableCalendar>> {
+    use firstlight_core::providers::system::SysCalendarKind;
+    Ok(state
+        .deps
+        .system
+        .calendars()
+        .map_err(internal("reading the calendars"))?
+        .into_iter()
+        // Birthdays and subscribed calendars are read-only by nature; anything the system says it will not let
+        // anyone change is left out too.
+        .filter(|c| {
+            !c.read_only
+                && !matches!(
+                    c.kind,
+                    SysCalendarKind::Birthday | SysCalendarKind::Subscription
+                )
+        })
+        .map(|c| WritableCalendar {
+            id: c.id,
+            name: c.title,
+            source: c.source,
+        })
+        .collect())
+}
+
+/// The calendars the "Save to" menu offers. Empty unless the setting is on and access was allowed, so the
+/// form shows nothing extra to anyone who has not opted in.
+#[tauri::command]
+pub async fn writable_calendars(state: State<'_, AppState>) -> CmdResult<Vec<WritableCalendar>> {
+    if calendar_writing_allowed(&state).is_err() {
+        return Ok(vec![]);
+    }
+    writable_list(&state)
+}
+
+fn save_calendar_event(
+    app: &AppHandle,
+    state: &AppState,
+    id: Option<&str>,
+    calendar_id: &str,
+    event: firstlight_core::local::EventInput,
+) -> CmdResult<Event> {
+    calendar_writing_allowed(state)?;
+    // A new event may only go to a calendar the system lists as changeable (an edit keeps its own calendar).
+    if id.is_none() && !writable_list(state)?.iter().any(|c| c.id == calendar_id) {
+        return Err("That calendar can't be added to.".into());
+    }
+    let saved = {
+        let mut store = lock_store(state)?;
+        firstlight_core::local::save_to_calendar(
+            &mut store,
+            state.deps.system.as_ref(),
+            id,
+            calendar_id,
+            &event,
+            crate::local_tz(),
+            Utc::now(),
+        )
+        .map_err(|e| match e {
+            Error::Invalid(m) => m.to_string(),
+            Error::PermissionNeeded => {
+                "Allow Firstlight to use your calendars in System Settings first.".to_string()
+            }
+            _ => "The Calendar app couldn't save that. Nothing was changed.".to_string(),
+        })?
+    };
+    // Bring the saved event back through the normal sync so it appears like any other event.
+    state.sync.trigger(Trigger::Manual);
+    let _ = app.emit("events-changed", ());
+    Ok(saved)
 }
 
 /// `dir/stem.ext`, or `dir/stem (2).ext` and so on: never overwrites something the user already has.

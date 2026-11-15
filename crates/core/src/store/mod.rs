@@ -498,6 +498,12 @@ impl Store {
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
+    /// For tests of failure handling: makes every later write of an own event fail.
+    #[cfg(test)]
+    pub fn drop_own_events_table_for_tests(&self) {
+        self.conn.execute_batch("DROP TABLE own_events").unwrap();
+    }
+
     pub fn delete_own_event(&self, id: &str) -> Result<()> {
         self.conn
             .execute("DELETE FROM own_events WHERE id = ?1", [id])?;

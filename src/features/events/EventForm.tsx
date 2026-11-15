@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { api, errorMessage, type EventInput, type OwnEvent } from "@/api";
 import {
@@ -216,6 +216,11 @@ function FormSheet({
   );
   const notesId = useId();
   const editing = !!initial && !detach;
+  // Where a NEW event goes: only here, or into a calendar in the Calendar app. The menu has more than "this
+  // computer" only when the user turned that on in Settings and allowed access.
+  const [destination, setDestination] = useState("local");
+  const writable = useQuery({ queryKey: ["writable-calendars"], queryFn: () => api.writableCalendars(), staleTime: 0 });
+  const choices = !initial && !detach ? (writable.data ?? []) : [];
 
   const save = useMutation({
     mutationFn: async () => {
@@ -228,7 +233,7 @@ function FormSheet({
       }
       return initial
         ? api.updateEvent(initial.id, input)
-        : api.createEvent(input);
+        : api.createEvent(input, destination === "local" ? undefined : destination);
     },
     onSuccess: () => {
       void qc.invalidateQueries();
@@ -289,6 +294,24 @@ function FormSheet({
             {errorMessage(save.error)}
           </p>
         )}
+        {choices.length > 0 && (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-headline text-fg">Save to</span>
+            <Select
+              label="Save to"
+              value={destination}
+              onValueChange={setDestination}
+              options={[
+                { value: "local", label: "This computer only" },
+                ...choices.map((c) => ({ value: c.id, label: c.source ? `${c.name} (${c.source})` : c.name })),
+              ]}
+            />
+          </div>
+        )}
+        {destination !== "local" && choices.length > 0 && (
+          <p className="text-footnote text-fg-2">It is added to that calendar in your Calendar app, so it appears on your other devices too. People you invite are not emailed by it: use Send invitation for that.</p>
+        )}
+        {initial?.saved_to && !detach && <p className="text-footnote text-fg-2">This event is in your Calendar app, so changes you make here are made there too.</p>}
         <TextField
           label="Title"
           value={d.title}

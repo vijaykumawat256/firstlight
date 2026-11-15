@@ -27,6 +27,9 @@ If you add invitees and save to Google or Outlook, **the provider emails them**.
 2. Approve invitations being a separate, default-off switch (recommended).
 3. Which comes first, Google or Microsoft? (Both are similar; one at a time halves the live testing.)
 
+### Update 2026-11-14: Mac Calendar app write built
+Built, opt-in (default off), macOS only: see CLAUDE.md "Writing to the Calendar app". Not built: the same for Windows/Linux (needs CalDAV write, testable with a mock server) and Google/Microsoft (needs live accounts). Real email sending (SMTP through a connected mailbox, proper meeting-request format) is proposed, not built: it would reverse the "Firstlight never sends mail" rule and needs the user's decision.
+
 ## 2. Incremental sync for Google and Microsoft: deliberately not built yet
 
 Today each sync re-reads the whole window (30 days back, 90 forward) every 10 minutes. That is a little wasteful but always correct. Incremental sync only saves bandwidth, and getting it wrong **silently hides events**, which is the worst failure a calendar can have. I am not willing to ship it unverified:

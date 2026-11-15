@@ -89,6 +89,9 @@ pub struct GeneralSettings {
     pub time_format: TimeFormat,
     /// A global shortcut that shows or hides the briefing, e.g. `CmdOrCtrl+Shift+Space`.
     pub global_shortcut: Option<String>,
+    /// Let Firstlight add the events you create to a calendar in the Calendar app (and change or delete the ones
+    /// it added). Off by default: Firstlight otherwise only reads your calendars.
+    pub write_to_calendar_app: bool,
     /// Show a Dock icon (macOS) or taskbar button (Windows). Off keeps Firstlight in the menu bar or tray only.
     pub show_in_dock: bool,
     /// A global shortcut that opens the video link of the meeting that is starting or running.
@@ -110,6 +113,7 @@ impl Default for GeneralSettings {
             time_format: TimeFormat::Auto,
             global_shortcut: None,
             show_in_dock: true,
+            write_to_calendar_app: false,
             join_shortcut: None,
             tray_next_meeting: false,
             check_for_updates: true,
@@ -705,6 +709,7 @@ impl AppSettings {
         };
         let mut imported = Self::from_value(inner);
         // Agreement to send data to an AI service must be given on this computer, never inherited from a file.
+        imported.general.write_to_calendar_app = false; // writing to a calendar is never switched on by a file
         imported.ai.consented = None;
         imported.ai.consented_host = None;
         imported.ai.enabled = false;

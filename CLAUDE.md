@@ -123,6 +123,12 @@ Queued, not built: Apple Mail digest (unread, important senders, invitations) vi
 - Invitations (`crates/core/src/invite.rs`): Firstlight NEVER sends mail. `prepare_invite` saves an `.ics` to Downloads (never overwriting), reveals it, and opens a `mailto:` draft in the user's own mail app. Recipients are validated strictly; subject/body are percent-encoded; a connected calendar's description is never copied into an email. METHOD:PUBLISH, no ORGANIZER/ATTENDEE, so replies don't come back to the user; the file just lets people add it to a calendar.
 - Found while building this: an all-day recurring event ending on a date (`UNTIL=20261119`, as Google and Apple write it) used to expand to only its first day; fixed in `ics::date_until_to_datetime` with a regression test.
 
+## Writing to the Calendar app (macOS, opt-in)
+- `general.write_to_calendar_app` (OFF by default; Settings, Privacy & data, only where the Calendar app is supported). When on and access is granted (`calendar_writing_allowed`), the New event form offers "Save to" a writable calendar. Permission is re-checked on every write.
+- Only events Firstlight created can be changed or removed: `own_events` keeps a `remote` pointer (`RemoteRef`), `local::resolve` maps a synced Calendar-app row back to it. The Calendar app is written first, then the record; a failed record write undoes a new Calendar-app event. Series are changed whole; "this day only" actions are hidden for these events. `export_all` and reminders skip them (the Calendar app owns those).
+- Rust: `SystemSource::save_event/delete_event` (default: error), macOS impl in `eventkit.rs`. Never run against the real Calendar app yet (needs the user's permission click). Other platforms: nothing writes yet; CalDAV/Google/Microsoft write is design-only in `docs/NEXT.md`.
+- Browser fixture: `?writeon` turns the setting on, `?calfail` makes the save fail.
+
 ## Look and one-day edits
 - The default accent follows the macOS accent colour (`get_system_accent`, mapped by `accent_name`; blue, yellow, graphite and non-macOS give the normal default). The applier re-reads it on window focus. The up-next window's capability file allows that one read-only command.
 - Optional time-of-day tint: `appearance.ambient` (off by default) sets `data-ambient` on `<html>` (morning/day/evening/night, re-evaluated every 5 minutes); the CSS is a faint wash from the top (`tokens.css`). Axe-tested in light and dark. PLAN.md says no decorative gradients; this exists because the user asked, and stays opt-in.

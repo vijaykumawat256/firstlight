@@ -95,6 +95,7 @@ export function SettingsScreen() {
     onError: () => push({ title: "Couldn't copy to the clipboard", tone: "danger" }),
   });
 
+  const sysCal = useQuery({ queryKey: ["system-status"], queryFn: () => api.systemCalendarStatus() });
   const crash = useQuery({ queryKey: ["crash-report"], queryFn: () => api.getLastCrashReport() });
   const [reportOpen, setReportOpen] = useState(false);
   const clearReports = useMutation({
@@ -400,6 +401,21 @@ export function SettingsScreen() {
                 </Button>
               </SettingRow>
             </Group>
+
+            {sysCal.data?.supported && (
+              <Group title="Your calendars">
+                <SettingRow
+                  title="Let Firstlight add events to the Calendar app"
+                  description="Off by default. When on, the New event form can save into a calendar in your Calendar app, and only events Firstlight created there can be changed or removed. Anything already in your calendars stays untouched. The Mac asks your permission first."
+                >
+                  <Switch
+                    label="Add events to the Calendar app"
+                    checked={s.general.write_to_calendar_app}
+                    onCheckedChange={(v) => update((d) => void (d.general.write_to_calendar_app = v))}
+                  />
+                </SettingRow>
+              </Group>
+            )}
 
             <Group title="Crash reports">
               <SettingRow title="Crash reports" description="If Firstlight stops unexpectedly, save a short report on this computer. It contains no calendar or email information and is never sent anywhere.">

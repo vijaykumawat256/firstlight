@@ -9,6 +9,7 @@
 
 use crate::invite::{self, IcsExtras};
 use crate::model::*;
+use crate::providers::system::{SysFreq, SysNewEvent, SysRepeat, SysWhen, SystemSource};
 use crate::store::Store;
 use crate::{Error, Result, join};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
@@ -62,6 +63,15 @@ pub struct EventInput {
     pub invitees: Vec<String>,
 }
 
+/// Where an event Firstlight created lives in the Calendar app, when the user chose to save it there.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteRef {
+    /// The Calendar app's identifier for the calendar it was put in.
+    pub calendar_id: String,
+    /// The Calendar app's identifier for the event.
+    pub event_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Stored {
     input: EventInput,
@@ -70,6 +80,10 @@ struct Stored {
     /// Occurrences of a repeating event that were removed (or moved to a one-off event), by their key.
     #[serde(default)]
     skipped: Vec<String>,
+    /// Set when the event was saved into the Calendar app. Its dated rows then come back through the normal
+    /// sync like any other event there, so none are generated here (that would show it twice).
+    #[serde(default)]
+    remote: Option<RemoteRef>,
 }
 
 /// An own event as the edit form needs it.
@@ -78,6 +92,8 @@ pub struct OwnEvent {
     /// The event's id (the series id for a repeating one).
     pub id: String,
     pub input: EventInput,
+    /// The Calendar app's calendar it was saved to, if it was saved there rather than only on this computer.
+    pub saved_to: Option<String>,
 }
 
 fn clean(s: &Option<String>, max: usize, too_long: &'static str) -> Result<Option<String>> {
@@ -247,6 +263,9 @@ fn expand(
     now: DateTime<Utc>,
 ) -> Result<Vec<Event>> {
     let tz: Tz = stored.tz.parse().unwrap_or(chrono_tz::UTC);
+    if stored.remote.is_some() {
+        return Ok(vec![]);
+    }
     let base = build_event(&stored.input, Some(master), tz, now)?;
     let (_, rule) = check_extras(&stored.input, &base, tz)?;
     let Some(rule) = rule else {
@@ -347,13 +366,15 @@ pub fn save(
     let master = match id {
         None => None,
         Some(id) => {
-            let m = own_master_id(id)?;
-            if store.get_own_event(m)?.is_none() {
+            let m =
+                resolve(store, id)?.ok_or(Error::Invalid("That event can't be changed here."))?;
+            if load(store, &m)?.is_none_or(|s| s.remote.is_some()) {
                 return Err(Error::Invalid("That event can't be changed here."));
             }
             Some(m)
         }
     };
+    let master = master.as_deref();
     let base = build_event(input, master, tz, now)?;
     let (clean_input, _) = check_extras(input, &base, tz)?;
     // Editing the series keeps the days already removed from it.
@@ -369,6 +390,7 @@ pub fn save(
         input: clean_input,
         tz: tz.name().to_string(),
         skipped,
+        remote: None,
     };
     let json = serde_json::to_string(&stored)
         .map_err(|_| Error::Invalid("That event couldn't be saved."))?;
@@ -377,27 +399,160 @@ pub fn save(
     Ok(base)
 }
 
-/// The record for the edit form. `id` may be the event or any one occurrence of a series.
-pub fn get(store: &Store, id: &str) -> Result<Option<OwnEvent>> {
-    let master = own_master_id(id)?;
+fn load(store: &Store, master: &str) -> Result<Option<Stored>> {
     Ok(store
         .get_own_event(master)?
-        .and_then(|j| serde_json::from_str::<Stored>(&j).ok())
-        .map(|s| OwnEvent {
-            id: format!("{CALENDAR_ID}:{master}"),
-            input: s.input,
-        }))
+        .and_then(|j| serde_json::from_str::<Stored>(&j).ok()))
+}
+
+/// The series id behind an event id. Either one of our own events (`local-events:...`), or an event that
+/// Firstlight saved into the Calendar app, which is found through the Calendar app's own identifier for it.
+/// `None` for anything else: events from connected calendars are never ours to change.
+pub fn resolve(store: &Store, id: &str) -> Result<Option<String>> {
+    if id.starts_with(&format!("{CALENDAR_ID}:")) {
+        return Ok(Some(own_master_id(id)?.to_string()));
+    }
+    let Some(ev) = store.get_event(id)? else {
+        return Ok(None);
+    };
+    if !ev
+        .calendar_id
+        .starts_with(&format!("{}:", crate::providers::system::SYSTEM_ACCOUNT_ID))
+    {
+        return Ok(None);
+    }
+    let system_id = ev.remote_id.split('#').next().unwrap_or("");
+    for (master, json) in store.all_own_events()? {
+        if serde_json::from_str::<Stored>(&json)
+            .ok()
+            .and_then(|s| s.remote)
+            .is_some_and(|r| r.event_id == system_id)
+        {
+            return Ok(Some(master));
+        }
+    }
+    Ok(None)
+}
+
+/// What the Calendar app is asked to keep for an event built from the form.
+fn to_sys(input: &EventInput, base: &Event) -> Result<SysNewEvent> {
+    let when = match &base.when {
+        When::Timed { start, end, .. } => SysWhen::Timed {
+            start: *start,
+            end: *end,
+        },
+        When::AllDay { start, end } => SysWhen::AllDay {
+            first: *start,
+            last: *end - Duration::days(1),
+        },
+    };
+    let repeat = match &input.repeat {
+        None => None,
+        Some(r) => Some(SysRepeat {
+            freq: match r.every.as_str() {
+                "daily" => SysFreq::Daily,
+                "weekly" => SysFreq::Weekly,
+                "monthly" => SysFreq::Monthly,
+                "yearly" => SysFreq::Yearly,
+                _ => return Err(Error::Invalid("Choose how often it repeats.")),
+            },
+            interval: r.interval,
+            until: r.until.as_deref().map(parse_date).transpose()?,
+        }),
+    };
+    Ok(SysNewEvent {
+        title: base.title.clone(),
+        when,
+        location: base.location.clone(),
+        url: base.join_url.clone(),
+        notes: base.description.clone(),
+        repeat,
+        alarm_minutes: input.reminder_minutes,
+    })
+}
+
+/// Adds an event to a calendar in the Calendar app (`id` is `None`), or changes one that Firstlight added
+/// before (then `calendar_id` is ignored: it stays where it is). The Calendar app is changed first; our own
+/// record is only written once that worked, and if writing it fails the new event is taken back out, so
+/// there is never a half-saved event.
+pub fn save_to_calendar(
+    store: &mut Store,
+    source: &dyn SystemSource,
+    id: Option<&str>,
+    calendar_id: &str,
+    input: &EventInput,
+    tz: Tz,
+    now: DateTime<Utc>,
+) -> Result<Event> {
+    let (master, existing) = match id {
+        None => (None, None),
+        Some(id) => {
+            let m =
+                resolve(store, id)?.ok_or(Error::Invalid("That event can't be changed here."))?;
+            let s = load(store, &m)?.ok_or(Error::Invalid("That event can't be changed here."))?;
+            if s.remote.is_none() {
+                return Err(Error::Invalid(
+                    "That event is stored only on this computer.",
+                ));
+            }
+            (Some(m), s.remote)
+        }
+    };
+    let base = build_event(input, master.as_deref(), tz, now)?;
+    let (clean_input, _) = check_extras(input, &base, tz)?;
+    let sys = to_sys(&clean_input, &base)?;
+    let target = existing
+        .as_ref()
+        .map_or(calendar_id, |r| r.calendar_id.as_str());
+    let event_id = source.save_event(
+        target,
+        existing.as_ref().map(|r| r.event_id.as_str()),
+        &sys,
+        tz,
+    )?;
+    let stored = Stored {
+        input: clean_input,
+        tz: tz.name().to_string(),
+        skipped: vec![],
+        remote: Some(RemoteRef {
+            calendar_id: target.to_string(),
+            event_id: event_id.clone(),
+        }),
+    };
+    let wrote = serde_json::to_string(&stored)
+        .map_err(|_| Error::Invalid("That event couldn't be saved."))
+        .and_then(|json| store.put_own_event(&base.remote_id, &json))
+        .and_then(|_| refresh(store, now));
+    if let Err(e) = wrote {
+        if existing.is_none() {
+            let _ = source.delete_event(&event_id); // take back what was just added
+        }
+        return Err(e);
+    }
+    Ok(base)
+}
+
+/// The record for the edit form. `id` may be the event or any one occurrence of a series.
+pub fn get(store: &Store, id: &str) -> Result<Option<OwnEvent>> {
+    let Some(master) = resolve(store, id)? else {
+        return Ok(None);
+    };
+    Ok(load(store, &master)?.map(|s| OwnEvent {
+        id: format!("{CALENDAR_ID}:{master}"),
+        input: s.input,
+        saved_to: s.remote.map(|r| r.calendar_id),
+    }))
 }
 
 /// What to put in an invitation file for one of our own events: the first occurrence and, for a
 /// repeating one, the recurrence rule, so the people invited get the whole series. `None` if `id`
 /// isn't ours.
 pub fn share_parts(store: &Store, id: &str) -> Result<Option<(Event, Option<String>)>> {
-    let master = own_master_id(id)?;
-    let Some(stored) = store
-        .get_own_event(master)?
-        .and_then(|j| serde_json::from_str::<Stored>(&j).ok())
-    else {
+    let Some(master) = resolve(store, id)? else {
+        return Ok(None);
+    };
+    let master = master.as_str();
+    let Some(stored) = load(store, master)? else {
         return Ok(None);
     };
     let tz: Tz = stored.tz.parse().unwrap_or(chrono_tz::UTC);
@@ -420,6 +575,11 @@ pub fn skip_occurrence(store: &mut Store, id: &str, now: DateTime<Utc>) -> Resul
         .get_own_event(master)?
         .and_then(|j| serde_json::from_str::<Stored>(&j).ok())
         .ok_or(Error::Invalid("That event can't be changed here."))?;
+    if stored.remote.is_some() {
+        return Err(Error::Invalid(
+            "Single days can't be removed from an event in the Calendar app yet.",
+        ));
+    }
     if stored.input.repeat.is_none() {
         return Err(Error::Invalid(
             "Only one day of a repeating event can be removed.",
@@ -456,6 +616,9 @@ pub fn export_all(store: &Store, now: DateTime<Utc>) -> Result<Option<(String, u
         let Ok(stored) = serde_json::from_str::<Stored>(&json) else {
             continue;
         };
+        if stored.remote.is_some() {
+            continue; // already in the Calendar app: exporting it would only create a copy there
+        }
         let tz: Tz = stored.tz.parse().unwrap_or(chrono_tz::UTC);
         let Ok(event) = build_event(&stored.input, Some(&id), tz, now) else {
             continue;
@@ -495,7 +658,25 @@ pub fn export_all(store: &Store, now: DateTime<Utc>) -> Result<Option<(String, u
 
 /// Deletes an event, or a whole repeating series.
 pub fn delete(store: &mut Store, id: &str, now: DateTime<Utc>) -> Result<()> {
-    let master = own_master_id(id)?.to_string();
+    delete_with(store, None, id, now)
+}
+
+/// Like [`delete`], and for an event that was saved into the Calendar app it is removed there first, so a
+/// failure leaves everything as it was. The event may already be gone from the Calendar app (the user
+/// deleted it there); the source treats that as done.
+pub fn delete_with(
+    store: &mut Store,
+    source: Option<&dyn SystemSource>,
+    id: &str,
+    now: DateTime<Utc>,
+) -> Result<()> {
+    let master = resolve(store, id)?.ok_or(Error::Invalid("That event can't be changed here."))?;
+    if let Some(remote) = load(store, &master)?.and_then(|s| s.remote) {
+        let source = source.ok_or(Error::Invalid(
+            "Turn on adding events to the Calendar app to delete this one.",
+        ))?;
+        source.delete_event(&remote.event_id)?;
+    }
     store.delete_own_event(&master)?;
     refresh(store, now)
 }
@@ -533,11 +714,12 @@ pub fn reminder_map(store: &Store) -> Result<HashMap<String, u32>> {
         .all_own_events()?
         .into_iter()
         .filter_map(|(id, json)| {
-            let m = serde_json::from_str::<Stored>(&json)
-                .ok()?
-                .input
-                .reminder_minutes?;
-            Some((id, m))
+            let stored = serde_json::from_str::<Stored>(&json).ok()?;
+            // An event in the Calendar app has its alert there (the Calendar app shows it), not here.
+            if stored.remote.is_some() {
+                return None;
+            }
+            Some((id, stored.input.reminder_minutes?))
         })
         .collect())
 }
