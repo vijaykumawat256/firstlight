@@ -142,8 +142,8 @@ test.describe("conflict help", () => {
     await page.getByRole("button", { name: "New event" }).click();
     const sheet = page.getByRole("dialog", { name: "New event" });
     await sheet.getByLabel("Title").fill("Eye test");
-    await sheet.getByLabel("Start time").fill("10:45");
-    await sheet.getByLabel("End time").fill("11:15");
+    await sheet.getByLabel("Start time").fill("15:30");
+    await sheet.getByLabel("End time").fill("16:30");
     await sheet.getByRole("button", { name: "Add event" }).click();
     await page.getByRole("button", { name: /^Sort out: .*Eye test/ }).first().click();
     const dialog = page.getByRole("dialog", { name: "Sort out an overlap" });
@@ -152,6 +152,62 @@ test.describe("conflict help", () => {
     await dialog.getByRole("button", { name: /^Move here/ }).first().click();
     await expect(page.getByText("Moved").first()).toBeVisible();
     await expect(page.getByRole("dialog", { name: "Sort out an overlap" })).toHaveCount(0);
+  });
+
+  async function addOwn(page: import("@playwright/test").Page, title: string, from: string, to: string, extra?: (sheet: import("@playwright/test").Locator) => Promise<void>) {
+    await page.getByRole("button", { name: "New event" }).click();
+    const sheet = page.getByRole("dialog", { name: "New event" });
+    await sheet.getByLabel("Title").fill(title);
+    await sheet.getByLabel("Start time").fill(from);
+    await sheet.getByLabel("End time").fill(to);
+    if (extra) await extra(sheet);
+    await sheet.getByRole("button", { name: "Add event" }).click();
+    await expect(page.getByText("Event added").first()).toBeVisible();
+  }
+
+  test("three or more meetings piled up are sorted out together with places that do not collide", async ({ page }) => {
+    await start(page);
+    await addOwn(page, "Eye test", "10:45", "11:15"); // overlaps Design review and the 1:1
+    await page.getByRole("button", { name: /^Sort out: .*Eye test/ }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Sort out an overlap" });
+    await expect(dialog.getByRole("status")).toContainText("3 meetings overlap each other. Moving 2 clears it.");
+    await expect(dialog.getByText("Keep: Design review")).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Move 1:1 with Sam" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Move Eye test" })).toBeVisible();
+    // Only the one you made can be moved from here; the other needs a note to its organiser.
+    await expect(dialog.getByRole("button", { name: /^Move here/ }).first()).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Write the message" })).toHaveCount(1);
+    const first = (name: string) => dialog.getByRole("list", { name }).getByRole("listitem").first().innerText();
+    expect(await first("Free times for 1:1 with Sam")).not.toEqual(await first("Free times for Eye test"));
+  });
+
+  test("after moving an event you invited people to, you are offered the updated invitation", async ({ page }) => {
+    await start(page);
+    await addOwn(page, "Eye test", "10:45", "11:15", async (sheet) => {
+      await sheet.getByLabel("Invite people").fill("sam@example.com");
+    });
+    await page.getByRole("button", { name: /^Sort out: .*Eye test/ }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Sort out an overlap" });
+    await expect(dialog.getByText(/you can send the people you invited an updated invitation/).first()).toBeVisible();
+    await dialog.getByRole("button", { name: /^Move here/ }).first().click();
+    const invite = page.getByRole("dialog", { name: "Send invitation" });
+    await expect(invite).toBeVisible();
+    await expect(invite.getByLabel("To")).toHaveValue("sam@example.com");
+  });
+
+  test("one day of a repeating event you created can be moved on its own", async ({ page }) => {
+    await start(page);
+    await addOwn(page, "Pilates", "10:45", "11:15", async (sheet) => {
+      await sheet.getByRole("combobox", { name: "Repeat" }).click();
+      await page.getByRole("option", { name: "Every day" }).click();
+    });
+    await page.getByRole("button", { name: /^Sort out: .*Pilates/ }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Sort out an overlap" });
+    await expect(dialog.getByText(/moves only this day/i).first()).toBeVisible();
+    await dialog.getByRole("button", { name: /^Move this day here/ }).first().click();
+    await expect(page.getByText("That day was moved").first()).toBeVisible();
+    // The series is still there tomorrow.
+    await expect(page.getByRole("region", { name: "Tomorrow" }).getByText("Pilates").first()).toBeVisible();
   });
 
   test("the sheet has no accessibility problems", async ({ page }) => {

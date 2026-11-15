@@ -730,6 +730,49 @@ export const fixtureBackend: Backend = {
       if (mins(moved) < mins(kept)) reasons.push("shorter");
       if (reasons.length === 0) reasons.push("later");
     }
+    // The pile-up this pair belongs to (3 to 10 meetings in a chain of overlaps), a simplified copy of the Rust rules.
+    const span = (e: CalEvent) => (e.when.kind === "timed" ? ([Date.parse(e.when.start), Date.parse(e.when.end)] as const) : null);
+    const hit = (x: CalEvent, y: CalEvent) => {
+      const [p, q] = [span(x), span(y)];
+      return !!p && !!q && p[0] < q[1] && q[0] < p[1];
+    };
+    const pileUp = async (): Promise<ConflictHelp["pile_up"]> => {
+      const pool = all.filter((e) => e.when.kind === "timed" && e.status !== "cancelled" && e.my_response !== "declined");
+      const group = pool.filter((e) => e.id === ea.id || e.id === eb.id);
+      for (let grew = true; grew; ) {
+        const more = pool.filter((e) => !group.includes(e) && group.some((g) => hit(g, e)));
+        grew = more.length > 0;
+        group.push(...more);
+        if (group.length > 10) return null;
+      }
+      if (group.length < 3) return null;
+      group.sort((x, y) => span(x)![0] - span(y)![0]);
+      const n = group.length;
+      const value = group.map((e) => 10 - ((mine(e) ? 3 : 0) + (e.my_response === "needs_action" ? 2 : 0) + (e.my_response === "tentative" || e.status === "tentative" ? 2 : 0)));
+      let best = -1;
+      let bestMask = 0;
+      for (let mask = 1; mask < 1 << n; mask++) {
+        const kept = [...Array(n).keys()].filter((i) => mask & (1 << i));
+        if (kept.some((i, x) => kept.slice(x + 1).some((j) => hit(group[i]!, group[j]!)))) continue;
+        const score = kept.reduce((t, i) => t + value[i]! * 1000 + (n - i), 0);
+        if (score > best) [best, bestMask] = [score, mask];
+      }
+      const keep = group.filter((_, i) => bestMask & (1 << i)).map((e) => e.id);
+      const taken = new Set<string>();
+      const moves = [];
+      for (const e of group.filter((g) => !keep.includes(g.id))) {
+        const need = Math.max(5, Math.round(((span(e)![1] - span(e)![0]) / 60_000)));
+        const slots = (await this.findFreeTimes(need, 14)).filter((s) => !taken.has(s.start));
+        const seen = new Set<string>();
+        const options = slots
+          .filter((s) => (seen.has(new Date(s.start).toDateString()) ? false : (seen.add(new Date(s.start).toDateString()), true)))
+          .slice(0, 3)
+          .map((s) => ({ start: s.start, end: new Date(Date.parse(s.start) + need * 60_000).toISOString() }));
+        if (options[0]) taken.add(options[0].start);
+        moves.push({ event: e, yours: mine(e), options });
+      }
+      return { events: group, keep, moves };
+    };
     const [s1, e1, s2, e2] = [Date.parse(ea.when.start), Date.parse(ea.when.end), Date.parse(eb.when.start), Date.parse(eb.when.end)];
     const need = Math.max(5, Math.round(mins(moved)));
     const slots = await this.findFreeTimes(need, 14);
@@ -743,7 +786,7 @@ export const fixtureBackend: Backend = {
       })
       .slice(0, 3)
       .map((s) => ({ start: s.start, end: new Date(Date.parse(s.start) + need * 60_000).toISOString() }));
-    return { moved, kept, reasons, overlap_minutes: Math.round((Math.min(e1, e2) - Math.max(s1, s2)) / 60_000), options, yours: mine(moved) } satisfies ConflictHelp;
+    return { moved, kept, reasons, overlap_minutes: Math.round((Math.min(e1, e2) - Math.max(s1, s2)) / 60_000), options, yours: mine(moved), pile_up: await pileUp() } satisfies ConflictHelp;
   },
   async openMailDraft(to, subject, body) {
     const w = window as unknown as { __drafts?: Array<{ to: string | null; subject: string; body: string }> };

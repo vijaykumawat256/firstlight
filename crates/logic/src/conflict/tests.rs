@@ -162,3 +162,77 @@ fn no_overlap_or_an_all_day_event_gives_no_help() {
     };
     assert!(run(&a, &c, &[a.clone(), c.clone()], &nobody, None).is_none());
 }
+
+// ---- pile-ups of three or more ------------------------------------------------------------
+
+#[test]
+fn two_meetings_are_not_a_pile_up() {
+    let a = ev("a", t(10, 10, 0), 60);
+    let b = ev("b", t(10, 10, 30), 60);
+    let h = run(&a, &b, &[a.clone(), b.clone()], &nobody, None).unwrap();
+    assert!(h.pile_up.is_none());
+}
+
+#[test]
+fn a_chain_of_overlaps_is_found_and_the_fewest_moves_clear_it() {
+    // a 10:00-11:00, b 10:30-11:30, c 11:15-12:00: a-b and b-c overlap; a and c do not. Moving just b clears it.
+    let a = ev("a", t(10, 10, 0), 60);
+    let b = ev("b", t(10, 10, 30), 60);
+    let c = ev("c", t(10, 11, 15), 45);
+    let all = [a.clone(), b.clone(), c.clone()];
+    let h = run(&a, &b, &all, &nobody, None).unwrap();
+    let p = h.pile_up.expect("three linked meetings");
+    assert_eq!(p.events.len(), 3);
+    assert_eq!(p.keep, ["a", "c"]);
+    assert_eq!(p.moves.len(), 1);
+    assert_eq!(p.moves[0].event.id, "b");
+    assert!(!p.moves[0].options.is_empty());
+}
+
+#[test]
+fn what_is_easy_to_move_is_what_moves() {
+    // Three that all overlap each other: only one can stay. The unanswered and the one you made go.
+    let keep_me = ev("keep", t(10, 10, 0), 60);
+    let mut open = ev("open", t(10, 10, 15), 60);
+    open.my_response = Response::NeedsAction;
+    let mine = ev("mine", t(10, 10, 30), 60);
+    let all = [keep_me.clone(), open.clone(), mine.clone()];
+    let h = run(&keep_me, &open, &all, &|e| e.id == "mine", None).unwrap();
+    let p = h.pile_up.unwrap();
+    assert_eq!(p.keep, ["keep"]);
+    let mut moved: Vec<&str> = p.moves.iter().map(|m| m.event.id.as_str()).collect();
+    moved.sort();
+    assert_eq!(moved, ["mine", "open"]);
+    assert!(p.moves.iter().find(|m| m.event.id == "mine").unwrap().yours);
+}
+
+#[test]
+fn the_places_suggested_for_the_moves_never_collide() {
+    let keep_me = ev("keep", t(10, 10, 0), 60);
+    let x = ev("x", t(10, 10, 10), 60);
+    let y = ev("y", t(10, 10, 20), 60);
+    let all = [keep_me.clone(), x.clone(), y.clone()];
+    let h = run(&x, &y, &all, &nobody, None).unwrap();
+    let p = h.pile_up.unwrap();
+    assert_eq!(p.moves.len(), 2);
+    let (f0, f1) = (&p.moves[0].options[0], &p.moves[1].options[0]);
+    assert!(f0.end <= f1.start || f1.end <= f0.start, "{f0:?} vs {f1:?}");
+    // And neither lands on the meeting that stays.
+    for f in [f0, f1] {
+        assert!(f.end <= t(10, 10, 0) || f.start >= t(10, 11, 0));
+    }
+}
+
+#[test]
+fn a_huge_pile_up_is_left_to_the_pair_view() {
+    let mut all = vec![];
+    for i in 0..12 {
+        all.push(ev(
+            &format!("e{i}"),
+            t(10, 10, 0) + Duration::minutes(i * 5),
+            120,
+        ));
+    }
+    let h = run(&all[0], &all[1], &all, &nobody, None).unwrap();
+    assert!(h.pile_up.is_none(), "more than ten is not worked out");
+}

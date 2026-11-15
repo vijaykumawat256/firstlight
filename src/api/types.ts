@@ -308,6 +308,8 @@ export interface ConflictHelp {
   options: Array<{ start: string; end: string }>;
   /** Whether Firstlight can move it for you (you created it). */
   yours: boolean;
+  /** Set when these two are part of a pile-up of three to ten meetings. */
+  pile_up: { events: CalEvent[]; keep: string[]; moves: Array<{ event: CalEvent; yours: boolean; options: Array<{ start: string; end: string }> }> } | null;
 }
 
 /** Mirrors `firstlight_core::prep`. */
