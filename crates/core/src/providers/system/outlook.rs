@@ -50,11 +50,31 @@ exit 1\n\
 }\n";
 
 const CALENDARS: &str = "$out=New-Object System.Collections.ArrayList\n\
+$seen=@{}\n\
+$errs=New-Object System.Collections.ArrayList\n\
+$add={param($f,$x)\n\
+  $eid=[string]$f.EntryID\n\
+  if($seen.ContainsKey($eid)){return}\n\
+  $seen[$eid]=$true\n\
+  $src=''\n\
+  try{$src=[string]$f.Store.DisplayName}catch{}\n\
+  [void]$out.Add([pscustomobject]@{store=[string]$f.StoreID;entry=$eid;title=[string]$f.Name;source=$src;exchange=$x})\n\
+}\n\
+$stores=0\n\
 foreach($s in $ns.Stores){\n\
+  $stores++\n\
   try{\n\
     $f=$s.GetDefaultFolder(9)\n\
-    [void]$out.Add([pscustomobject]@{store=[string]$s.StoreID;entry=[string]$f.EntryID;title=[string]$f.Name;source=[string]$s.DisplayName;exchange=([int]$s.ExchangeStoreType -lt 3)})\n\
-  }catch{}\n\
+    $x=$false\n\
+    try{$x=([int]$s.ExchangeStoreType -lt 3)}catch{}\n\
+    & $add $f $x\n\
+  }catch{[void]$errs.Add([string]$_.Exception.Message)}\n\
+}\n\
+try{& $add ($ns.GetDefaultFolder(9)) $false}catch{[void]$errs.Add([string]$_.Exception.Message)}\n\
+if($out.Count -eq 0){\n\
+  $why=''\n\
+  if($errs.Count -gt 0){$why=' '+[string]$errs[0]}\n\
+  throw ('No calendar folder found in '+$stores+' Outlook data file(s).'+$why)\n\
 }\n";
 
 const EVENTS: &str = "$f=$ns.GetFolderFromID('@ENTRY@','@STORE@')\n\
@@ -93,7 +113,7 @@ fn calendars_script() -> String {
 
 /// Ids from Outlook are hexadecimal. Anything else is refused before it can reach a script.
 fn is_hex(s: &str) -> bool {
-    !s.is_empty() && s.len() <= 512 && s.bytes().all(|b| b.is_ascii_hexdigit())
+    !s.is_empty() && s.len() <= 4096 && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// `store` and `entry` must already have passed [`is_hex`]; the two numbers are written as numbers.
@@ -293,7 +313,19 @@ impl<R: ScriptRunner> SystemSource for OutlookSource<R> {
 
     fn calendars(&self) -> Result<Vec<SysCalendar>> {
         let out = self.runner.run(&calendars_script())?;
-        Ok(parse::<RawCalendar>(&out)?
+        let raw = parse::<RawCalendar>(&out)?;
+        if let Some(c) = raw.first()
+            && !raw.iter().any(|c| is_hex(&c.store) && is_hex(&c.entry))
+        {
+            // Says what was odd without showing the ids themselves.
+            return Err(Error::Provider(format!(
+                "Outlook listed {} calendar(s), but their ids were not in the form Firstlight expects (lengths {} and {})",
+                raw.len(),
+                c.store.len(),
+                c.entry.len()
+            )));
+        }
+        Ok(raw
             .into_iter()
             .filter(|c| is_hex(&c.store) && is_hex(&c.entry))
             .map(|c| SysCalendar {

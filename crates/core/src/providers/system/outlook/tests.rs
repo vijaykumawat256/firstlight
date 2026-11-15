@@ -269,3 +269,13 @@ fn the_scripts_are_balanced_and_always_answer() {
         );
     }
 }
+
+#[test]
+fn long_store_ids_are_accepted_and_the_default_calendar_is_a_fallback() {
+    // Exchange and IMAP store ids run to many hundreds of characters.
+    assert!(is_hex(&"0A".repeat(900)));
+    assert!(!is_hex(&"0A".repeat(3000)));
+    let sc = calendars_script();
+    assert!(sc.contains("$ns.GetDefaultFolder(9)"));
+    assert!(sc.contains("No calendar folder found"));
+}
