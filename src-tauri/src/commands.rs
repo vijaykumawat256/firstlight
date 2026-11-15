@@ -114,6 +114,24 @@ fn explain(kind: ProviderKind, report: &SyncReport) -> &'static str {
     }
 }
 
+/// Why Outlook couldn't be read, in the words Windows and Outlook used (no calendar content is ever in them):
+/// asks again, first for the list of calendars and then for the events of the first one, to find which step fails.
+fn explain_outlook(deps: &crate::providers::Deps) -> Option<String> {
+    let calendars = match deps.system.calendars() {
+        Err(Error::Provider(m)) => return Some(m),
+        Err(_) => return None,
+        Ok(c) => c,
+    };
+    let first = calendars.first()?;
+    let now = Utc::now();
+    match deps.system.events(&first.id, now, now + Duration::days(1)) {
+        Err(Error::Provider(m)) => Some(format!(
+            "Outlook's calendar list was read, but its events couldn't be: {m}"
+        )),
+        _ => None,
+    }
+}
+
 fn user_input_error(e: Error) -> String {
     match e {
         Error::Invalid(m) => m.to_string(),
@@ -178,9 +196,20 @@ async fn connect(
             &account,
             &default_window(Utc::now()),
         );
-        if !report.is_clean() {
+        // Outlook can hold several kinds of calendar (archives, shared ones): one that can't be read must not stop
+        // the others from being added, so it counts as connected as soon as one calendar worked.
+        let outlook = new.kind == ProviderKind::System && deps.system.name() == "Outlook";
+        let partly_ok = outlook && report.calendars_ok > 0 && !report.needs_attention;
+        if !report.is_clean() && !partly_ok {
             rollback(Some(&store));
+            if outlook && let Some(why) = explain_outlook(&deps) {
+                return Err(why);
+            }
             return Err(explain(new.kind, &report).into());
+        }
+        if outlook && report.calendars_ok == 0 {
+            rollback(Some(&store));
+            return Err("Outlook answered, but it has no calendar Firstlight can read. Open Outlook and make sure an account is set up there. (The new Outlook can't be read this way: use Sign in with Microsoft instead.)".into());
         }
         store
             .account_views()

@@ -32,23 +32,63 @@ impl<R: ScriptRunner> OutlookSource<R> {
     }
 }
 
+/// How a script ends, whatever happens: either `FLJSON:<base64 of the JSON>` on success or `FLERR:<base64 of the
+/// error text>` on failure. Base64 keeps the answer safe from the console's code page, and the marker keeps it
+/// apart from any banner or warning PowerShell prints. The error text comes from Outlook or Windows (for example a
+/// COM error code), never from the calendar's contents.
 const PRELUDE: &str = "$ErrorActionPreference='Stop'\n\
-[Console]::OutputEncoding=[System.Text.Encoding]::UTF8\n\
+try{\n\
 $ol=New-Object -ComObject Outlook.Application\n\
 $ns=$ol.GetNamespace('MAPI')\n";
 
-fn calendars_script() -> String {
-    format!(
-        "{PRELUDE}\
-$out=New-Object System.Collections.ArrayList\n\
-foreach($s in $ns.Stores){{\n\
-  try{{\n\
+const EPILOGUE: &str = "$json=ConvertTo-Json -InputObject @($out) -Compress\n\
+Write-Output ('FLJSON:'+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json)))\n\
+}catch{\n\
+$m=[string]$_.Exception.Message\n\
+Write-Output ('FLERR:'+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m)))\n\
+exit 1\n\
+}\n";
+
+const CALENDARS: &str = "$out=New-Object System.Collections.ArrayList\n\
+foreach($s in $ns.Stores){\n\
+  try{\n\
     $f=$s.GetDefaultFolder(9)\n\
-    [void]$out.Add([pscustomobject]@{{store=$s.StoreID;entry=$f.EntryID;title=[string]$f.Name;source=[string]$s.DisplayName;exchange=($s.ExchangeStoreType -lt 3)}})\n\
-  }}catch{{}}\n\
-}}\n\
-ConvertTo-Json -InputObject @($out) -Compress\n"
-    )
+    [void]$out.Add([pscustomobject]@{store=[string]$s.StoreID;entry=[string]$f.EntryID;title=[string]$f.Name;source=[string]$s.DisplayName;exchange=([int]$s.ExchangeStoreType -lt 3)})\n\
+  }catch{}\n\
+}\n";
+
+const EVENTS: &str = "$f=$ns.GetFolderFromID('@ENTRY@','@STORE@')\n\
+$items=$f.Items\n\
+$items.Sort('[Start]')\n\
+$items.IncludeRecurrences=$true\n\
+$from=[DateTimeOffset]::FromUnixTimeSeconds(@FROM@).LocalDateTime\n\
+$to=[DateTimeOffset]::FromUnixTimeSeconds(@TO@).LocalDateTime\n\
+$ci=[System.Globalization.CultureInfo]::CurrentCulture\n\
+$flt='[Start] < ''' + $to.ToString('g',$ci) + ''' AND [End] > ''' + $from.ToString('g',$ci) + ''''\n\
+$epoch=[DateTime]::SpecifyKind([DateTime]'1970-01-01',[DateTimeKind]::Utc)\n\
+$utc={param($d) [long]([DateTime]::SpecifyKind($d,[DateTimeKind]::Utc)-$epoch).TotalSeconds}\n\
+$out=New-Object System.Collections.ArrayList\n\
+$n=0\n\
+foreach($a in $items.Restrict($flt)){\n\
+  $n++\n\
+  if($n -gt 5000){break}\n\
+  try{\n\
+    $org=''\n\
+    try{$org=[string]$a.Organizer}catch{}\n\
+    $body=''\n\
+    try{$body=[string]$a.Body; if($body.Length -gt 8000){$body=$body.Substring(0,8000)}}catch{}\n\
+    [void]$out.Add([pscustomobject]@{\n\
+      id=[string]$a.EntryID; uid=[string]$a.GlobalAppointmentID; title=[string]$a.Subject;\n\
+      start=(& $utc $a.StartUTC); end=(& $utc $a.EndUTC); all_day=[bool]$a.AllDayEvent;\n\
+      location=[string]$a.Location; notes=$body; organizer=$org;\n\
+      busy=[int]$a.BusyStatus; meeting=[int]$a.MeetingStatus; response=[int]$a.ResponseStatus;\n\
+      recurring=[bool]$a.IsRecurring; modified=(& $utc $a.LastModificationTime.ToUniversalTime())\n\
+    })\n\
+  }catch{}\n\
+}\n";
+
+fn calendars_script() -> String {
+    format!("{PRELUDE}{CALENDARS}{EPILOGUE}")
 }
 
 /// Ids from Outlook are hexadecimal. Anything else is refused before it can reach a script.
@@ -56,40 +96,86 @@ fn is_hex(s: &str) -> bool {
     !s.is_empty() && s.len() <= 512 && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
+/// `store` and `entry` must already have passed [`is_hex`]; the two numbers are written as numbers.
 fn events_script(store: &str, entry: &str, from: i64, to: i64) -> String {
-    format!(
-        "{PRELUDE}\
-$f=$ns.GetFolderFromID('{entry}','{store}')\n\
-$items=$f.Items\n\
-$items.Sort('[Start]')\n\
-$items.IncludeRecurrences=$true\n\
-$from=[DateTimeOffset]::FromUnixTimeSeconds({from}).LocalDateTime\n\
-$to=[DateTimeOffset]::FromUnixTimeSeconds({to}).LocalDateTime\n\
-$ci=[System.Globalization.CultureInfo]::CurrentCulture\n\
-$flt=\"[Start] < '\"+$to.ToString('g',$ci)+\"' AND [End] > '\"+$from.ToString('g',$ci)+\"'\"\n\
-$epoch=[DateTime]::SpecifyKind([DateTime]'1970-01-01',[DateTimeKind]::Utc)\n\
-$utc={{param($d) [long]([DateTime]::SpecifyKind($d,[DateTimeKind]::Utc)-$epoch).TotalSeconds}}\n\
-$out=New-Object System.Collections.ArrayList\n\
-$n=0\n\
-foreach($a in $items.Restrict($flt)){{\n\
-  $n++\n\
-  if($n -gt 5000){{break}}\n\
-  try{{\n\
-    $org=''\n\
-    try{{$org=[string]$a.Organizer}}catch{{}}\n\
-    $body=''\n\
-    try{{$body=[string]$a.Body; if($body.Length -gt 8000){{$body=$body.Substring(0,8000)}}}}catch{{}}\n\
-    [void]$out.Add([pscustomobject]@{{\n\
-      id=[string]$a.EntryID; uid=[string]$a.GlobalAppointmentID; title=[string]$a.Subject;\n\
-      start=(& $utc $a.StartUTC); end=(& $utc $a.EndUTC); all_day=[bool]$a.AllDayEvent;\n\
-      location=[string]$a.Location; notes=$body; organizer=$org;\n\
-      busy=[int]$a.BusyStatus; meeting=[int]$a.MeetingStatus; response=[int]$a.ResponseStatus;\n\
-      recurring=[bool]$a.IsRecurring; modified=(& $utc $a.LastModificationTime.ToUniversalTime())\n\
-    }})\n\
-  }}catch{{}}\n\
-}}\n\
-ConvertTo-Json -InputObject @($out) -Compress\n"
-    )
+    let body = EVENTS
+        .replace("@ENTRY@", entry)
+        .replace("@STORE@", store)
+        .replace("@FROM@", &from.to_string())
+        .replace("@TO@", &to.to_string());
+    format!("{PRELUDE}{body}{EPILOGUE}")
+}
+
+/// A script as PowerShell's `-EncodedCommand` wants it: UTF-16 little-endian, base64. Passing it this way runs it as
+/// one piece (reading a script from standard input runs it line by line, which behaves differently when a line
+/// fails) and puts no script text where a shell could reinterpret it.
+pub fn encode_command(script: &str) -> String {
+    use base64::Engine;
+    let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+fn unreadable() -> Error {
+    Error::Provider("Outlook gave an answer Firstlight couldn't read".into())
+}
+
+/// One short, plain line of what Outlook or Windows said, safe to show: control characters out, cut short.
+fn tidy_error(raw: &str) -> String {
+    let one: String = raw
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let one = one.split_whitespace().collect::<Vec<_>>().join(" ");
+    if one.chars().count() <= 300 {
+        return one;
+    }
+    format!("{}…", one.chars().take(299).collect::<String>().trim_end())
+}
+
+/// What a failure means for the person, with what Windows said after it.
+pub fn explain_failure(raw: &str) -> Error {
+    let said = tidy_error(raw);
+    let lower = said.to_ascii_lowercase();
+    let hint = if lower.contains("80040154")
+        || lower.contains("class not registered")
+        || lower.contains("regdb_e_classnotreg")
+    {
+        "Classic Outlook isn't installed on this computer. (The new Outlook can't be read this way: use Sign in with Microsoft instead.)"
+    } else if lower.contains("80080005")
+        || lower.contains("server execution failed")
+        || lower.contains("co_e_server_exec_failure")
+    {
+        "Outlook wouldn't start for Firstlight. Open Outlook yourself once and wait for it to finish loading, then try again. If you run Outlook as administrator, run Firstlight the same way."
+    } else if lower.contains("mapi")
+        || lower.contains("profile")
+        || lower.contains("operation failed")
+        || lower.contains("80040")
+    {
+        "Outlook isn't ready: it may be waiting for you to choose a profile or finish setting up an account. Open Outlook, complete anything it asks, then try again."
+    } else {
+        "Outlook couldn't be read."
+    };
+    Error::Provider(format!("{hint} (Windows said: {said})"))
+}
+
+/// Finds the answer in what the script printed: the JSON it produced, or the failure it reported.
+fn read_answer(out: &str) -> Result<String> {
+    use base64::Engine;
+    let decode = |b64: &str| {
+        base64::engine::general_purpose::STANDARD
+            .decode(b64.trim())
+            .ok()
+            .and_then(|b| String::from_utf8(b).ok())
+    };
+    for line in out.lines().map(str::trim) {
+        if let Some(b64) = line.strip_prefix("FLERR:") {
+            return Err(explain_failure(&decode(b64).unwrap_or_default()));
+        }
+        if let Some(b64) = line.strip_prefix("FLJSON:") {
+            return decode(b64).ok_or_else(unreadable);
+        }
+    }
+    Err(unreadable())
 }
 
 #[derive(Deserialize)]
@@ -134,23 +220,8 @@ struct RawEvent {
     modified: i64,
 }
 
-/// PowerShell may print a banner or a warning before the JSON; the answer starts at the first line that opens an array.
-fn json_line(out: &str) -> Option<&str> {
-    let mut offset = 0;
-    for line in out.split_inclusive('\n') {
-        if line.trim_start().starts_with('[') {
-            return Some(out[offset..].trim());
-        }
-        offset += line.len();
-    }
-    None
-}
-
 fn parse<T: for<'de> Deserialize<'de>>(out: &str) -> Result<Vec<T>> {
-    let line = json_line(out)
-        .ok_or_else(|| Error::Provider("Outlook gave an answer Firstlight couldn't read".into()))?;
-    serde_json::from_str(line)
-        .map_err(|_| Error::Provider("Outlook gave an answer Firstlight couldn't read".into()))
+    serde_json::from_str(&read_answer(out)?).map_err(|_| unreadable())
 }
 
 /// Outlook calendar ids are `<store id>:<folder id>`, both hexadecimal.

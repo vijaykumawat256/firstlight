@@ -1,6 +1,24 @@
 use super::*;
 use std::sync::Mutex;
 
+/// What a script prints when it works: the JSON, base64, behind a marker.
+fn ok(json: &str) -> String {
+    use base64::Engine;
+    format!(
+        "FLJSON:{}",
+        base64::engine::general_purpose::STANDARD.encode(json)
+    )
+}
+
+/// What a script prints when Outlook or Windows refuses.
+fn failed(message: &str) -> String {
+    use base64::Engine;
+    format!(
+        "FLERR:{}",
+        base64::engine::general_purpose::STANDARD.encode(message)
+    )
+}
+
 struct Fake {
     installed: bool,
     answer: String,
@@ -44,9 +62,13 @@ fn it_is_offered_only_when_classic_outlook_is_installed() {
 fn calendars_come_from_every_store_and_exchange_ones_are_marked() {
     let s = OutlookSource::new(Fake::new(
         true,
-        r#"WARNING: banner
-[{"store":"00AB","entry":"01CD","title":"Calendar","source":"me@work.com","exchange":true},
- {"store":"00EF","entry":"02AA","title":"","source":"Personal.pst","exchange":false}]"#,
+        &format!(
+            "WARNING: banner\n{}",
+            ok(
+                r#"[{"store":"00AB","entry":"01CD","title":"Calendar","source":"me@work.com","exchange":true},
+ {"store":"00EF","entry":"02AA","title":"","source":"Personal.pst","exchange":false}]"#
+            )
+        ),
     ));
     let c = s.calendars().unwrap();
     assert_eq!(c.len(), 2);
@@ -67,7 +89,7 @@ fn events_are_mapped_with_response_status_and_cancellation() {
   "location":"Room 4","notes":"Agenda","organizer":"Sam","busy":2,"meeting":1,"response":5,"recurring":true,"modified":1773000000},
  {"id":"AA22","uid":"","title":"Offsite","start":1773100800,"end":1773187200,"all_day":true,
   "location":"","notes":"","organizer":"","busy":1,"meeting":5,"response":3,"recurring":false,"modified":0}]"#;
-    let s = OutlookSource::new(Fake::new(true, json));
+    let s = OutlookSource::new(Fake::new(true, &ok(json)));
     let from = DateTime::from_timestamp(1773000000, 0).unwrap();
     let e = s
         .events("00AB:01CD", from, from + chrono::Duration::days(1))
@@ -91,7 +113,7 @@ fn events_are_mapped_with_response_status_and_cancellation() {
 
 #[test]
 fn the_script_asks_for_the_window_in_unix_seconds_and_only_for_that_calendar() {
-    let fake = Fake::new(true, "[]");
+    let fake = Fake::new(true, &ok("[]"));
     let s = OutlookSource::new(fake);
     let from = DateTime::from_timestamp(1_800_000_000, 0).unwrap();
     s.events("00AB:01CD", from, from + chrono::Duration::days(2))
@@ -138,7 +160,15 @@ fn an_id_that_is_not_hexadecimal_never_reaches_a_script() {
 
 #[test]
 fn an_answer_that_is_not_json_is_a_plain_error_not_a_panic() {
-    for junk in ["", "Outlook is not installed", "{\"a\":1}", "[not json]"] {
+    for junk in [
+        "",
+        "Outlook is not installed",
+        "{\"a\":1}",
+        "[not json]",
+        "FLJSON:!!!not base64",
+        &ok("[not json]"),
+        &ok("{\"a\":1}"),
+    ] {
         let s = OutlookSource::new(Fake::new(true, junk));
         assert!(s.calendars().is_err(), "{junk:?}");
     }
@@ -150,5 +180,92 @@ fn the_calendar_listing_script_is_read_only_too() {
     assert!(sc.contains("GetDefaultFolder(9)"));
     for banned in [".Save(", ".Delete(", "CreateItem", ".Send("] {
         assert!(!sc.contains(banned));
+    }
+}
+
+#[test]
+fn a_failure_reported_by_the_script_reaches_the_person_with_a_hint_and_what_windows_said() {
+    let cases = [
+        (
+            "Retrieving the COM class factory for component with CLSID {0006F03A-0000-0000-C000-000000000046} failed due to the following error: 80040154 Class not registered (Exception from HRESULT: 0x80040154 (REGDB_E_CLASSNOTREG)).",
+            "Classic Outlook isn't installed",
+        ),
+        (
+            "Server execution failed (Exception from HRESULT: 0x80080005 (CO_E_SERVER_EXEC_FAILURE))",
+            "wouldn't start",
+        ),
+        (
+            "Cannot complete the operation. You are not connected. Profile missing",
+            "waiting for you to choose a profile",
+        ),
+        ("Something nobody expected", "Outlook couldn't be read."),
+    ];
+    for (said, hint) in cases {
+        let s = OutlookSource::new(Fake::new(true, &failed(said)));
+        let Err(Error::Provider(m)) = s.calendars() else {
+            panic!("expected a provider error for {said}")
+        };
+        assert!(m.contains(hint), "{m}");
+        assert!(m.contains("Windows said:"), "{m}");
+    }
+}
+
+#[test]
+fn what_windows_said_is_one_short_clean_line() {
+    let long = format!("bad\u{7}\n\tthing {}", "x".repeat(2000));
+    let s = OutlookSource::new(Fake::new(true, &failed(&long)));
+    let Err(Error::Provider(m)) = s.calendars() else {
+        panic!()
+    };
+    assert!(!m.chars().any(char::is_control), "{m:?}");
+    assert!(m.chars().count() < 700, "{}", m.chars().count());
+}
+
+#[test]
+fn the_script_is_handed_to_powershell_as_one_encoded_command() {
+    // "Write-Output 1" as UTF-16LE, base64: the form PowerShell's -EncodedCommand expects.
+    assert_eq!(
+        encode_command("Write-Output 1"),
+        "VwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAAxAA=="
+    );
+    // Both real scripts fit comfortably where a command line allows (about 32 000 characters).
+    for sc in [calendars_script(), events_script("00AB", "01CD", 1, 2)] {
+        assert!(
+            encode_command(&sc).len() < 12_000,
+            "{}",
+            encode_command(&sc).len()
+        );
+    }
+}
+
+#[test]
+fn the_scripts_are_balanced_and_always_answer() {
+    for sc in [
+        calendars_script(),
+        events_script("00AB", "01CD", 1_773_000_000, 1_773_172_800),
+    ] {
+        assert_eq!(
+            sc.matches('{').count(),
+            sc.matches('}').count(),
+            "braces: {sc}"
+        );
+        assert_eq!(
+            sc.matches('(').count(),
+            sc.matches(')').count(),
+            "parentheses: {sc}"
+        );
+        assert!(
+            sc.contains("FLJSON:") && sc.contains("FLERR:"),
+            "both ways out are there"
+        );
+        assert!(sc.starts_with("$ErrorActionPreference='Stop'"));
+        assert!(
+            !sc.contains('@') || !sc.contains("@ENTRY@"),
+            "no placeholder is left in"
+        );
+        assert!(
+            !sc.contains("OutputEncoding"),
+            "nothing depends on the console's code page"
+        );
     }
 }

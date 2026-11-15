@@ -2,9 +2,9 @@
 //! Everything that decides what is asked and what the answer means is in `firstlight_core::providers::system::outlook`
 //! (tested on any computer); this file only runs the script. It has been type-checked for Windows but never run.
 
-use firstlight_core::providers::system::outlook::{OutlookSource, ScriptRunner};
+use firstlight_core::providers::system::outlook::{OutlookSource, ScriptRunner, encode_command};
 use firstlight_core::{Error, Result};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -52,32 +52,42 @@ impl ScriptRunner for PowerShell {
     }
 
     fn run(&self, script: &str) -> Result<String> {
+        // The script goes in as one encoded command: no file, nothing for a shell to reinterpret.
         let mut child = Command::new("powershell.exe")
             .args([
                 "-NoProfile",
                 "-NonInteractive",
                 "-ExecutionPolicy",
                 "Bypass",
-                "-Command",
-                "-",
+                "-InputFormat",
+                "None",
+                "-OutputFormat",
+                "Text",
+                "-EncodedCommand",
+                &encode_command(script),
             ])
             .creation_flags(CREATE_NO_WINDOW)
-            .stdin(Stdio::piped())
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
-            .map_err(|_| fail("PowerShell couldn't be started"))?;
-        // The script goes in through standard input, never through the command line.
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(script.as_bytes());
-        }
+            .map_err(|_| fail("PowerShell couldn't be started on this computer."))?;
         let mut stdout = child
             .stdout
             .take()
             .ok_or_else(|| fail("PowerShell gave no output"))?;
-        let reader = std::thread::spawn(move || {
+        let mut stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| fail("PowerShell gave no output"))?;
+        let out_reader = std::thread::spawn(move || {
             let mut out = Vec::new();
             let _ = (&mut stdout).take(MAX_OUTPUT).read_to_end(&mut out);
+            out
+        });
+        let err_reader = std::thread::spawn(move || {
+            let mut out = Vec::new();
+            let _ = (&mut stderr).take(4096).read_to_end(&mut out);
             out
         });
         let start = Instant::now();
@@ -87,20 +97,42 @@ impl ScriptRunner for PowerShell {
                 Ok(None) if start.elapsed() > LIMIT => {
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err(Error::Offline);
+                    return Err(fail(
+                        "Outlook didn't answer within a minute. Open Outlook yourself, close any window it shows (such as choosing a profile), then try again.",
+                    ));
                 }
                 Ok(None) => std::thread::sleep(Duration::from_millis(100)),
                 Err(_) => return Err(fail("PowerShell stopped unexpectedly")),
             }
         };
-        let out = reader
+        let out = out_reader
             .join()
             .map_err(|_| fail("PowerShell output was lost"))?;
-        if !status.success() {
-            return Err(fail(
-                "Outlook couldn't be read. Is it set up with an account?",
-            ));
+        let out = String::from_utf8_lossy(&out).into_owned();
+        // A script always ends by printing its answer or its failure, whatever its exit code.
+        if out.contains("FLJSON:") || out.contains("FLERR:") {
+            return Ok(out);
         }
-        Ok(String::from_utf8_lossy(&out).into_owned())
+        let err = err_reader.join().unwrap_or_default();
+        let said = String::from_utf8_lossy(&err)
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty() && !l.starts_with("#< CLIXML"))
+            .map(|l| {
+                l.chars()
+                    .filter(|c| !c.is_control())
+                    .take(200)
+                    .collect::<String>()
+            })
+            .unwrap_or_default();
+        Err(fail(&format!(
+            "PowerShell stopped without an answer (exit code {}){}",
+            status.code().map_or("?".to_string(), |c| c.to_string()),
+            if said.is_empty() {
+                String::new()
+            } else {
+                format!(": {said}")
+            }
+        )))
     }
 }
