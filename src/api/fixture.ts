@@ -192,7 +192,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   general: { sync_interval_minutes: 10, default_view: "briefing", week_start: "auto", time_format: "auto", global_shortcut: null, show_in_dock: true, write_to_calendar_app: params.has("writeon"), writable_accounts: [], join_shortcut: null, tray_next_meeting: false, check_for_updates: true, update_channel: "stable" },
   briefing: { show_declined: false, min_gap_minutes: 30, work_start_hour: 9, work_end_hour: 18, early_hour: 8 },
   sections: { tomorrow: true, free_time: true, attention: true },
-  unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true },
+  unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true, open_every_time: false },
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, week_preview: true, time_24h: false, hide_titles: false },
   appearance: { theme: "system", accent: "system", ambient: params.has("ambient") },
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, important_senders: [], days_back: 3 },

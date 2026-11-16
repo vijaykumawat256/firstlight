@@ -278,13 +278,11 @@ fn on_unlock(app: &AppHandle) {
     let today = now.with_timezone(&tz).date_naive();
     let _ = store.log_briefing(today, "unlock", now);
 
-    let saved = |key: &str| store.get_setting(key).ok().flatten();
-    let rules: UnlockRules = saved("unlock_rules")
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default();
-    let settings: BriefingSettings = saved("briefing")
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default();
+    // The one settings document, never the old scattered keys (those are only read by the migration): reading
+    // them here ignored everything the person had configured and fell back to the defaults.
+    let all = store.load_settings();
+    let rules: UnlockRules = all.unlock;
+    let settings: BriefingSettings = all.briefing;
     let (Ok(rule_state), (from, _)) = (store.rule_state(tz), day_bounds(today, tz)) else {
         return;
     };
@@ -301,7 +299,17 @@ fn on_unlock(app: &AppHandle) {
     // Only looked at when the rule is on, so the window list is not read for nothing.
     let covered = rules.skip_when_fullscreen && fullscreen::another_app_is_full_screen();
     let action = decide(now, tz, &rules, &rule_state, next_start, covered);
-    log::info!("unlock decision: {action:?}");
+    // The inputs, so a "nothing appeared" is a log read and not a guess. No event data.
+    log::info!(
+        "unlock decision: {action:?} (local {}, zone {}, every time {}, days {:?}, quiet {:?}, fullscreen {covered}, last full {:?}, minutes since last shown {:?})",
+        now.with_timezone(&tz).format("%a %H:%M"),
+        tz.name(),
+        rules.open_every_time,
+        rules.days,
+        rules.quiet_hours,
+        rule_state.last_full_date,
+        rule_state.last_shown_at.map(|t| (now - t).num_minutes()),
+    );
     match action {
         Action::ShowFull => {
             let _ = store.log_briefing(today, "full", now);
@@ -668,8 +676,18 @@ pub fn run() {
                 let _ = handle.emit("system-unlock", ());
             });
 
-            // Launched by the login item: stay in the tray. Otherwise show the window.
-            if !std::env::args().any(|a| a == "--hidden") {
+            // Launched by the login item: start in the tray, but a fresh sign-in is not an unlock, so no unlock
+            // event will ever come for it. Ask the same rules once, a few seconds in (the window and the first
+            // sync need a moment), so the first sign-in of the day opens the briefing like the first unlock does.
+            // Quiet hours, days and full screen still apply. Otherwise show the window.
+            if std::env::args().any(|a| a == "--hidden") {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(8));
+                    log::info!("started at sign-in: applying the unlock rules once");
+                    on_unlock(&handle);
+                });
+            } else {
                 show_main(app.handle());
             }
             Ok(())

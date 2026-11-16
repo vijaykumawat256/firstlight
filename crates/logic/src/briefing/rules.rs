@@ -21,6 +21,9 @@ pub struct UnlockRules {
     pub up_next_lead_minutes: i64,
     /// Stay out of the way when another app is full screen (presentations, video, games).
     pub skip_when_fullscreen: bool,
+    /// Open the full briefing on every unlock (and at sign-in), not just the first of the day. Days, quiet hours
+    /// and full screen still apply.
+    pub open_every_time: bool,
 }
 
 impl Default for UnlockRules {
@@ -32,6 +35,7 @@ impl Default for UnlockRules {
             days: [true; 7],
             up_next_lead_minutes: 15,
             skip_when_fullscreen: true,
+            open_every_time: false,
         }
     }
 }
@@ -85,6 +89,17 @@ pub fn decide(
     if fullscreen && rules.skip_when_fullscreen {
         return Action::None;
     }
+    if rules.open_every_time {
+        // Two unlocks within a minute are one (the lock screen can flicker).
+        return if state
+            .last_shown_at
+            .is_some_and(|t| now - t < Duration::minutes(1))
+        {
+            Action::None
+        } else {
+            Action::ShowFull
+        };
+    }
     if state
         .last_shown_at
         .is_some_and(|t| now - t < Duration::minutes(rules.min_interval_minutes))
@@ -122,6 +137,52 @@ mod tests {
 
     fn rules() -> UnlockRules {
         UnlockRules::default()
+    }
+
+    #[test]
+    fn open_every_time_shows_the_briefing_on_each_unlock_but_keeps_the_quiet_rules() {
+        let every = UnlockRules {
+            open_every_time: true,
+            ..rules()
+        };
+        let st = RuleState {
+            last_full_date: Some(today()),
+            last_shown_at: Some(at(8, 30)),
+        };
+        // Already shown today and only ten minutes ago: still opens.
+        assert_eq!(
+            decide(at(8, 40), LONDON, &every, &st, None, false),
+            Action::ShowFull
+        );
+        // Before the "first unlock after" hour too.
+        assert_eq!(
+            decide(at(6, 0), LONDON, &every, &RuleState::default(), None, false),
+            Action::ShowFull
+        );
+        // Within a minute of the last one: once.
+        let just = RuleState {
+            last_full_date: Some(today()),
+            last_shown_at: Some(at(8, 40)),
+        };
+        assert_eq!(
+            decide(at(8, 40), LONDON, &every, &just, None, false),
+            Action::None
+        );
+        // Quiet hours, a day switched off and full screen still win.
+        assert_eq!(
+            decide(at(23, 0), LONDON, &every, &st, None, false),
+            Action::None
+        );
+        assert_eq!(
+            decide(at(12, 0), LONDON, &every, &st, None, true),
+            Action::None
+        );
+        let mut off = every.clone();
+        off.days[1] = false;
+        assert_eq!(
+            decide(at(12, 0), LONDON, &off, &st, None, false),
+            Action::None
+        );
     }
 
     #[test]

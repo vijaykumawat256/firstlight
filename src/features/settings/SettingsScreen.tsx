@@ -306,7 +306,10 @@ export function SettingsScreen() {
         )}
         {section === "appears" && (
           <div className="flex flex-col gap-7">
-            <Group title="On unlock" footer="The first unlock of the day opens your briefing. Later unlocks only show a small reminder when a meeting is about to start.">
+            <Group title="On unlock" footer="Normally the first unlock of the day opens your briefing, and later unlocks only show a small reminder when a meeting is about to start. Turn on the first option to open it every time, including when the computer starts.">
+              <SettingRow title="Open on every unlock and start" description="Quiet days, quiet hours and full screen still apply.">
+                <Switch label="Open on every unlock and start" checked={s.unlock.open_every_time} onCheckedChange={(v) => update((d) => void (d.unlock.open_every_time = v))} />
+              </SettingRow>
               <SettingRow title="First unlock after">
                 <HourSelect label="First unlock after" from={0} to={12} value={s.unlock.first_unlock_after_hour} onChange={(h) => update((d) => void (d.unlock.first_unlock_after_hour = h))} />
               </SettingRow>

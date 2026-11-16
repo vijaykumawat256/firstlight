@@ -1,6 +1,6 @@
 //! Windows half of the classic-Outlook reader: starts PowerShell hidden and waits for it, with a limit.
 //! Everything that decides what is asked and what the answer means is in `firstlight_core::providers::system::outlook`
-//! (tested on any computer); this file only runs the script. It has been type-checked for Windows but never run.
+//! (tested on any computer); this file only runs the script.
 
 use firstlight_core::providers::system::outlook::{OutlookSource, ScriptRunner, encode_command};
 use firstlight_core::{Error, Result};

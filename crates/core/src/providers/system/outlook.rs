@@ -77,6 +77,10 @@ if($out.Count -eq 0){\n\
   throw ('No calendar folder found in '+$stores+' Outlook data file(s).'+$why)\n\
 }\n";
 
+// Outlook guards some fields against outside programs (the notes, the organiser, recipients, anything through the
+// property accessor): asking for one makes it wait on a security prompt and the whole read stalls until the time
+// limit (seen on a real PC, 2026-11-15). So the script asks for none of them: Outlook events have no notes and no
+// organiser. A test keeps them out.
 const EVENTS: &str = "$f=$ns.GetFolderFromID('@ENTRY@','@STORE@')\n\
 $items=$f.Items\n\
 $items.Sort('[Start]')\n\
@@ -93,14 +97,10 @@ foreach($a in $items.Restrict($flt)){\n\
   $n++\n\
   if($n -gt 5000){break}\n\
   try{\n\
-    $org=''\n\
-    try{$org=[string]$a.Organizer}catch{}\n\
-    $body=''\n\
-    try{$body=[string]$a.Body; if($body.Length -gt 8000){$body=$body.Substring(0,8000)}}catch{}\n\
     [void]$out.Add([pscustomobject]@{\n\
       id=[string]$a.EntryID; uid=[string]$a.GlobalAppointmentID; title=[string]$a.Subject;\n\
       start=(& $utc $a.StartUTC); end=(& $utc $a.EndUTC); all_day=[bool]$a.AllDayEvent;\n\
-      location=[string]$a.Location; notes=$body; organizer=$org;\n\
+      location=[string]$a.Location;\n\
       busy=[int]$a.BusyStatus; meeting=[int]$a.MeetingStatus; response=[int]$a.ResponseStatus;\n\
       recurring=[bool]$a.IsRecurring; modified=(& $utc $a.LastModificationTime.ToUniversalTime())\n\
     })\n\
@@ -369,3 +369,6 @@ impl<R: ScriptRunner> SystemSource for OutlookSource<R> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod live;

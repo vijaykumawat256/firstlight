@@ -279,3 +279,21 @@ fn long_store_ids_are_accepted_and_the_default_calendar_is_a_fallback() {
     assert!(sc.contains("$ns.GetDefaultFolder(9)"));
     assert!(sc.contains("No calendar folder found"));
 }
+
+#[test]
+fn the_scripts_never_ask_for_a_field_outlook_guards() {
+    // Each of these makes Outlook wait on a security prompt, which stalls the whole read.
+    let events = events_script("0A", "0B", 0, 1);
+    for sc in [calendars_script(), events] {
+        for guarded in [
+            ".Body",
+            ".Organizer",
+            ".Recipients",
+            "PropertyAccessor",
+            ".RequiredAttendees",
+            ".OptionalAttendees",
+        ] {
+            assert!(!sc.contains(guarded), "{guarded} must not be asked for");
+        }
+    }
+}

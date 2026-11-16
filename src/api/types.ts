@@ -206,6 +206,7 @@ export interface AppSettings {
     days: boolean[];
     up_next_lead_minutes: number;
     skip_when_fullscreen: boolean;
+    open_every_time: boolean;
   };
   notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; week_preview: boolean; time_24h: boolean; hide_titles: boolean };
   appearance: { theme: ThemeChoice; accent: string; ambient: boolean };
