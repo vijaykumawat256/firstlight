@@ -60,3 +60,22 @@ test("zones, travel time and the weekly review are in Settings", async ({ page }
   await expect(page.getByLabel("Travel time")).toBeVisible();
   await expect(page.getByRole("switch", { name: "Weekly review" })).toBeChecked();
 });
+
+test("Apple Maps trip times are off by default, ask for a starting place, and are not offered off the Mac", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^Notifications/ }).click();
+  const maps = page.getByRole("switch", { name: "Trip times from Apple Maps" });
+  await expect(maps).not.toBeChecked();
+  await expect(page.getByLabel("First trip starts from")).toHaveCount(0);
+  await maps.click();
+  await page.getByLabel("First trip starts from").fill("1 Main Street, London");
+  await page.getByLabel("First trip starts from").blur();
+  await expect(maps).toBeChecked();
+
+  await page.goto("/?windows");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^Notifications/ }).click();
+  await expect(page.getByRole("switch", { name: "Weekly review" })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Trip times from Apple Maps" })).toHaveCount(0);
+});

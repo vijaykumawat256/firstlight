@@ -11,7 +11,7 @@ use crate::tasks::TaskLists;
 use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, Timelike, Utc, Weekday};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Meetings closer together than this count as one run (no real break between them).
 const BREAK_GAP_MINUTES: i64 = 10;
@@ -41,6 +41,10 @@ pub struct DaySettings {
     pub travel_minutes: i64,
     /// On Friday afternoon, a look back at the week: meeting time, focus time, tasks done.
     pub weekly_review: bool,
+    /// Ask Apple Maps how long the trip takes (Mac only). Sends the two addresses to Apple. Off by default.
+    pub travel_maps: bool,
+    /// Where the first trip of the day starts (your office, say), for Apple Maps.
+    pub travel_from: String,
 }
 
 impl Default for DaySettings {
@@ -60,6 +64,8 @@ impl Default for DaySettings {
             follow_ups: true,
             travel_minutes: 0,
             weekly_review: true,
+            travel_maps: false,
+            travel_from: String::new(),
         }
     }
 }
@@ -79,6 +85,13 @@ impl DaySettings {
         }
         self.lunch_minutes = self.lunch_minutes.clamp(10, 120);
         self.travel_minutes = self.travel_minutes.clamp(0, 180);
+        let from: String = self
+            .travel_from
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(200)
+            .collect();
+        self.travel_from = from.trim().to_string();
     }
 }
 
@@ -145,6 +158,34 @@ pub fn due(
     ns: &NotifySettings,
     sent: &HashSet<String>,
 ) -> Vec<Notification> {
+    due_with_trips(
+        events,
+        tasks,
+        now,
+        tz,
+        ds,
+        bs,
+        rules,
+        ns,
+        sent,
+        &HashMap::new(),
+    )
+}
+
+/// [`due`], with trip times looked up for some meetings (meeting id to minutes), which replace your own estimate.
+#[allow(clippy::too_many_arguments)] // the inputs are all distinct facts about the day
+pub fn due_with_trips(
+    events: &[Event],
+    tasks: &TaskLists,
+    now: DateTime<Utc>,
+    tz: Tz,
+    ds: &DaySettings,
+    bs: &BriefingSettings,
+    rules: &UnlockRules,
+    ns: &NotifySettings,
+    sent: &HashSet<String>,
+    looked_up: &HashMap<String, i64>,
+) -> Vec<Notification> {
     let local = now.with_timezone(&tz);
     let today = local.date_naive();
     if !rules.days[weekday_index(local.weekday())]
@@ -193,10 +234,64 @@ pub fn due(
         out.push(n);
     }
     out.extend(
-        leave_now(events, now, tz, ds, bs, ns)
+        leave_now(events, now, tz, ds, bs, ns, looked_up)
             .into_iter()
             .filter(|n| !sent.contains(&n.id)),
     );
+    out
+}
+
+/// Margin added to a trip time from Apple Maps (parking, finding the room).
+pub const MAPS_MARGIN_MINUTES: i64 = 5;
+
+/// The trip time for one meeting: the one looked up (plus a margin), else your own estimate; 0 = nothing to plan.
+fn trip_minutes(e: &Event, ds: &DaySettings, looked_up: &HashMap<String, i64>) -> i64 {
+    looked_up
+        .get(&e.id)
+        .map(|m| m + MAPS_MARGIN_MINUTES)
+        .unwrap_or(ds.travel_minutes)
+}
+
+/// Trips worth looking up today: (meeting id, where from, where to). From the in-person meeting before it (if it ends
+/// before this one starts and is somewhere else), otherwise from `travel_from`. Nothing when looking up is off.
+pub fn trips(
+    events: &[Event],
+    now: DateTime<Utc>,
+    tz: Tz,
+    ds: &DaySettings,
+    bs: &BriefingSettings,
+) -> Vec<(String, String, String)> {
+    if !ds.travel_maps {
+        return vec![];
+    }
+    let (from, to) = day_bounds(now.with_timezone(&tz).date_naive(), tz);
+    let mut todays: Vec<(&Event, DateTime<Utc>, DateTime<Utc>)> = events
+        .iter()
+        .filter(|e| is_shown(e, bs) && in_person(e))
+        .filter_map(|e| match e.when {
+            When::Timed { start, end, .. } if start < to && end > from => Some((e, start, end)),
+            _ => None,
+        })
+        .collect();
+    todays.sort_by_key(|(_, s, _)| *s);
+    let mut out = Vec::new();
+    for (i, (e, start, _)) in todays.iter().enumerate() {
+        if *start <= now {
+            continue;
+        }
+        let place = e.location.as_deref().unwrap_or_default().trim().to_string();
+        let before = todays[..i]
+            .iter()
+            .filter(|(_, _, end)| *end <= *start)
+            .max_by_key(|(_, _, end)| *end);
+        let origin = match before {
+            Some((p, _, _)) => p.location.as_deref().unwrap_or_default().trim().to_string(),
+            None => ds.travel_from.clone(),
+        };
+        if !origin.is_empty() && origin.to_lowercase() != place.to_lowercase() {
+            out.push((e.id.clone(), origin, place));
+        }
+    }
     out
 }
 
@@ -230,32 +325,34 @@ pub fn in_person(e: &Event) -> bool {
 
 /// "Leave now": when the travel time before an in-person meeting begins (for ten minutes, if the app was asleep).
 /// Comes regardless of quiet hours only if the summaries could (it is part of `due`, which checks them).
-fn leave_now(
+pub fn leave_now(
     events: &[Event],
     now: DateTime<Utc>,
     tz: Tz,
     ds: &DaySettings,
     bs: &BriefingSettings,
     ns: &NotifySettings,
+    looked_up: &HashMap<String, i64>,
 ) -> Vec<Notification> {
-    if ds.travel_minutes <= 0 {
-        return vec![];
-    }
-    let travel = Duration::minutes(ds.travel_minutes);
     events
         .iter()
         .filter(|e| is_shown(e, bs) && in_person(e))
-        .filter_map(|e| match e.when {
-            When::Timed { start, .. }
-                if start - travel <= now
-                    && now < start - travel + Duration::minutes(10)
-                    && now < start =>
-            {
-                Some((e, start))
+        .filter_map(|e| {
+            let minutes = trip_minutes(e, ds, looked_up);
+            let travel = Duration::minutes(minutes);
+            match e.when {
+                When::Timed { start, .. }
+                    if minutes > 0
+                        && start - travel <= now
+                        && now < start - travel + Duration::minutes(10)
+                        && now < start =>
+                {
+                    Some((e, start, minutes))
+                }
+                _ => None,
             }
-            _ => None,
         })
-        .map(|(e, start)| Notification {
+        .map(|(e, start, minutes)| Notification {
             id: format!("leave:{}:{}", e.id, start.timestamp()),
             kind: Kind::Leave,
             title: if ns.hide_titles {
@@ -270,10 +367,14 @@ fn leave_now(
                 )
             } else {
                 format!(
-                    "Starts at {} at {}. You allow {} minutes to get there.",
+                    "Starts at {} at {}. {}",
                     fmt_time(start, tz, ns.time_24h),
                     e.location.as_deref().unwrap_or_default().trim(),
-                    ds.travel_minutes
+                    if looked_up.contains_key(&e.id) {
+                        format!("About {minutes} minutes to get there.")
+                    } else {
+                        format!("You allow {minutes} minutes to get there.")
+                    }
                 )
             },
         })
@@ -299,10 +400,8 @@ pub fn travel_warnings(
     tz: Tz,
     ds: &DaySettings,
     bs: &BriefingSettings,
+    looked_up: &HashMap<String, i64>,
 ) -> Vec<TravelWarning> {
-    if ds.travel_minutes <= 0 {
-        return vec![];
-    }
     let (from, to) = day_bounds(now.with_timezone(&tz).date_naive(), tz);
     let mut timed: Vec<(&Event, DateTime<Utc>, DateTime<Utc>)> = events
         .iter()
@@ -328,7 +427,8 @@ pub fn travel_warnings(
         let same_place = prev.location.as_deref().map(|l| l.trim().to_lowercase())
             == e.location.as_deref().map(|l| l.trim().to_lowercase());
         let gap = (*start - *prev_end).num_minutes();
-        if !same_place && gap < ds.travel_minutes {
+        let need = trip_minutes(e, ds, looked_up);
+        if !same_place && need > 0 && gap < need {
             out.push(TravelWarning {
                 event_id: e.id.clone(),
                 title: e.title.clone(),
@@ -746,7 +846,8 @@ mod tests {
         );
         phone.location = Some("Phone call".into());
         let events = [online, offsite, lunch, phone];
-        let w = travel_warnings(&events, t("2026-11-18T13:00:00Z"), NY, &ds, &bs);
+        let none = HashMap::new();
+        let w = travel_warnings(&events, t("2026-11-18T13:00:00Z"), NY, &ds, &bs, &none);
         assert_eq!(w.len(), 1);
         assert_eq!(
             (
@@ -762,12 +863,23 @@ mod tests {
                 t("2026-11-18T13:00:00Z"),
                 NY,
                 &DaySettings::default(),
-                &bs
+                &bs,
+                &none
             )
             .is_empty()
         );
 
-        let at = |now: &str| leave_now(&events, t(now), NY, &ds, &bs, &NotifySettings::default());
+        let at = |now: &str| {
+            leave_now(
+                &events,
+                t(now),
+                NY,
+                &ds,
+                &bs,
+                &NotifySettings::default(),
+                &none,
+            )
+        };
         assert!(at("2026-11-18T14:29:00Z").is_empty());
         let n = at("2026-11-18T14:30:00Z");
         assert_eq!(n.len(), 1);
@@ -777,6 +889,72 @@ mod tests {
             "Starts at 10:00 AM at Granary Square. You allow 30 minutes to get there."
         );
         assert!(at("2026-11-18T14:41:00Z").is_empty());
+    }
+
+    #[test]
+    fn looked_up_trip_times_replace_the_estimate_and_trips_start_from_the_last_place() {
+        let ds = DaySettings {
+            travel_maps: true,
+            travel_from: "1 Main St".into(),
+            ..Default::default()
+        };
+        let bs = BriefingSettings::default();
+        let mut a = ev(
+            "a",
+            "Client",
+            "2026-11-18T15:00:00Z",
+            "2026-11-18T16:00:00Z",
+        );
+        a.location = Some("Granary Square".into());
+        let mut b = ev("b", "Lunch", "2026-11-18T16:30:00Z", "2026-11-18T17:30:00Z");
+        b.location = Some("Borough Market".into());
+        let events = [a, b];
+        let trips = trips(&events, t("2026-11-18T13:00:00Z"), NY, &ds, &bs);
+        assert_eq!(
+            trips,
+            [
+                (
+                    "a".to_string(),
+                    "1 Main St".to_string(),
+                    "Granary Square".to_string()
+                ),
+                (
+                    "b".to_string(),
+                    "Granary Square".to_string(),
+                    "Borough Market".to_string()
+                ),
+            ]
+        );
+        // 40 minutes by Apple Maps (+5) for a 30-minute gap: tight, even with no estimate of your own.
+        let looked_up: HashMap<String, i64> = [("b".to_string(), 40)].into();
+        let w = travel_warnings(&events, t("2026-11-18T13:00:00Z"), NY, &ds, &bs, &looked_up);
+        assert_eq!(
+            w.iter().map(|w| w.title.as_str()).collect::<Vec<_>>(),
+            ["Lunch"]
+        );
+        let n = leave_now(
+            &events,
+            t("2026-11-18T15:45:00Z"),
+            NY,
+            &ds,
+            &bs,
+            &NotifySettings::default(),
+            &looked_up,
+        );
+        assert_eq!(
+            n[0].body,
+            "Starts at 11:30 AM at Borough Market. About 45 minutes to get there."
+        );
+        assert!(
+            super::trips(
+                &events,
+                t("2026-11-18T13:00:00Z"),
+                NY,
+                &DaySettings::default(),
+                &bs
+            )
+            .is_empty()
+        );
     }
 
     #[test]

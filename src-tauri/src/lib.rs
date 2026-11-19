@@ -9,6 +9,7 @@ mod eventkit;
 mod fullscreen;
 mod keychain;
 mod mail_ai;
+mod maps;
 mod notifier;
 #[cfg(windows)]
 mod outlook_win;

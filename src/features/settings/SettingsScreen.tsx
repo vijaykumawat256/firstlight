@@ -7,6 +7,7 @@ import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleto
 import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
 import { AiGroup, EmailGroup, SendingGroup, TaskSyncGroup } from "./EmailAiSettings";
 import { COMMON_ZONES, zoneLabel } from "@/features/calendar/zones";
+import { useDayStatus } from "@/features/tasks/DayCards";
 import { useSettings } from "./useSettings";
 
 const ACCENTS = ["system", ...CALENDAR_COLOURS.filter((c) => !["blue", "yellow", "brown"].includes(c))];
@@ -60,6 +61,7 @@ export function SettingsScreen() {
   const qc = useQueryClient();
   const push = useToasts((s) => s.push);
   const { settings: s, update } = useSettings();
+  const mapsAvailable = useDayStatus().data?.maps_available ?? false;
 
   const autostart = useQuery({ queryKey: ["autostart"], queryFn: () => api.getAutostart() });
   const toggleAutostart = useMutation({
@@ -476,6 +478,16 @@ export function SettingsScreen() {
                   options={[0, 10, 15, 30, 45, 60, 90].map((m) => ({ value: String(m), label: m === 0 ? "Off" : `${m} min` }))}
                 />
               </SettingRow>
+              {mapsAvailable && (
+                <SettingRow title="Trip times from Apple Maps" description="Instead of your own estimate, ask Apple Maps how long the drive takes (plus 5 minutes). Sends only the two places to Apple. Off by default.">
+                  <Switch label="Trip times from Apple Maps" checked={s.day.travel_maps} onCheckedChange={(v) => update((d) => void (d.day.travel_maps = v))} />
+                </SettingRow>
+              )}
+              {mapsAvailable && s.day.travel_maps && (
+                <SettingRow title="First trip starts from" description="Your office, say. Later trips start from the meeting before." stack>
+                  <TravelFrom value={s.day.travel_from} onSave={(v) => update((d) => void (d.day.travel_from = v))} />
+                </SettingRow>
+              )}
               <SettingRow title="Weekly review" description="On Friday afternoon: time in meetings next to last week, focus time and tasks done. Numbers only.">
                 <Switch label="Weekly review" checked={s.day.weekly_review} onCheckedChange={(v) => update((d) => void (d.day.weekly_review = v))} />
               </SettingRow>
@@ -628,5 +640,21 @@ export function SettingsScreen() {
         <span className="sr-only">Confirm erasing all data</span>
       </Dialog>
     </div>
+  );
+}
+
+/** The starting place for the first trip of the day, saved when you leave the field. */
+function TravelFrom({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [text, setText] = useState(value);
+  return (
+    <input
+      aria-label="First trip starts from"
+      value={text}
+      maxLength={200}
+      placeholder="1 Main Street, London"
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => text.trim() !== value && onSave(text.trim())}
+      className="h-9 w-full rounded-control bg-fill px-3 text-body text-fg placeholder:text-fg-3"
+    />
   );
 }

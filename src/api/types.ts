@@ -145,6 +145,8 @@ export interface DayStatus {
   travel: { event_id: string; title: string; start: string; previous_title: string; gap_minutes: number }[];
   /** Friday afternoon or the weekend: show the week's review. */
   review: boolean;
+  /** Trip times from Apple Maps can be offered (macOS). */
+  maps_available: boolean;
 }
 
 /** This week so far (Monday to today) next to the same days last week. */
@@ -333,7 +335,7 @@ export interface AppSettings {
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; send_messages: boolean; send_accounts: string[]; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null; plan_consented: AiProvider | null };
   privacy: { crash_reports: boolean };
-  day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean; follow_ups: boolean; travel_minutes: number; weekly_review: boolean };
+  day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean; follow_ups: boolean; travel_minutes: number; weekly_review: boolean; travel_maps: boolean; travel_from: string };
   templates: EventTemplate[];
   /** Accounts your tasks are kept in step with (the first takes tasks made here). */
   tasks: { sync_accounts: string[] };

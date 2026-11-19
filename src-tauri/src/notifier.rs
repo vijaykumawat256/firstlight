@@ -222,7 +222,9 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                         // The day's own notes: wrap-up, break, stop work (same days and quiet hours as the summaries).
                         let tasks =
                             firstlight_core::todo::lists(&store, now, tz).unwrap_or_default();
-                        let day = firstlight_core::day::due(
+                        // Trip times from Apple Maps when that is on (looked up here, at most every few hours each).
+                        let trips = crate::maps::trip_times(&events, now, tz, &settings.day, &bs, true);
+                        let day = firstlight_core::day::due_with_trips(
                             &events,
                             &tasks,
                             now,
@@ -232,6 +234,7 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                             &rules,
                             &ns,
                             &sent,
+                            &trips,
                         );
                         // After a meeting with notes written for it: a nudge to follow up.
                         let follow: Vec<firstlight_core::briefing::notify::Notification> = if settings.day.follow_ups {

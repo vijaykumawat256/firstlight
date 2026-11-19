@@ -201,7 +201,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, send_messages: false, send_accounts: [], important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null, plan_consented: null },
   privacy: { crash_reports: false },
-  day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true },
+  day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true, travel_maps: false, travel_from: "" },
   templates: [],
   tasks: { sync_accounts: [] },
 };
@@ -1075,7 +1075,7 @@ export const fixtureBackend: Backend = {
       });
     }
     const review = d.weekly_review && (day === 0 || day === 6 || (day === 5 && now.getHours() >= 12));
-    return { wrap_up: wrap, lunch, travel, review } satisfies DayStatus;
+    return { wrap_up: wrap, lunch, travel, review, maps_available: !params.has("windows") } satisfies DayStatus;
   },
   async planMyDay(useAi) {
     // A small stand-in for crates/logic/src/dayplan.rs: tasks in order, each in the first free stretch with room.

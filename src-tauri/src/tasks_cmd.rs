@@ -148,6 +148,8 @@ pub struct DayStatus {
     travel: Vec<firstlight_core::day::TravelWarning>,
     /// It is Friday afternoon or the weekend: the briefing shows the week's review.
     review: bool,
+    /// Trip times from Apple Maps can be offered (macOS).
+    maps_available: bool,
 }
 
 /// What the briefing needs to know about the rest of the day beyond meetings.
@@ -178,7 +180,10 @@ pub async fn get_day_status(state: State<'_, AppState>) -> CmdResult<DayStatus> 
             tz,
             &settings.day,
             &settings.briefing,
+            // Only trip times already known: the page never waits on Apple Maps.
+            &crate::maps::trip_times(&events, now, tz, &settings.day, &settings.briefing, false),
         ),
+        maps_available: crate::maps::AVAILABLE,
         review: settings.day.weekly_review && {
             use chrono::{Datelike, Timelike};
             let local = now.with_timezone(&tz);
