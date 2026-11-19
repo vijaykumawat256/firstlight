@@ -10,6 +10,7 @@ pub mod day;
 pub mod dayplan;
 pub mod dedupe;
 pub mod error;
+pub mod followup;
 pub mod ics;
 pub mod join;
 pub mod model;

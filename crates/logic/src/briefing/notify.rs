@@ -62,6 +62,8 @@ pub enum Kind {
     Break,
     /// The end of working hours.
     StopWork,
+    /// After a meeting with notes (`followup`).
+    FollowUp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

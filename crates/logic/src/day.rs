@@ -35,6 +35,8 @@ pub struct DaySettings {
     pub lunch_minutes: i64,
     /// A reminder at the end of working hours (the briefing's work end hour).
     pub stop_work: bool,
+    /// After a meeting you wrote notes in: a nudge to turn them into tasks or send a recap.
+    pub follow_ups: bool,
 }
 
 impl Default for DaySettings {
@@ -51,6 +53,7 @@ impl Default for DaySettings {
             lunch_to_hour: 14,
             lunch_minutes: 30,
             stop_work: false,
+            follow_ups: true,
         }
     }
 }

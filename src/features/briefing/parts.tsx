@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Briefing, BriefingItem, CalEvent, NextUp } from "@/api";
 import { Badge, Button, Card, ListGroup, SectionHeader, calendarColour } from "@/design";
 import { ConflictSheet } from "./ConflictHelp";
+import { RunningLate } from "@/features/meetings/RunningLate";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { eventLink, isLinkOnly, linkLabel } from "./links";
 import { formatCountdown, formatDuration, formatTime } from "./format";
@@ -26,6 +27,7 @@ const subtitleOf = (i: BriefingItem) => [isLinkOnly(i.event.location) ? null : i
 /* -------------------------------------------------------------- Up next */
 
 export function UpNextCard({ next, now, colourOf, onJoin, onOpen }: { next: NextUp; now: Date; colourOf: ColourOf; onJoin: (url: string) => void; onOpen: Open }) {
+  const [late, setLate] = useState(false);
   const label = next.in_progress
     ? `Happening now · ends ${formatCountdown(at(next.end).getTime() - now.getTime())}`
     : `Up next · ${formatCountdown(at(next.start).getTime() - now.getTime())}`;
@@ -53,13 +55,17 @@ export function UpNextCard({ next, now, colourOf, onJoin, onOpen }: { next: Next
               <CopyLinkButton url={eventLink(next.event)!} />
             </p>
           )}
-          {next.event.join_url && (
-            <div className="mt-3">
+          <div className="mt-3 flex flex-wrap gap-2">
+            {next.event.join_url && (
               <Button variant="primary" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(next.event.join_url!)}>
                 Join
               </Button>
-            </div>
-          )}
+            )}
+            <Button variant="secondary" onClick={() => setLate(true)}>
+              Running late
+            </Button>
+          </div>
+          {late && <RunningLate event={next.event} onClose={() => setLate(false)} />}
         </div>
       </div>
     </Card>

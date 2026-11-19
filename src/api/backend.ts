@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -94,6 +94,8 @@ export interface Backend {
   /** The lines of a meeting note that could become tasks. */
   noteTaskLines(text: string): Promise<string[]>;
   addTasksFromNote(titles: string[], meeting: string | null): Promise<Task[]>;
+  /** Meetings that ended in the last three hours with notes written for them. */
+  getFollowUps(): Promise<FollowUp[]>;
   /** Moves tasks to another day (YYYY-MM-DD), keeping each one's time of day. */
   moveTasks(ids: string[], date: string): Promise<void>;
   /** Whether the wrap-up moment has come, and whether meetings leave room for lunch today. */

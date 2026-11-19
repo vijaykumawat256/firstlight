@@ -18,6 +18,7 @@ import { useSearch } from "@/features/search/store";
 import { InboxSection } from "./InboxSection";
 import { TasksSection } from "@/features/tasks/TasksSection";
 import { LunchCard, WrapUpCard } from "@/features/tasks/DayCards";
+import { FollowUpCard } from "@/features/meetings/FollowUpCard";
 import { summarise } from "./summary";
 
 function LoadingState() {
@@ -149,6 +150,7 @@ export function BriefingScreen() {
         ) : (
           <div className="flex flex-col gap-6">
             {b.next ? <UpNextCard next={b.next} now={now} colourOf={colourOf} onJoin={join} onOpen={setDetail} /> : <ClearDay />}
+            <FollowUpCard />
             <WrapUpCard />
             {sections.attention && <AttentionSection b={b} />}
             {sections.attention && <LunchCard />}

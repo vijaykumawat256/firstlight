@@ -23,6 +23,7 @@
     "allow-open-mail-draft",
     "allow-find-free-times",
     "allow-get-meeting-note",
+    "allow-get-follow-ups",
     "allow-move-tasks",
     "allow-get-day-status",
     "allow-plan-my-day",

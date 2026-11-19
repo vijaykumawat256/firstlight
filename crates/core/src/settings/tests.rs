@@ -758,3 +758,23 @@ fn the_planning_agreement_lapses_with_the_main_one_and_never_comes_from_a_file()
     other.sanitize();
     assert_eq!(other.ai.plan_consented, None);
 }
+
+#[test]
+fn templates_keep_only_valid_unique_ones_and_a_bad_one_costs_only_itself() {
+    let s = AppSettings::from_value(&serde_json::json!({
+        "templates": [
+            { "name": " Retro ", "minutes": 45, "agenda": "What went well" },
+            { "name": "retro", "minutes": 30 },
+            { "name": "", "minutes": 30 },
+            { "name": "Too long", "minutes": 2000 },
+            { "name": 5 },
+            { "name": "Sync", "minutes": 15 }
+        ]
+    }));
+    let names: Vec<_> = s
+        .templates
+        .iter()
+        .map(|t| (t.name.as_str(), t.minutes))
+        .collect();
+    assert_eq!(names, [("Retro", 45), ("Sync", 15)]);
+}

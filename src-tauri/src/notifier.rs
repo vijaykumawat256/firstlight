@@ -233,9 +233,31 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                             &ns,
                             &sent,
                         );
+                        // After a meeting with notes written for it: a nudge to follow up.
+                        let follow: Vec<firstlight_core::briefing::notify::Notification> = if settings.day.follow_ups {
+                            let found = firstlight_core::meeting_flow::follow_ups(&store, now, tz, &bs)
+                                .unwrap_or_default();
+                            firstlight_core::followup::to_notify(&found, now)
+                                .into_iter()
+                                .map(|f| firstlight_core::briefing::notify::Notification {
+                                    id: format!("followup:{}:{}", f.event_id, f.end.timestamp()),
+                                    kind: firstlight_core::briefing::notify::Kind::FollowUp,
+                                    title: "Anything to follow up?".into(),
+                                    body: if ns.hide_titles {
+                                        "Turn your notes into tasks, or send a recap.".into()
+                                    } else {
+                                        format!("From {}: turn your notes into tasks, or send a recap.", f.title)
+                                    },
+                                })
+                                .filter(|n| !sent.contains(&n.id))
+                                .collect()
+                        } else {
+                            vec![]
+                        };
                         for n in due(&events, now, tz, &ns, &bs, &rules, &sent)
                             .into_iter()
                             .chain(day)
+                            .chain(follow)
                         {
                             if focusing && n.kind != firstlight_core::briefing::notify::Kind::Before
                             {

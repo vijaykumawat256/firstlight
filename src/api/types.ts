@@ -112,6 +112,23 @@ export interface TaskInput {
   from_meeting?: string | null;
 }
 
+/** A ready-made kind of event: usual length, and an agenda that goes into the meeting's private note. */
+export interface EventTemplate {
+  name: string;
+  minutes: number;
+  agenda: string;
+}
+
+/** A meeting that ended recently with notes written for it. */
+export interface FollowUp {
+  event_id: string;
+  title: string;
+  end: string;
+  note: string;
+  /** Everyone on the guest list, organiser first. */
+  people: string[];
+}
+
 export interface DayStatus {
   /** The wrap-up moment has come today. */
   wrap_up: boolean;
@@ -293,7 +310,8 @@ export interface AppSettings {
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null; plan_consented: AiProvider | null };
   privacy: { crash_reports: boolean };
-  day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean };
+  day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean; follow_ups: boolean };
+  templates: EventTemplate[];
 }
 
 export type AiProvider = "anthropic" | "local" | "openai" | "xai" | "gemini" | "mistral" | "groq" | "openrouter" | "custom";

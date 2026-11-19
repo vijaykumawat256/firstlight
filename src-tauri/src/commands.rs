@@ -1529,8 +1529,11 @@ pub async fn open_mail_draft(
 ) -> CmdResult<()> {
     use firstlight_core::invite;
     use tauri_plugin_opener::OpenerExt;
+    // One address, or several separated by commas (a recap to everyone at a meeting); each one is checked.
     let recipients: Vec<String> = match to.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
-        Some(t) => vec![invite::parse_address(t).ok_or("That isn't a valid email address.")?],
+        Some(t) => {
+            invite::parse_list(t).map_err(|_| "That isn't a valid email address.".to_string())?
+        }
         None => vec![],
     };
     let clip = |s: &str, max: usize| {

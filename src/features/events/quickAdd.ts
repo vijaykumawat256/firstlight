@@ -9,6 +9,8 @@ export interface QuickEvent {
   /** Local end (midnight after the last day when all day). */
   end: Date;
   location: string | null;
+  /** The line gave an end or a length ("2-3pm", "for 45 min"), so a template's usual length should not replace it. */
+  lengthGiven: boolean;
 }
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -199,11 +201,11 @@ export function parseQuickAdd(input: string, now: Date, opts: { place?: boolean 
   if (!pickedStart && evening) {
     // "dinner tonight": seven in the evening.
     const at = new Date((date ?? today).getFullYear(), (date ?? today).getMonth(), (date ?? today).getDate(), 19);
-    return { title: cap(title), allDay: false, start: at, end: new Date(at.getTime() + 3_600_000), location };
+    return { title: cap(title), allDay: false, start: at, end: new Date(at.getTime() + 3_600_000), location, lengthGiven: false };
   }
   if (!pickedStart || allDay) {
     const first = date ?? today;
-    return { title: cap(title), allDay: true, start: first, end: day0(first, 1), location };
+    return { title: cap(title), allDay: true, start: first, end: day0(first, 1), location, lengthGiven: false };
   }
   let day: Date = date ?? today;
   let s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), pickedStart.h, pickedStart.m);
@@ -214,7 +216,7 @@ export function parseQuickAdd(input: string, now: Date, opts: { place?: boolean 
   const e = pickedEnd
     ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), pickedEnd.h, pickedEnd.m)
     : new Date(s.getTime() + ((minutes as number | null) ?? 60) * 60_000);
-  return { title: cap(title), allDay: false, start: s, end: e, location };
+  return { title: cap(title), allDay: false, start: s, end: e, location, lengthGiven: !!pickedEnd || minutes !== null };
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

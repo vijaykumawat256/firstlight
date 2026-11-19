@@ -170,3 +170,14 @@ pub async fn get_day_status(state: State<'_, AppState>) -> CmdResult<DayStatus> 
         ),
     })
 }
+
+/// Meetings that ended in the last three hours with notes written for them, to follow up on.
+#[tauri::command]
+pub async fn get_follow_ups(
+    state: State<'_, AppState>,
+) -> CmdResult<Vec<firstlight_core::followup::FollowUp>> {
+    let store = lock_store(&state)?;
+    let bs = store.load_settings().briefing;
+    firstlight_core::meeting_flow::follow_ups(&store, Utc::now(), crate::local_tz(), &bs)
+        .map_err(internal("loading follow-ups"))
+}

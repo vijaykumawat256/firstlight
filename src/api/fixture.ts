@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, PlanSuggestion, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, PlanSuggestion, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -201,7 +201,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null, plan_consented: null },
   privacy: { crash_reports: false },
-  day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false },
+  day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true },
+  templates: [],
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
 if (["week", "day", "month"].includes(params.get("defaultview") ?? "")) settings.general.default_view = params.get("defaultview") as "day" | "week" | "month";
@@ -376,6 +377,10 @@ function findTask(id: string): Task {
 
 /** Private meeting notes, keyed like crates/logic/src/notes.rs `meeting_key`. */
 const meetingNotes = new Map<string, MeetingNote>();
+/** `?followup`: notes were written in this morning's planning meeting. */
+if (params.has("followup")) {
+  meetingNotes.set("title:roadmap planning", { text: "- Jordan shares the Q1 list\n- Pick a launch date", updated_at: new Date().toISOString() });
+}
 function meetingKey(e: CalEvent): string {
   if (e.recurrence_master_id) return `series:${e.calendar_id}:${e.recurrence_master_id}`;
   const t = e.title.trim().replace(/\s+/g, " ").toLowerCase();
@@ -912,6 +917,21 @@ export const fixtureBackend: Backend = {
     const made: Task[] = [];
     for (const title of titles) made.push(await this.addTask({ title, notes: null, due_date: null, due_time: null, minutes: null, from_meeting: meeting }));
     return made;
+  },
+  async getFollowUps() {
+    // A small stand-in for crates/logic/src/followup.rs.
+    const now = Date.now();
+    const out: FollowUp[] = [];
+    for (const e of fixtureEvents()) {
+      if (e.when.kind !== "timed" || e.status === "cancelled" || e.my_response === "declined") continue;
+      const [start, end] = [Date.parse(e.when.start), Date.parse(e.when.end)];
+      if (end > now || now - end > 3 * 3_600_000 || new Date(end).toDateString() !== new Date(now).toDateString()) continue;
+      const note = meetingNotes.get(meetingKey(e));
+      if (!note || Date.parse(note.updated_at) < start - 3_600_000) continue;
+      const people = [...e.attendees.filter((a) => a.organizer), ...e.attendees.filter((a) => !a.organizer)].map((a) => a.email);
+      out.push({ event_id: e.id, title: e.title, end: e.when.end, note: note.text, people: [...new Set(people)] });
+    }
+    return out.sort((a, b) => b.end.localeCompare(a.end));
   },
   async moveTasks(ids, date) {
     for (const id of ids) {

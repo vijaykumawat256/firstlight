@@ -19,6 +19,8 @@ import { InviteDialog, useInviteSenders } from "@/features/events/InviteDialog";
 import { Badge, Button, Sheet, calendarColour, useToasts } from "@/design";
 import { Guests } from "./Guests";
 import { MeetingNotes } from "./MeetingNotes";
+import { useNow } from "./hooks";
+import { RunningLate } from "@/features/meetings/RunningLate";
 import { MeetingPrep } from "./MeetingPrep";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { eventLink, isLinkOnly } from "./links";
@@ -97,6 +99,15 @@ export function EventDetail({
   const push = useToasts((s) => s.push);
   const qc = useQueryClient();
   const [editTarget, setEditTarget] = useState<OwnEvent | null>(null);
+  const [late, setLate] = useState(false);
+  const now = useNow(60_000);
+  // "Running late" makes sense from three hours before a meeting until it ends.
+  const lateOk =
+    !!event &&
+    event.when.kind === "timed" &&
+    event.status !== "cancelled" &&
+    new Date(event.when.end) > now &&
+    new Date(event.when.start).getTime() - now.getTime() < 3 * 3_600_000;
   // Captured when you click, because closing this sheet clears `event`.
   const [inviting, setInviting] = useState<{ event: CalEvent; invitees: string[] } | null>(null);
   // Which delete is being confirmed: this one day of a repeat, or everything.
@@ -208,17 +219,25 @@ export function EventDetail({
               )}
               {event.recurrence_master_id && <Badge>Repeats</Badge>}
             </div>
-            {event.join_url && (
-              <div>
-                <Button
-                  variant="primary"
-                  leading={<Video className="size-4" aria-hidden />}
-                  onClick={() => onJoin(event.join_url!)}
-                >
-                  Join
-                </Button>
+            {(event.join_url || lateOk) && (
+              <div className="flex flex-wrap gap-2">
+                {event.join_url && (
+                  <Button
+                    variant="primary"
+                    leading={<Video className="size-4" aria-hidden />}
+                    onClick={() => onJoin(event.join_url!)}
+                  >
+                    Join
+                  </Button>
+                )}
+                {lateOk && (
+                  <Button variant="secondary" onClick={() => setLate(true)}>
+                    Running late
+                  </Button>
+                )}
               </div>
             )}
+            {late && <RunningLate event={event} onClose={() => setLate(false)} />}
             <dl className="flex flex-col gap-3 text-body">
               {eventLink(event) && (
                 // The link itself, with its copy icon right after it.

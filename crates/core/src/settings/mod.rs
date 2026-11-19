@@ -72,6 +72,31 @@ pub enum UpdateChannel {
     Beta,
 }
 
+/// A ready-made kind of event: a usual length and an agenda that goes into the meeting's private note.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventTemplate {
+    pub name: String,
+    pub minutes: u32,
+    #[serde(default)]
+    pub agenda: String,
+}
+
+/// Most templates kept, and the longest name and agenda.
+pub const MAX_TEMPLATES: usize = 20;
+const MAX_TEMPLATE_NAME: usize = 60;
+const MAX_TEMPLATE_AGENDA: usize = 2000;
+
+impl EventTemplate {
+    pub fn is_valid(&self) -> bool {
+        let name = self.name.trim();
+        !name.is_empty()
+            && name.chars().count() <= MAX_TEMPLATE_NAME
+            && !name.chars().any(char::is_control)
+            && (5..=480).contains(&self.minutes)
+            && self.agenda.chars().count() <= MAX_TEMPLATE_AGENDA
+    }
+}
+
 /// Choices about what Firstlight does on its own and what it keeps.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -416,6 +441,8 @@ pub struct AppSettings {
     pub ai: AiSettings,
     pub privacy: PrivacySettings,
     pub day: crate::day::DaySettings,
+    /// Your own event templates (the built-in ones live in the page).
+    pub templates: Vec<EventTemplate>,
 }
 
 impl Default for AppSettings {
@@ -432,6 +459,7 @@ impl Default for AppSettings {
             ai: Default::default(),
             privacy: Default::default(),
             day: Default::default(),
+            templates: vec![],
         }
     }
 }
@@ -532,6 +560,15 @@ impl AppSettings {
             ai: merge_valid(&d.ai, &section("ai")),
             privacy: merge_valid(&d.privacy, &section("privacy")),
             day: merge_valid(&d.day, &section("day")),
+            // One bad template costs only itself.
+            templates: section("templates")
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|t| serde_json::from_value::<EventTemplate>(t.clone()).ok())
+                        .collect()
+                })
+                .unwrap_or_default(),
         };
         s.sanitize();
         s
@@ -662,6 +699,14 @@ impl AppSettings {
         }
 
         self.day.sanitize();
+        self.templates.retain(EventTemplate::is_valid);
+        for t in &mut self.templates {
+            t.name = t.name.trim().to_string();
+        }
+        let mut seen = std::collections::HashSet::new();
+        self.templates
+            .retain(|t| seen.insert(t.name.to_lowercase()));
+        self.templates.truncate(MAX_TEMPLATES);
 
         let accent = &self.appearance.accent;
         if accent != "system" && !CALENDAR_COLOURS.contains(&accent.as_str()) {

@@ -149,6 +149,19 @@ export function SettingsScreen() {
         )}
         {section === "general" && (
           <div className="flex flex-col gap-7">
+            <Group title="Event templates" footer="1:1, Interview, Standup and Kickoff are built in. Make your own with “Keep as a template” in the new-event form; a title that starts with a template's name (“1:1 with Sam”) picks it up.">
+              {s.templates.length === 0 ? (
+                <SettingRow title="Your templates" description="None yet." />
+              ) : (
+                s.templates.map((t) => (
+                  <SettingRow key={t.name} title={t.name} description={`${t.minutes} min${t.agenda.trim() ? " · with an agenda" : ""}`}>
+                    <Button size="sm" variant="plain" aria-label={`Delete template ${t.name}`} onClick={() => update((d) => void (d.templates = d.templates.filter((x) => x.name !== t.name)))}>
+                      Delete
+                    </Button>
+                  </SettingRow>
+                ))
+              )}
+            </Group>
             <Group title="Startup">
               <SettingRow title="Start at login" description="Open Firstlight quietly when you sign in.">
                 <Switch label="Start at login" checked={autostart.data ?? false} disabled={autostart.isPending} onCheckedChange={(v) => toggleAutostart.mutate(v)} />
@@ -431,6 +444,9 @@ export function SettingsScreen() {
                   </div>
                 </SettingRow>
               )}
+              <SettingRow title="Follow up after meetings" description="After a meeting you wrote notes in: turn them into tasks or email a recap.">
+                <Switch label="Follow up after meetings" checked={s.day.follow_ups} onCheckedChange={(v) => update((d) => void (d.day.follow_ups = v))} />
+              </SettingRow>
               <SettingRow title="Stop-work reminder" description="A note when your working hours end.">
                 <Switch label="Stop-work reminder" checked={s.day.stop_work} onCheckedChange={(v) => update((d) => void (d.day.stop_work = v))} />
               </SettingRow>

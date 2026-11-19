@@ -14,11 +14,11 @@ function parse(text: string) {
 describe("parseQuickAdd", () => {
   it("reads a title, a weekday, a time and a place", () => {
     const q = parse("Lunch with Riya friday 1pm at Cafe Nero");
-    expect(q).toEqual({ title: "Lunch with Riya", allDay: false, start: at(20, 13), end: at(20, 14), location: "Cafe Nero" });
+    expect(q).toEqual({ title: "Lunch with Riya", allDay: false, start: at(20, 13), end: at(20, 14), location: "Cafe Nero", lengthGiven: false });
   });
 
   it("understands time ranges, with the end's am/pm applying to the start", () => {
-    expect(parse("Dentist tomorrow 2-3pm")).toMatchObject({ title: "Dentist", start: at(19, 14), end: at(19, 15) });
+    expect(parse("Dentist tomorrow 2-3pm")).toMatchObject({ title: "Dentist", start: at(19, 14), end: at(19, 15), lengthGiven: true });
     expect(parse("Planning thu 11-1pm")).toMatchObject({ start: at(19, 11), end: at(19, 13) });
     expect(parse("Workshop from 9:30 to 11 on friday")).toMatchObject({ title: "Workshop", start: at(20, 9, 30), end: at(20, 11) });
     expect(parse("Review 13:00–14:30 tomorrow")).toMatchObject({ start: at(19, 13), end: at(19, 14, 30) });
@@ -42,7 +42,7 @@ describe("parseQuickAdd", () => {
   });
 
   it("makes an all-day event for a day without a time", () => {
-    expect(parse("Mum's birthday dec 24")).toEqual({ title: "Mum's birthday", allDay: true, start: at(24, 0, 0, 11), end: at(25, 0, 0, 11), location: null });
+    expect(parse("Mum's birthday dec 24")).toEqual({ title: "Mum's birthday", allDay: true, start: at(24, 0, 0, 11), end: at(25, 0, 0, 11), location: null, lengthGiven: false });
     expect(parse("Holiday 3rd of march")).toMatchObject({ allDay: true, start: at(3, 0, 0, 2, 2027) });
     expect(parse("Conference 2026-12-01")).toMatchObject({ allDay: true, start: at(1, 0, 0, 11) });
     expect(parse("Pay rent in 3 days")).toMatchObject({ allDay: true, start: at(21, 0) });

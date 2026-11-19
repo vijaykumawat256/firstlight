@@ -3,6 +3,9 @@ import { useId, useState } from "react";
 import { useInviteSenders } from "@/features/events/InviteDialog";
 import { parseQuickAdd, type QuickEvent } from "@/features/events/quickAdd";
 import { formatDate, formatTime } from "@/features/briefing/format";
+import { allTemplates, templateFor } from "@/features/events/templates";
+import { useSettings } from "@/features/settings/useSettings";
+import type { EventTemplate } from "@/api";
 import { api, errorMessage, type EventInput, type OwnEvent } from "@/api";
 import {
   Button,
@@ -70,6 +73,19 @@ function fromQuick(p: Draft, q: QuickEvent): Draft {
     endTime: q.allDay ? p.endTime : timeValue(q.end),
     location: q.location ?? "",
   };
+}
+
+/** Sets the end so the event lasts `minutes` (timed events). */
+function withLength(p: Draft, minutes: number): Draft {
+  if (p.allDay || !p.startDate || !p.startTime) return p;
+  const end = new Date(new Date(`${p.startDate}T${p.startTime}`).getTime() + minutes * 60_000);
+  return { ...p, endDate: dateValue(end), endTime: timeValue(end) };
+}
+
+/** How long a timed draft lasts, in minutes (30 when it can't be read). */
+function lengthOf(d: Draft): number {
+  const m = (new Date(`${d.endDate}T${d.endTime}`).getTime() - new Date(`${d.startDate}T${d.startTime}`).getTime()) / 60_000;
+  return Number.isFinite(m) && m >= 5 && m <= 480 ? Math.round(m) : 30;
 }
 
 /** "Fri 20 Nov, 1:00 PM to 2:00 PM · Cafe Nero", so the person can see how the line was read. */
@@ -246,12 +262,19 @@ function FormSheet({
 }) {
   const qc = useQueryClient();
   const push = useToasts((s) => s.push);
+  const { settings, update: updateSettings } = useSettings();
+  const templates = allTemplates(settings?.templates ?? []);
   const [line, setLine] = useState(quick ?? "");
   const [understood, setUnderstood] = useState<QuickEvent | null>(() => (quick ? parseQuickAdd(quick, new Date()) : null));
+  // The template chosen (by name), whose agenda goes into the meeting's private note once the event is added.
+  const [template, setTemplate] = useState<EventTemplate | null>(() => (understood ? templateFor(understood.title, templates) : null));
   const [d, setD] = useState<Draft>(() => {
     if (initial) return draftOf(initial.input);
     const start = blank(day ?? new Date());
-    return understood ? fromQuick(start, understood) : start;
+    if (!understood) return start;
+    const filled = fromQuick(start, understood);
+    const t = templateFor(understood.title, templates);
+    return t && !understood.lengthGiven ? withLength(filled, t.minutes) : filled;
   });
   const quickAdd = !initial && !detach;
   const notesId = useId();
@@ -275,9 +298,14 @@ function FormSheet({
         await api.skipOccurrence(detach);
         return made;
       }
-      return initial
-        ? api.updateEvent(initial.id, input)
-        : api.createEvent(input, destination === "local" ? undefined : destination);
+      if (initial) return api.updateEvent(initial.id, input);
+      const made = await api.createEvent(input, destination === "local" ? undefined : destination);
+      // The template's agenda starts the meeting's private note, unless that meeting already has one.
+      if (template?.agenda.trim()) {
+        const existing = await api.getMeetingNote(made.id).catch(() => null);
+        if (!existing) await api.saveMeetingNote(made.id, template.agenda).catch(() => null);
+      }
+      return made;
     },
     onSuccess: () => {
       void qc.invalidateQueries();
@@ -303,7 +331,26 @@ function FormSheet({
     setLine(text);
     const q = parseQuickAdd(text, new Date());
     setUnderstood(q);
-    if (q) setD((p) => fromQuick(p, q));
+    if (!q) return;
+    const t = templateFor(q.title, templates);
+    setTemplate(t);
+    setD((p) => {
+      const filled = fromQuick(p, q);
+      return t && !q.lengthGiven ? withLength(filled, t.minutes) : filled;
+    });
+  };
+  const pickTemplate = (name: string) => {
+    const t = templates.find((x) => x.name === name) ?? null;
+    setTemplate(t);
+    if (t) setD((p) => withLength({ ...p, title: p.title.trim() ? p.title : t.name }, t.minutes));
+  };
+  const saveAsTemplate = () => {
+    const name = d.title.trim().slice(0, 60);
+    if (!name) return;
+    updateSettings((s) => {
+      s.templates = [{ name, minutes: d.allDay ? 30 : lengthOf(d), agenda: d.notes.trim().slice(0, 2000) }, ...s.templates.filter((t) => t.name.toLowerCase() !== name.toLowerCase())].slice(0, 20);
+    });
+    push({ title: `Kept “${name}” as a template` });
   };
 
   return (
@@ -380,6 +427,18 @@ function FormSheet({
             autoFocus
           />
         )}
+        {quickAdd && (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-headline text-fg">Template</span>
+            <Select
+              label="Template"
+              value={template?.name ?? "none"}
+              onValueChange={(v) => (v === "none" ? setTemplate(null) : pickTemplate(v))}
+              options={[{ value: "none", label: "None" }, ...templates.map((t) => ({ value: t.name, label: `${t.name} (${t.minutes} min)` }))]}
+            />
+          </div>
+        )}
+        {template?.agenda.trim() && quickAdd && <p className="text-footnote text-fg-2">Its agenda goes into your private notes for this meeting.</p>}
         <TextField
           label="Title"
           value={d.title}
@@ -533,6 +592,13 @@ function FormSheet({
             className="select-text rounded-card bg-fill px-3 py-2 text-headline text-fg placeholder:text-fg-3"
           />
         </div>
+        {!d.allDay && d.title.trim() && (
+          <div>
+            <Button variant="plain" size="sm" onClick={saveAsTemplate}>
+              Keep as a template
+            </Button>
+          </div>
+        )}
         {editing && repeating && (
           <p className="text-footnote text-fg-2">
             Changes apply to every repeat of this event.
