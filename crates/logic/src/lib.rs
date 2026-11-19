@@ -11,6 +11,7 @@ pub mod error;
 pub mod ics;
 pub mod join;
 pub mod model;
+pub mod notes;
 pub mod prep;
 pub mod tz;
 pub mod weekahead;

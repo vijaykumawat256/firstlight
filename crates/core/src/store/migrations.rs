@@ -72,6 +72,12 @@ const MIGRATIONS: &[&str] = &[
      );",
     // 4: the guest list of an event, as the calendar reported it (JSON; names and addresses stay in the encrypted file)
     "ALTER TABLE events ADD COLUMN attendees TEXT;",
+    // 5: private meeting notes, one per meeting (see `notes::meeting_key`); kept only in this encrypted file
+    "CREATE TABLE meeting_notes (
+        key TEXT PRIMARY KEY,
+        text TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+     );",
 ];
 
 pub fn run(conn: &mut Connection) -> Result<()> {

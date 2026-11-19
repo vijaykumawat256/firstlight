@@ -1397,6 +1397,60 @@ pub async fn get_briefing(
     Ok(build(&events, now, tz, &settings))
 }
 
+/// A private meeting note as the event sheet shows it.
+#[derive(serde::Serialize)]
+pub struct MeetingNote {
+    text: String,
+    /// When it was last changed (RFC 3339).
+    updated_at: chrono::DateTime<Utc>,
+}
+
+/// The note this meeting shares (every time it happens), if one was written. Kept only on this computer.
+#[tauri::command]
+pub async fn get_meeting_note(
+    state: State<'_, AppState>,
+    id: String,
+) -> CmdResult<Option<MeetingNote>> {
+    let store = lock_store(&state)?;
+    let Some(event) = store
+        .get_event(&id)
+        .map_err(internal("loading the event"))?
+    else {
+        return Ok(None);
+    };
+    Ok(store
+        .get_meeting_note(&firstlight_core::notes::meeting_key(&event))
+        .map_err(internal("loading the note"))?
+        .map(|(text, updated_at)| MeetingNote { text, updated_at }))
+}
+
+/// Keeps (or, when empty, removes) the note for this meeting. It shows again next time the meeting comes up.
+#[tauri::command]
+pub async fn save_meeting_note(
+    state: State<'_, AppState>,
+    id: String,
+    text: String,
+) -> CmdResult<Option<MeetingNote>> {
+    let text = firstlight_core::notes::clean_note(&text).map_err(user_input_error)?;
+    let now = Utc::now();
+    let store = lock_store(&state)?;
+    let event = store
+        .get_event(&id)
+        .map_err(internal("loading the event"))?
+        .ok_or("That event is no longer in your calendar.")?;
+    store
+        .set_meeting_note(
+            &firstlight_core::notes::meeting_key(&event),
+            text.as_deref(),
+            now,
+        )
+        .map_err(internal("saving the note"))?;
+    Ok(text.map(|text| MeetingNote {
+        text,
+        updated_at: now,
+    }))
+}
+
 /// Free stretches in working hours, from now, long enough for `minutes` (weekends skipped).
 #[tauri::command]
 pub async fn find_free_times(

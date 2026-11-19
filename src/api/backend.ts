@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, WeekAhead, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -83,6 +83,10 @@ export interface Backend {
   openMailDraft(to: string | null, subject: string, body: string): Promise<void>;
   /** What is worth knowing before a meeting, worked out locally (no AI, no network). */
   getMeetingPrep(id: string): Promise<MeetingPrep>;
+  /** Your private note for this meeting (shared by every time it happens), or null. */
+  getMeetingNote(id: string): Promise<MeetingNote | null>;
+  /** Keeps the note for this meeting; empty text removes it. Kept only on this computer. */
+  saveMeetingNote(id: string, text: string): Promise<MeetingNote | null>;
   /** Answers a question about the calendar. Only the question (with today's date and time zone) is sent to the AI; the answer is built here from the stored events. */
   askCalendar(question: string): Promise<AskReply>;
   /** Free stretches in working hours, from now, long enough for `minutes`; weekends skipped. */

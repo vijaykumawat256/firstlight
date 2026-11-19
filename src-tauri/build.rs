@@ -43,6 +43,8 @@ fn main() {
             "get_conflict_help",
             "open_mail_draft",
             "find_free_times",
+            "get_meeting_note",
+            "save_meeting_note",
             "get_calendars",
             "list_accounts",
             "add_ics_account",

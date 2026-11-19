@@ -523,6 +523,44 @@ impl Store {
         Ok(())
     }
 
+    // ---- private meeting notes (see `notes`) ---------------------------------------------
+
+    /// The note kept for a meeting, and when it was last changed.
+    pub fn get_meeting_note(&self, key: &str) -> Result<Option<(String, DateTime<Utc>)>> {
+        match self.conn.query_row(
+            "SELECT text, updated_at FROM meeting_notes WHERE key = ?1",
+            [key],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)),
+        ) {
+            Ok((text, at)) => Ok(Some((
+                text,
+                DateTime::from_timestamp(at, 0).unwrap_or_default(),
+            ))),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Keeps a note for a meeting; an empty note (`None`) removes it.
+    pub fn set_meeting_note(
+        &self,
+        key: &str,
+        text: Option<&str>,
+        now: DateTime<Utc>,
+    ) -> Result<()> {
+        match text {
+            Some(text) => self.conn.execute(
+                "INSERT INTO meeting_notes (key, text, updated_at) VALUES (?1, ?2, ?3)
+                 ON CONFLICT(key) DO UPDATE SET text = excluded.text, updated_at = excluded.updated_at",
+                params![key, text, now.timestamp()],
+            )?,
+            None => self
+                .conn
+                .execute("DELETE FROM meeting_notes WHERE key = ?1", [key])?,
+        };
+        Ok(())
+    }
+
     pub fn remove_calendar(&self, id: &str) -> Result<()> {
         self.conn
             .execute("DELETE FROM calendars WHERE id = ?1", [id])?;
@@ -655,6 +693,7 @@ impl Store {
              DELETE FROM briefing_log;
              DELETE FROM notifications_sent;
              DELETE FROM own_events;
+             DELETE FROM meeting_notes;
              DELETE FROM settings;",
         )?;
         self.conn
@@ -953,6 +992,27 @@ mod tests {
     }
 
     #[test]
+    fn meeting_notes_are_kept_changed_and_removed() {
+        let s = seeded();
+        let (t1, t2) = (
+            DateTime::from_timestamp(1_800_000_000, 0).unwrap(),
+            DateTime::from_timestamp(1_800_000_600, 0).unwrap(),
+        );
+        assert_eq!(s.get_meeting_note("title:standup").unwrap(), None);
+        s.set_meeting_note("title:standup", Some("Ask about the budget"), t1)
+            .unwrap();
+        s.set_meeting_note("title:standup", Some("Budget agreed"), t2)
+            .unwrap();
+        assert_eq!(
+            s.get_meeting_note("title:standup").unwrap(),
+            Some(("Budget agreed".into(), t2))
+        );
+        assert_eq!(s.get_meeting_note("title:other").unwrap(), None);
+        s.set_meeting_note("title:standup", None, t2).unwrap();
+        assert_eq!(s.get_meeting_note("title:standup").unwrap(), None);
+    }
+
+    #[test]
     fn erase_all_removes_everything() {
         let s = seeded();
         s.save_settings(&crate::settings::AppSettings::default())
@@ -964,6 +1024,8 @@ mod tests {
         )
         .unwrap();
         s.mark_notification_sent("x", Utc::now()).unwrap();
+        s.set_meeting_note("title:standup", Some("private"), Utc::now())
+            .unwrap();
         s.erase_all().unwrap();
         for table in [
             "accounts",
@@ -973,6 +1035,8 @@ mod tests {
             "settings",
             "briefing_log",
             "notifications_sent",
+            "own_events",
+            "meeting_notes",
         ] {
             let n: i64 = s
                 .conn

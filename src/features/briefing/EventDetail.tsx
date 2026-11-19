@@ -18,6 +18,7 @@ import { EventForm } from "@/features/events/EventForm";
 import { InviteDialog, useInviteSenders } from "@/features/events/InviteDialog";
 import { Badge, Button, Sheet, calendarColour, useToasts } from "@/design";
 import { Guests } from "./Guests";
+import { MeetingNotes } from "./MeetingNotes";
 import { MeetingPrep } from "./MeetingPrep";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { eventLink, isLinkOnly } from "./links";
@@ -409,6 +410,7 @@ export function EventDetail({
             )}
             {!own && <Guests people={event.attendees} />}
             <MeetingPrep event={event} />
+            <MeetingNotes key={event.id} event={event} />
             {event.description && (
               // Event text is untrusted: shown as plain text only, never as HTML.
               <p className="max-h-48 select-text overflow-y-auto whitespace-pre-wrap break-words rounded-card bg-fill p-3 text-body text-fg-2">

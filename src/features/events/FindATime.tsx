@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
-import { Copy } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy, Target } from "lucide-react";
 import { useMemo, useState } from "react";
-import { api, type FreeSlot } from "@/api";
+import { api, errorMessage, type FreeSlot } from "@/api";
 import { Dialog, IconButton, Segmented, useToasts } from "@/design";
 import { formatDate, formatTime } from "@/features/briefing/format";
 
@@ -22,6 +22,7 @@ const range = (s: FreeSlot) => `${formatDate(new Date(s.start))}, ${formatTime(n
 /** "Find a time": the free stretches in your working hours that are long enough. Reads your calendars only; nothing is sent. */
 export function FindATime({ onClose }: { onClose: () => void }) {
   const push = useToasts((s) => s.push);
+  const qc = useQueryClient();
   const [minutes, setMinutes] = useState("30");
   const [days, setDays] = useState("7");
   const slots = useQuery({
@@ -42,8 +43,35 @@ export function FindATime({ onClose }: { onClose: () => void }) {
       .catch(() => push({ title: "Couldn't copy that", tone: "danger" }));
   };
 
+  // Blocks the chosen length from the start of the stretch as focus time, kept on this computer.
+  const block = useMutation({
+    mutationFn: (s: FreeSlot) => {
+      const start = new Date(s.start);
+      const end = new Date(Math.min(start.getTime() + Number(minutes) * 60_000, new Date(s.end).getTime()));
+      return api.createEvent({
+        title: "Focus",
+        all_day: false,
+        start: start.toISOString(),
+        end: end.toISOString(),
+        location: null,
+        join_url: null,
+        notes: null,
+        repeat: null,
+        reminder_minutes: null,
+        invitees: [],
+        focus: true,
+      });
+    },
+    onSuccess: (e) => {
+      void qc.invalidateQueries();
+      const start = e.when.kind === "timed" ? new Date(e.when.start) : null;
+      push({ title: start ? `Focus time added: ${formatDate(start)}, ${formatTime(start)}` : "Focus time added" });
+    },
+    onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
+  });
+
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Find a time" description="Free stretches in your working hours, weekdays only.">
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Find a time" description="Free stretches in your working hours, weekdays only. The target blocks one for focus time.">
       <div className="flex flex-wrap gap-2 pb-3">
         <Segmented label="How long" value={minutes} onValueChange={setMinutes} options={LENGTHS} />
         <Segmented label="How far ahead" value={days} onValueChange={setDays} options={SPANS} />
@@ -65,9 +93,14 @@ export function FindATime({ onClose }: { onClose: () => void }) {
                     <span className="text-body text-fg">
                       {formatTime(new Date(s.start))} to {formatTime(new Date(s.end))}
                     </span>
-                    <IconButton label={`Copy ${range(s)}`} onClick={() => copy(s)}>
-                      <Copy className="size-4" />
-                    </IconButton>
+                    <span className="flex shrink-0 items-center gap-1">
+                      <IconButton label={`Block ${LENGTHS.find((l) => l.value === minutes)?.label ?? ""} for focus from ${range(s)}`} disabled={block.isPending} onClick={() => block.mutate(s)}>
+                        <Target className="size-4" />
+                      </IconButton>
+                      <IconButton label={`Copy ${range(s)}`} onClick={() => copy(s)}>
+                        <Copy className="size-4" />
+                      </IconButton>
+                    </span>
                   </li>
                 ))}
               </ul>

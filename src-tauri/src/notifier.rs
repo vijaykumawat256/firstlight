@@ -173,16 +173,31 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                             );
                             log::info!("own reminder shown");
                         }
+                        // During focus time the summaries and snoozed repeats wait (they are not marked as
+                        // shown, so they come once it ends); heads-ups and reminders still come, so a meeting is
+                        // never missed.
+                        let focusing = firstlight_core::local::focus_until(&store, now)
+                            .ok()
+                            .flatten()
+                            .is_some();
                         // Snoozed ones whose ten minutes are up (shown again with the same words).
-                        let again = SNOOZED
-                            .lock()
-                            .map(|mut q| q.take_due(now))
-                            .unwrap_or_default();
+                        let again = if focusing {
+                            vec![]
+                        } else {
+                            SNOOZED
+                                .lock()
+                                .map(|mut q| q.take_due(now))
+                                .unwrap_or_default()
+                        };
                         for s in again {
                             show(&app, &s.title, &s.body, true);
                             log::info!("snoozed notification shown again");
                         }
                         for n in due(&events, now, tz, &ns, &bs, &rules, &sent) {
+                            if focusing && n.kind != firstlight_core::briefing::notify::Kind::Before
+                            {
+                                continue;
+                            }
                             // Record first: whatever happens next, we never try this one again.
                             let _ = store.mark_notification_sent(&n.id, now);
                             show(

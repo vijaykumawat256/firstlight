@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { useInviteSenders } from "@/features/events/InviteDialog";
+import { parseQuickAdd, type QuickEvent } from "@/features/events/quickAdd";
+import { formatDate, formatTime } from "@/features/briefing/format";
 import { api, errorMessage, type EventInput, type OwnEvent } from "@/api";
 import {
   Button,
@@ -51,6 +53,29 @@ interface Draft {
   /** Minutes before, or "none". */
   reminder: string;
   invitees: string;
+  /** Focus time (timed events kept on this computer only). */
+  focus: boolean;
+}
+
+/** The fields a quick-add line fills in; everything else in the draft stays as it was. */
+function fromQuick(p: Draft, q: QuickEvent): Draft {
+  const last = q.allDay ? new Date(q.end.getFullYear(), q.end.getMonth(), q.end.getDate() - 1) : q.end;
+  return {
+    ...p,
+    title: q.title,
+    allDay: q.allDay,
+    startDate: dateValue(q.start),
+    startTime: q.allDay ? p.startTime : timeValue(q.start),
+    endDate: dateValue(last),
+    endTime: q.allDay ? p.endTime : timeValue(q.end),
+    location: q.location ?? "",
+  };
+}
+
+/** "Fri 20 Nov, 1:00 PM to 2:00 PM · Cafe Nero", so the person can see how the line was read. */
+export function describeQuick(q: QuickEvent): string {
+  const when = q.allDay ? `${formatDate(q.start)}, all day` : `${formatDate(q.start)}, ${formatTime(q.start)} to ${formatTime(q.end)}`;
+  return `${q.title} · ${when}${q.location ? ` · ${q.location}` : ""}`;
 }
 
 /** The next half hour on `day` (or today), and an hour after it. */
@@ -79,6 +104,7 @@ function blank(day: Date): Draft {
     until: "",
     reminder: "none",
     invitees: "",
+    focus: false,
   };
 }
 
@@ -92,6 +118,7 @@ function draftOf(i: EventInput): Draft {
     until: i.repeat?.until ?? "",
     reminder: i.reminder_minutes === null ? "none" : String(i.reminder_minutes),
     invitees: i.invitees.join(", "),
+    focus: i.focus ?? false,
   };
   if (i.all_day)
     return {
@@ -138,6 +165,7 @@ function inputOf(d: Draft): EventInput {
     reminder_minutes:
       d.allDay || d.reminder === "none" ? null : Number(d.reminder),
     invitees: d.invitees.split(/[\s,;]+/).filter(Boolean),
+    focus: !d.allDay && d.focus,
   };
 }
 
@@ -176,6 +204,7 @@ export function EventForm({
   initial,
   day,
   detach,
+  quick,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -183,6 +212,8 @@ export function EventForm({
   day?: Date;
   /** The id of one day of a repeating event: only that day changes (see FormSheet). */
   detach?: string;
+  /** A line typed elsewhere (search) to start a new event from, as if typed into Quick add. */
+  quick?: string;
 }) {
   // Mounted only while open, so every opening starts from a fresh draft.
   return open ? (
@@ -191,6 +222,7 @@ export function EventForm({
       initial={initial}
       day={day}
       detach={detach}
+      quick={quick}
     />
   ) : null;
 }
@@ -204,17 +236,24 @@ function FormSheet({
   initial,
   day,
   detach,
+  quick,
 }: {
   onOpenChange: (o: boolean) => void;
   initial?: OwnEvent | null;
   day?: Date;
   detach?: string;
+  quick?: string;
 }) {
   const qc = useQueryClient();
   const push = useToasts((s) => s.push);
-  const [d, setD] = useState<Draft>(() =>
-    initial ? draftOf(initial.input) : blank(day ?? new Date()),
-  );
+  const [line, setLine] = useState(quick ?? "");
+  const [understood, setUnderstood] = useState<QuickEvent | null>(() => (quick ? parseQuickAdd(quick, new Date()) : null));
+  const [d, setD] = useState<Draft>(() => {
+    if (initial) return draftOf(initial.input);
+    const start = blank(day ?? new Date());
+    return understood ? fromQuick(start, understood) : start;
+  });
+  const quickAdd = !initial && !detach;
   const notesId = useId();
   const editing = !!initial && !detach;
   // Where a NEW event goes: only here, or into a calendar in the Calendar app. The menu has more than "this
@@ -224,10 +263,12 @@ function FormSheet({
   const choices = !initial && !detach ? (writable.data ?? []) : [];
   // The field to invite people appears only when real invitations can go out; otherwise only who is already invited shows.
   const canInvite = (useInviteSenders().data?.length ?? 0) > 0;
+  // Focus time is read from this computer's copy, so it is offered only for events kept here.
+  const canFocus = !d.allDay && destination === "local" && !initial?.saved_to;
 
   const save = useMutation({
     mutationFn: async () => {
-      const input = inputOf(d);
+      const input = { ...inputOf(d), focus: canFocus && d.focus };
       if (detach) {
         // Create the one-off first: if that fails, the series is left exactly as it was.
         const made = await api.createEvent(input);
@@ -258,6 +299,12 @@ function FormSheet({
     !!d.endDate &&
     (d.allDay || (!!d.startTime && !!d.endTime));
   const repeating = d.repeat !== "none" && !detach;
+  const typeLine = (text: string) => {
+    setLine(text);
+    const q = parseQuickAdd(text, new Date());
+    setUnderstood(q);
+    if (q) setD((p) => fromQuick(p, q));
+  };
 
   return (
     <Sheet
@@ -315,13 +362,31 @@ function FormSheet({
           <p className="text-footnote text-fg-2">It is added to that calendar in your Calendar app, so it appears on your other devices too.{canInvite ? " People you invite are not emailed by saving: use Send invitation for that." : ""}</p>
         )}
         {initial?.saved_to && !detach && <p className="text-footnote text-fg-2">This event is in your Calendar app, so changes you make here are made there too.</p>}
+        {quickAdd && (
+          <TextField
+            label="Quick add"
+            value={line}
+            onChange={(e) => typeLine(e.target.value)}
+            maxLength={300}
+            placeholder="Lunch with Riya friday 1pm at Cafe Nero"
+            hint={
+              understood
+                ? `Understood: ${describeQuick(understood)}. Press Return to add it, or change anything below.`
+                : line.trim()
+                  ? "Add a day or a time, such as “tomorrow 3pm” or “dec 24”."
+                  : "Type it in one go and the details below fill themselves in."
+            }
+            autoComplete="off"
+            autoFocus
+          />
+        )}
         <TextField
           label="Title"
           value={d.title}
           onChange={(e) => set("title", e.target.value)}
           maxLength={200}
           autoComplete="off"
-          autoFocus
+          autoFocus={!quickAdd}
         />
         <div className="flex items-center justify-between gap-3">
           <span className="text-headline text-fg">All day</span>
@@ -399,6 +464,15 @@ function FormSheet({
                 onChange={(e) => set("until", e.target.value)}
               />
             )}
+          </div>
+        )}
+        {canFocus && (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-headline text-fg">Focus time</span>
+              <Switch label="Focus time" checked={d.focus} onCheckedChange={(v) => set("focus", v)} />
+            </div>
+            <p className="text-footnote text-fg-2">While it runs, Firstlight holds back its summaries and doesn't open when you unlock. Meeting heads-ups and reminders still come.</p>
           </div>
         )}
         {!d.allDay && (

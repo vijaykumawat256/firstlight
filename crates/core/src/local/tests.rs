@@ -24,6 +24,7 @@ fn timed(title: &str) -> EventInput {
         repeat: None,
         reminder_minutes: None,
         invitees: vec![],
+        focus: false,
     }
 }
 
@@ -1014,4 +1015,91 @@ fn a_caldav_event_is_found_again_by_its_uid_and_stays_in_its_own_account() {
     let remote = remote_of(&s, &e.id).unwrap().unwrap();
     assert_eq!(remote.account_id.as_deref(), Some("acct1"));
     assert_eq!(remote.calendar_id, "acct1:abc");
+}
+
+fn focus(start: &str, end: &str) -> EventInput {
+    EventInput {
+        start: start.into(),
+        end: end.into(),
+        location: None,
+        join_url: None,
+        focus: true,
+        ..timed("Focus")
+    }
+}
+
+#[test]
+fn focus_time_is_found_while_it_runs_and_back_to_back_blocks_join() {
+    let mut s = store();
+    let now = t("2026-11-20T08:00:00Z");
+    assert_eq!(focus_until(&s, now).unwrap(), None);
+    save(
+        &mut s,
+        None,
+        &focus("2026-11-20T09:00:00Z", "2026-11-20T10:00:00Z"),
+        NY,
+        now,
+    )
+    .unwrap();
+    save(
+        &mut s,
+        None,
+        &focus("2026-11-20T10:00:00Z", "2026-11-20T10:30:00Z"),
+        NY,
+        now,
+    )
+    .unwrap();
+    // An ordinary event at the same time is not focus time.
+    save(&mut s, None, &timed("Call"), NY, now).unwrap();
+    assert_eq!(focus_until(&s, t("2026-11-20T08:59:59Z")).unwrap(), None);
+    assert_eq!(
+        focus_until(&s, t("2026-11-20T09:00:00Z")).unwrap(),
+        Some(t("2026-11-20T10:30:00Z"))
+    );
+    assert_eq!(
+        focus_until(&s, t("2026-11-20T10:15:00Z")).unwrap(),
+        Some(t("2026-11-20T10:30:00Z"))
+    );
+    assert_eq!(focus_until(&s, t("2026-11-20T10:30:00Z")).unwrap(), None);
+    assert_eq!(focus_until(&s, t("2026-11-20T15:30:00Z")).unwrap(), None);
+}
+
+#[test]
+fn repeating_focus_time_counts_on_every_day() {
+    let mut s = store();
+    let now = t("2026-11-16T08:00:00Z");
+    let mut daily = focus("2026-11-16T14:00:00Z", "2026-11-16T16:00:00Z");
+    daily.repeat = Some(RepeatInput {
+        every: "daily".into(),
+        interval: 1,
+        until: None,
+    });
+    save(&mut s, None, &daily, NY, now).unwrap();
+    assert_eq!(
+        focus_until(&s, t("2026-11-19T15:00:00Z")).unwrap(),
+        Some(t("2026-11-19T16:00:00Z"))
+    );
+}
+
+#[test]
+fn focus_time_needs_times_and_stays_on_this_computer() {
+    let mut s = store();
+    let now = t("2026-11-16T08:00:00Z");
+    let all_day = EventInput {
+        all_day: true,
+        start: "2026-11-20".into(),
+        end: "2026-11-20".into(),
+        ..focus("", "")
+    };
+    assert!(save(&mut s, None, &all_day, NY, now).is_err());
+    let input = focus("2026-11-20T09:00:00Z", "2026-11-20T10:00:00Z");
+    assert!(prepare_save(&s, None, "EK-CAL", &input, NY, now).is_err());
+    // Turning it off again makes it an ordinary event.
+    let made = save(&mut s, None, &input, NY, now).unwrap();
+    let off = EventInput {
+        focus: false,
+        ..input
+    };
+    save(&mut s, Some(&made.id), &off, NY, now).unwrap();
+    assert_eq!(focus_until(&s, t("2026-11-20T09:30:00Z")).unwrap(), None);
 }

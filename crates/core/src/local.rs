@@ -62,6 +62,10 @@ pub struct EventInput {
     /// People to share it with. Kept so the invitation can be sent again; nothing is sent by Firstlight.
     #[serde(default)]
     pub invitees: Vec<String>,
+    /// Focus time: while it runs, Firstlight holds back its daily summaries and does not open on unlock.
+    /// Timed events kept on this computer only.
+    #[serde(default)]
+    pub focus: bool,
 }
 
 /// Where an event Firstlight created lives outside this computer, when the user chose to save it there: in
@@ -213,6 +217,10 @@ fn check_extras(input: &EventInput, base: &Event, tz: Tz) -> Result<(EventInput,
         if m == 0 || m > MAX_REMINDER_MINUTES {
             return Err(Error::Invalid("Choose a reminder of up to a week."));
         }
+    }
+
+    if input.focus && input.all_day {
+        return Err(Error::Invalid("Focus time needs a start and an end time."));
     }
 
     let rule = match &input.repeat {
@@ -529,6 +537,12 @@ pub fn prepare_save(
     };
     let base = build_event(input, master.as_deref(), tz, now)?;
     let (clean_input, _) = check_extras(input, &base, tz)?;
+    if clean_input.focus {
+        // The hold-back reads this computer's copy, which an event kept in another calendar does not have.
+        return Err(Error::Invalid(
+            "Focus time can only be kept on this computer.",
+        ));
+    }
     let sys = to_sys(&clean_input, &base)?;
     let target = existing
         .as_ref()
@@ -797,6 +811,43 @@ fn own_master_id(id: &str) -> Result<&str> {
         && occurrence.bytes().all(|b| b.is_ascii_digit());
     ok.then_some(master)
         .ok_or(Error::Invalid("That event can't be changed here."))
+}
+
+// ---- focus time ----------------------------------------------------------------------------
+
+/// When the focus time running at `now` ends, or `None` if none is running. Overlapping or back-to-back
+/// blocks count as one, so the answer is the moment the person is free to be interrupted again.
+pub fn focus_until(store: &Store, now: DateTime<Utc>) -> Result<Option<DateTime<Utc>>> {
+    let focus: std::collections::HashSet<String> = store
+        .all_own_events()?
+        .into_iter()
+        .filter_map(|(id, json)| {
+            let stored = serde_json::from_str::<Stored>(&json).ok()?;
+            (stored.input.focus && stored.remote.is_none()).then_some(id)
+        })
+        .collect();
+    if focus.is_empty() {
+        return Ok(None);
+    }
+    let mut spans: Vec<(DateTime<Utc>, DateTime<Utc>)> = store
+        .events_between(now, now + Duration::days(2))?
+        .into_iter()
+        .filter(|e| e.calendar_id == CALENDAR_ID && focus.contains(master_of(e)))
+        .filter_map(|e| match e.when {
+            When::Timed { start, end, .. } => Some((start, end)),
+            When::AllDay { .. } => None,
+        })
+        .collect();
+    spans.sort();
+    let mut until: Option<DateTime<Utc>> = None;
+    for (start, end) in spans {
+        match until {
+            None if start <= now && now < end => until = Some(end),
+            Some(u) if start <= u && end > u => until = Some(end),
+            _ => {}
+        }
+    }
+    Ok(until)
 }
 
 // ---- reminders ---------------------------------------------------------------------------

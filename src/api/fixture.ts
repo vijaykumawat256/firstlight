@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingPrep, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -248,6 +248,7 @@ function checkOwn(input: EventInput): EventInput {
     if (input.end < input.start) throw new Error("The event can't end before it starts.");
   } else if (!(new Date(input.end) > new Date(input.start))) throw new Error("The event must end after it starts.");
   if (input.reminder_minutes !== null && input.all_day) throw new Error("Reminders need a start time.");
+  if (input.focus && input.all_day) throw new Error("Focus time needs a start and an end time.");
   if (input.reminder_minutes !== null && (input.reminder_minutes < 1 || input.reminder_minutes > 10080)) throw new Error("Choose a reminder of up to a week.");
   const invitees: string[] = [];
   for (const raw of input.invitees) {
@@ -317,6 +318,15 @@ function expandOwn(id: string, input: EventInput, calendar?: string): CalEvent[]
     out.push(make(at, input.all_day ? ymd(at).replaceAll("-", "") : String(Math.floor(at.getTime() / 1000))));
   }
   return out;
+}
+
+/** Private meeting notes, keyed like crates/logic/src/notes.rs `meeting_key`. */
+const meetingNotes = new Map<string, MeetingNote>();
+function meetingKey(e: CalEvent): string {
+  if (e.recurrence_master_id) return `series:${e.calendar_id}:${e.recurrence_master_id}`;
+  const t = e.title.trim().replace(/\s+/g, " ").toLowerCase();
+  if (t.length >= 4) return `title:${t}`;
+  return `event:${e.ical_uid || e.id}`;
 }
 
 function saveFixtureEvent(id: string | null, input: EventInput, destination?: string): CalEvent {
@@ -802,6 +812,23 @@ export const fixtureBackend: Backend = {
     const w = window as unknown as { __drafts?: Array<{ to: string | null; subject: string; body: string }> };
     (w.__drafts ??= []).push({ to, subject, body });
   },
+  async getMeetingNote(id) {
+    const e = fixtureEvents().find((x) => x.id === id);
+    return e ? structuredClone(meetingNotes.get(meetingKey(e)) ?? null) : null;
+  },
+  async saveMeetingNote(id, text) {
+    const e = fixtureEvents().find((x) => x.id === id);
+    if (!e) throw new Error("That event is no longer in your calendar.");
+    const tidy = text.replace(/\r\n/g, "\n").trim();
+    if (tidy.length > 10_000) throw new Error("That note is too long.");
+    if (!tidy) {
+      meetingNotes.delete(meetingKey(e));
+      return null;
+    }
+    const note = { text: tidy, updated_at: new Date().toISOString() };
+    meetingNotes.set(meetingKey(e), note);
+    return structuredClone(note);
+  },
   async getMeetingPrep(id) {
     // A small stand-in for crates/logic/src/prep.rs.
     const ids = visibleCalendarIds();
@@ -924,6 +951,7 @@ export const fixtureBackend: Backend = {
   },
   async eraseAllData() {
     accounts = [];
+    meetingNotes.clear();
     settings = structuredClone(DEFAULT_SETTINGS);
     settingsListeners.forEach((l) => l());
     notify();

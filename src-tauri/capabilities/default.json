@@ -22,6 +22,8 @@
     "allow-get-conflict-help",
     "allow-open-mail-draft",
     "allow-find-free-times",
+    "allow-get-meeting-note",
+    "allow-save-meeting-note",
     "allow-get-calendars",
     "allow-list-accounts",
     "allow-add-ics-account",

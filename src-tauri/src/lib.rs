@@ -296,6 +296,15 @@ fn on_unlock(app: &AppHandle) {
         .filter(|n| !n.in_progress)
         .map(|n| n.start);
 
+    // Focus time the person set: nothing opens on its own until it ends (the next unlock after it decides).
+    if let Ok(Some(until)) = firstlight_core::local::focus_until(&store, now) {
+        log::info!(
+            "unlock decision: held for focus time until {}",
+            until.with_timezone(&tz).format("%H:%M")
+        );
+        return;
+    }
+
     // Only looked at when the rule is on, so the window list is not read for nothing.
     let covered = rules.skip_when_fullscreen && fullscreen::another_app_is_full_screen();
     let action = decide(now, tz, &rules, &rule_state, next_start, covered);
@@ -453,6 +462,8 @@ pub fn run() {
             commands::get_conflict_help,
             commands::open_mail_draft,
             commands::find_free_times,
+            commands::get_meeting_note,
+            commands::save_meeting_note,
             commands::get_calendars,
             commands::list_accounts,
             commands::add_ics_account,

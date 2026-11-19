@@ -63,6 +63,15 @@ export interface EventInput {
   reminder_minutes: number | null;
   /** People it is shared with. Saving sends nothing: sharing opens your own mail app, or (if turned on) sends from your mailbox after you review it. */
   invitees: string[];
+  /** Focus time: while it runs Firstlight holds back its summaries and does not open on unlock. Timed, this computer only. */
+  focus?: boolean;
+}
+
+/** Your private note for a meeting. Shared by every time the meeting happens; kept only on this computer. */
+export interface MeetingNote {
+  text: string;
+  /** When it was last changed (ISO). */
+  updated_at: string;
 }
 
 /** One of your own events with everything the edit form needs. */
