@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { api, errorMessage, type CalEvent } from "@/api";
-import { Button, Dialog, Segmented, useToasts } from "@/design";
+import type { CalEvent } from "@/api";
+import { Dialog, Segmented } from "@/design";
+import { SendBar } from "./SendBar";
 import { formatTime } from "@/features/briefing/format";
 
 /** Who would get a "running late" note: the organiser, or everyone on the guest list. */
@@ -20,19 +21,13 @@ export function lateMessage(e: CalEvent, minutes: number): { subject: string; bo
 
 /** Pick how late you will be; the note opens in your own mail app, addressed to the organiser (or everyone). */
 export function RunningLate({ event, onClose }: { event: CalEvent; onClose: () => void }) {
-  const push = useToasts((s) => s.push);
   const [minutes, setMinutes] = useState("10");
   const [everyone, setEveryone] = useState(false);
   const to = lateRecipients(event, everyone);
   const { subject, body } = lateMessage(event, Number(minutes));
-  const open = () =>
-    api
-      .openMailDraft(to.join(", ") || null, subject, body)
-      .then(onClose)
-      .catch((e) => push({ title: errorMessage(e), tone: "danger" }));
   const hasGuests = event.attendees.length > 0;
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Running late" description="A short note opens in your mail app for you to send. Firstlight sends nothing.">
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Running late" description="Read the note, then send it or open it in your mail app.">
       <div className="flex flex-col gap-3 pb-2">
         <Segmented
           label="How late"
@@ -55,12 +50,7 @@ export function RunningLate({ event, onClose }: { event: CalEvent; onClose: () =
         <pre aria-label="Message" className="whitespace-pre-wrap rounded-card bg-fill p-3 text-footnote text-fg-2">
           {body}
         </pre>
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={() => void open()}>
-            Open in mail app
-          </Button>
-        </div>
+        <SendBar to={to} subject={subject} body={body} onDone={onClose} onCancel={onClose} />
       </div>
     </Dialog>
   );

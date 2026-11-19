@@ -778,3 +778,13 @@ fn templates_keep_only_valid_unique_ones_and_a_bad_one_costs_only_itself() {
         .collect();
     assert_eq!(names, [("Retro", 45), ("Sync", 15)]);
 }
+
+#[test]
+fn sending_is_never_switched_on_by_a_settings_file() {
+    let mut s = AppSettings::default();
+    s.email.send_messages = true;
+    s.email.send_accounts = vec!["acct".into()];
+    let back = AppSettings::import(&s.export()).unwrap();
+    assert!(!back.email.send_messages);
+    assert!(back.email.send_accounts.is_empty());
+}

@@ -115,7 +115,7 @@ fn out<'a>(to: &'a [String], subject: &'a str) -> Outgoing<'a> {
         to,
         subject,
         text: "Lunch\n\nWhen: Friday\n.hidden dot line\n",
-        ics: "BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nEND:VCALENDAR\r\n",
+        ics: Some("BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nEND:VCALENDAR\r\n"),
         method: "REQUEST",
         now: DateTime::from_timestamp(1_800_000_000, 0).unwrap(),
     }
@@ -457,4 +457,20 @@ fn caps_after_tls(s: &mut Session) {
         "{:?}",
         caps.lines
     );
+}
+
+#[test]
+fn a_plain_note_is_one_text_part_with_no_calendar_file() {
+    let to = vec!["sam@example.com".to_string()];
+    let msg = build_message(&Outgoing {
+        ics: None,
+        method: "",
+        ..out(&to, "Running late: Café chat")
+    })
+    .unwrap();
+    assert!(msg.contains("Content-Type: text/plain; charset=utf-8"));
+    assert!(!msg.contains("multipart"));
+    assert!(!msg.contains("text/calendar"));
+    assert!(msg.contains("Subject: =?UTF-8?B?"));
+    assert!(msg.contains("To: sam@example.com"));
 }

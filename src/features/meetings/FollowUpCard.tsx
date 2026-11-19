@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { MessageSquareText } from "lucide-react";
 import { useState } from "react";
-import { api, errorMessage, type FollowUp } from "@/api";
-import { Button, Card, useToasts } from "@/design";
+import { api, type FollowUp } from "@/api";
+import { Button, Card, Dialog, useToasts } from "@/design";
+import { SendBar } from "./SendBar";
 import { formatTime } from "@/features/briefing/format";
 import { NoteTasks } from "@/features/tasks/TaskDialogs";
 
@@ -30,6 +31,7 @@ export function FollowUpCard() {
   const items = useQuery({ queryKey: ["follow-ups"], queryFn: () => api.getFollowUps(), refetchInterval: 60_000, staleTime: 30_000 });
   const [dismissed, setDismissed] = useState<string[]>(readDismissed);
   const [lines, setLines] = useState<{ lines: string[]; meeting: string } | null>(null);
+  const [recapping, setRecapping] = useState<FollowUp | null>(null);
   const shown = (items.data ?? []).filter((f) => !dismissed.includes(`${f.event_id}@${f.end}`));
   if (shown.length === 0) return null;
   const dismiss = (f: FollowUp) => {
@@ -41,10 +43,7 @@ export function FollowUpCard() {
       // Remembering is a convenience; without storage it simply shows again next time.
     }
   };
-  const recap = (f: FollowUp) => {
-    const { subject, body } = recapOf(f);
-    api.openMailDraft(f.people.join(", ") || null, subject, body).catch((e) => push({ title: errorMessage(e), tone: "danger" }));
-  };
+  const recap = (f: FollowUp) => setRecapping(f);
   return (
     <section aria-label="Follow up" className="flex flex-col gap-2">
       {shown.slice(0, 3).map((f) => (
@@ -68,6 +67,23 @@ export function FollowUpCard() {
         </Card>
       ))}
       {lines && <NoteTasks lines={lines.lines} meeting={lines.meeting} onClose={() => setLines(null)} />}
+      {recapping && <RecapDialog f={recapping} onClose={() => setRecapping(null)} />}
     </section>
+  );
+}
+
+/** The recap as it would go out: to everyone on the guest list, with your notes. */
+function RecapDialog({ f, onClose }: { f: FollowUp; onClose: () => void }) {
+  const { subject, body } = recapOf(f);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Email a recap" description="Read it, then send it or open it in your mail app to change it first.">
+      <div className="flex flex-col gap-3 pb-2">
+        <p className="text-footnote text-fg-2">{f.people.length ? `To: ${f.people.join(", ")}` : "No guest list is known for this meeting: add people in your mail app."}</p>
+        <pre aria-label="Message" className="max-h-60 overflow-auto whitespace-pre-wrap rounded-card bg-fill p-3 text-footnote text-fg-2">
+          {`${subject}\n\n${body}`}
+        </pre>
+        <SendBar to={f.people} subject={subject} body={body} onDone={onClose} onCancel={onClose} />
+      </div>
+    </Dialog>
   );
 }

@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, PlanSuggestion, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, PlanSuggestion, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -198,7 +198,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true, open_every_time: false },
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, week_preview: true, time_24h: false, hide_titles: false },
   appearance: { theme: "system", accent: "system", ambient: params.has("ambient") },
-  email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, important_senders: [], days_back: 3 },
+  email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, send_messages: false, send_accounts: [], important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null, plan_consented: null },
   privacy: { crash_reports: false },
   day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true },
@@ -452,6 +452,10 @@ if (params.has("aion")) {
 }
 if (params.has("sendon")) {
   settings.email = { ...settings.email, send_invitations: true, imap: [{ id: "imap1", preset: "yahoo", address: "me@yahoo.com", host: null }] };
+}
+/** `?sendnotes`: sending notes is on, from a Yahoo mailbox. `?sendfail` makes sending fail. */
+if (params.has("sendnotes")) {
+  settings.email = { ...settings.email, send_messages: true, imap: [{ id: "imap1", preset: "yahoo", address: "me@yahoo.com", host: null }] };
 }
 if (params.has("mailon")) settings.email = { ...settings.email, enabled: true, apple_mail: true };
 /** `?preinvited`: one of your own events that already has someone invited, with sending not set up. */
@@ -917,6 +921,33 @@ export const fixtureBackend: Backend = {
     const made: Task[] = [];
     for (const title of titles) made.push(await this.addTask({ title, notes: null, due_date: null, due_time: null, minutes: null, from_meeting: meeting }));
     return made;
+  },
+  async messageSenders() {
+    if (!settings.email.send_messages) return [];
+    const out: MessageSender[] = settings.email.imap.filter((m) => m.preset !== "custom").map((m) => ({ id: `imap:${m.id}`, address: m.address, label: m.preset === "yahoo" ? "Yahoo" : "iCloud" }));
+    for (const id of settings.email.send_accounts) {
+      const a = accounts.find((x) => x.id === id);
+      if (a?.email) out.push({ id: `account:${a.id}`, address: a.email, label: a.provider === "google" ? "Gmail" : "Outlook" });
+    }
+    return out;
+  },
+  async sendMessage(senderId, to, subject, body) {
+    if (!settings.email.send_messages) throw new Error("Sending from Firstlight is turned off in Settings.");
+    if (!to.trim()) throw new Error("Add at least one email address.");
+    if (params.has("sendfail")) throw new Error("Couldn't reach the mail service. Nothing was sent.");
+    const w = window as unknown as { __messages?: Array<{ senderId: string; to: string; subject: string; body: string }> };
+    (w.__messages ??= []).push({ senderId, to, subject, body });
+  },
+  async enableAccountSend(accountId) {
+    if (params.has("oauthfail")) throw new Error("Sign-in was cancelled.");
+    settings = { ...settings, email: { ...settings.email, send_accounts: [...new Set([...settings.email.send_accounts, accountId])] } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async disableAccountSend(accountId) {
+    settings = { ...settings, email: { ...settings.email, send_accounts: settings.email.send_accounts.filter((a) => a !== accountId) } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
   },
   async getFollowUps() {
     // A small stand-in for crates/logic/src/followup.rs.

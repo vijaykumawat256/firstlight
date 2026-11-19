@@ -14,6 +14,7 @@ mod notifier;
 mod outlook_win;
 mod providers;
 mod scheduler;
+mod task_sync;
 mod tasks_cmd;
 mod unlock;
 mod updates;
@@ -528,6 +529,10 @@ pub fn run() {
             mail_ai::get_ai_summary,
             mail_ai::ask_calendar,
             mail_ai::get_meeting_prep,
+            mail_ai::message_senders,
+            mail_ai::send_message,
+            mail_ai::enable_account_send,
+            mail_ai::disable_account_send,
             mail_ai::plan_my_day,
             mail_ai::day_plan_preview,
             mail_ai::enable_ai_planning,

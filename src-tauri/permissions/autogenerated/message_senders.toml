@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-message-senders"
+description = "Enables the message_senders command without any pre-configured scope."
+commands.allow = ["message_senders"]
+
+[[permission]]
+identifier = "deny-message-senders"
+description = "Denies the message_senders command without any pre-configured scope."
+commands.deny = ["message_senders"]

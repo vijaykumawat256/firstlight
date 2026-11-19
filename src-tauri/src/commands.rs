@@ -903,7 +903,7 @@ pub async fn invite_preview(
 const SEND_LIMIT_PER_HOUR: usize = 10;
 static SENT: std::sync::Mutex<Vec<std::time::Instant>> = std::sync::Mutex::new(Vec::new());
 
-fn within_send_limit() -> bool {
+pub(crate) fn within_send_limit() -> bool {
     let Ok(mut sent) = SENT.lock() else {
         return false;
     };
@@ -983,7 +983,7 @@ pub async fn send_invite_mail(
                 to: &to,
                 subject: &subject,
                 text: &text,
-                ics: &ics,
+                ics: Some(&ics),
                 method: method.name(),
                 now,
             },
@@ -1603,6 +1603,8 @@ fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdR
     s.ai.plan_consented = stored.ai.plan_consented;
     // Mailboxes change only through add/remove, which keep their keychain passwords in step.
     s.email.imap = stored.email.imap;
+    // Which accounts may send is recorded only when that permission is granted.
+    s.email.send_accounts = stored.email.send_accounts;
     s.sanitize();
     // Try the shortcut first: if the system refuses it, nothing is saved and the user is told why.
     crate::apply_dock(app, s.general.show_in_dock);

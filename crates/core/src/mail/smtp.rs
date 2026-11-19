@@ -130,8 +130,8 @@ pub struct Outgoing<'a> {
     pub subject: &'a str,
     pub text: &'a str,
     /// The calendar invitation (`REQUEST`) or cancellation (`CANCEL`) as a file; it travels inside the message
-    /// where calendar apps look for it and again as an attachment.
-    pub ics: &'a str,
+    /// where calendar apps look for it and again as an attachment. `None` for a plain note (running late, a recap).
+    pub ics: Option<&'a str>,
     /// The iTIP method named in the calendar part's header: must match the file.
     pub method: &'a str,
     pub now: DateTime<Utc>,
@@ -190,6 +190,22 @@ pub fn build_message(m: &Outgoing) -> Result<String> {
     }
     let domain = from.split_once('@').map_or("localhost", |(_, d)| d);
     let id = crate::model::new_id();
+    let Some(ics) = m.ics else {
+        // A plain note: one text part.
+        let body = m.text.replace("\r\n", "\n").replace('\n', "\r\n");
+        let msg = format!(
+            "From: {from}\r\nTo: {to}\r\nSubject: {subject}\r\nDate: {date}\r\nMessage-ID: <{id}@{domain}>\r\nMIME-Version: 1.0\r\n\
+             Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n{text}\r\n",
+            to = to.join(", "),
+            subject = encode_header(m.subject),
+            date = m.now.to_rfc2822(),
+            text = b64_lines(body.as_bytes()),
+        );
+        if msg.len() > MAX_MESSAGE_BYTES {
+            return Err(Error::Invalid("That message is too long to send."));
+        }
+        return Ok(msg);
+    };
     if !matches!(m.method, "REQUEST" | "CANCEL") {
         return Err(Error::Invalid("That kind of message can't be sent."));
     }
@@ -213,7 +229,7 @@ pub fn build_message(m: &Outgoing) -> Result<String> {
         date = m.now.to_rfc2822(),
         method = m.method,
         text = b64_lines(body.as_bytes()),
-        ics = b64_lines(m.ics.as_bytes()),
+        ics = b64_lines(ics.as_bytes()),
     );
     if msg.len() > MAX_MESSAGE_BYTES {
         return Err(Error::Invalid("That message is too long to send."));

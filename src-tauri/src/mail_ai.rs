@@ -377,39 +377,12 @@ pub async fn enable_account_mail(
         .get_account(&account_id)
         .map_err(internal("loading the account"))?
         .ok_or("That account no longer exists.")?;
-    let (scope, kind) = match account.provider {
-        ProviderKind::Google => (gmail::SCOPE, ProviderKind::Google),
-        ProviderKind::Microsoft => (microsoft::SCOPE, ProviderKind::Microsoft),
+    let scope = match account.provider {
+        ProviderKind::Google => gmail::SCOPE,
+        ProviderKind::Microsoft => microsoft::SCOPE,
         _ => return Err("Mail can only be added for Google and Microsoft accounts.".into()),
     };
-    let mut cfg = config_for(&state, kind)?;
-    if !cfg.scopes.iter().any(|s| s == scope) {
-        cfg.scopes.push(scope.to_string());
-    }
-    let (tokens, email) = browser_sign_in(&app, &state, kind, cfg).await?;
-    if !account
-        .email
-        .as_deref()
-        .is_some_and(|e| e.eq_ignore_ascii_case(&email))
-    {
-        return Err(
-            "That's a different account from the one you chose. Sign in with the same account."
-                .into(),
-        );
-    }
-    // The new grant replaces the old one under the same keychain entry, so the account keeps working.
-    let secret_ref = account
-        .secret_ref
-        .clone()
-        .unwrap_or_else(|| oauth::secret_key(&account.id));
-    state
-        .deps
-        .secrets
-        .set(
-            &secret_ref,
-            &serde_json::to_string(&tokens).map_err(internal("saving the sign-in"))?,
-        )
-        .map_err(internal("saving the sign-in"))?;
+    upgrade_grant(&app, &state, &account, scope).await?;
     save_settings(&app, &state, |s| {
         if !s.email.account_ids.contains(&account.id) {
             s.email.account_ids.push(account.id.clone());
@@ -1169,4 +1142,283 @@ pub async fn disable_ai_planning(
     state: State<'_, AppState>,
 ) -> CmdResult<AppSettings> {
     save_settings(&app, &state, |s| s.ai.plan_consented = None)
+}
+
+// ---- permissions on a connected account ------------------------------------------------
+
+/// Every extra permission this Google or Microsoft account has been given, so asking again for one more never drops
+/// the others (a new sign-in replaces the stored grant).
+pub(crate) fn scopes_held(settings: &AppSettings, account: &Account) -> Vec<&'static str> {
+    use firstlight_core::mail::send::{GMAIL_SEND_SCOPE, GRAPH_SEND_SCOPE};
+    let has = |list: &[String]| list.iter().any(|id| id == &account.id);
+    let (read, send) = match account.provider {
+        ProviderKind::Google => (gmail::SCOPE, GMAIL_SEND_SCOPE),
+        ProviderKind::Microsoft => (microsoft::SCOPE, GRAPH_SEND_SCOPE),
+        _ => return vec![],
+    };
+    let mut out = Vec::new();
+    if has(&settings.email.account_ids) {
+        out.push(read);
+    }
+    if has(&settings.email.send_accounts) {
+        out.push(send);
+    }
+    out.extend(crate::task_sync::scopes_held(settings, account));
+    out
+}
+
+/// Signs in to the same account again asking for one more permission (plus everything it already has), checks it
+/// is the same account, and stores the new grant in place of the old one.
+pub(crate) async fn upgrade_grant(
+    app: &AppHandle,
+    state: &AppState,
+    account: &Account,
+    extra: &str,
+) -> CmdResult<()> {
+    let kind = match account.provider {
+        ProviderKind::Google | ProviderKind::Microsoft => account.provider,
+        _ => return Err("Only Google and Microsoft accounts can be given that permission.".into()),
+    };
+    let mut cfg = config_for(state, kind)?;
+    let held = scopes_held(&lock_store(state)?.load_settings(), account);
+    for scope in held.into_iter().chain([extra]) {
+        if !cfg.scopes.iter().any(|s| s == scope) {
+            cfg.scopes.push(scope.to_string());
+        }
+    }
+    let (tokens, email) = browser_sign_in(app, state, kind, cfg).await?;
+    if !account
+        .email
+        .as_deref()
+        .is_some_and(|e| e.eq_ignore_ascii_case(&email))
+    {
+        return Err(
+            "That's a different account from the one you chose. Sign in with the same account."
+                .into(),
+        );
+    }
+    // The new grant replaces the old one under the same keychain entry, so the account keeps working.
+    let secret_ref = account
+        .secret_ref
+        .clone()
+        .unwrap_or_else(|| oauth::secret_key(&account.id));
+    state
+        .deps
+        .secrets
+        .set(
+            &secret_ref,
+            &serde_json::to_string(&tokens).map_err(internal("saving the sign-in"))?,
+        )
+        .map_err(internal("saving the sign-in"))
+}
+
+// ---- sending a note (running late, a recap) ----------------------------------------------
+
+#[derive(Serialize)]
+pub struct MessageSender {
+    /// `imap:<mailbox id>` or `account:<account id>`.
+    id: String,
+    address: String,
+    label: String,
+}
+
+/// Where a note can be sent from: nothing unless sending is turned on; then Yahoo and iCloud mailboxes, and Google or
+/// Microsoft accounts that granted the separate send permission.
+#[tauri::command]
+pub async fn message_senders(state: State<'_, AppState>) -> CmdResult<Vec<MessageSender>> {
+    let store = lock_store(&state)?;
+    let settings = store.load_settings();
+    if !settings.email.send_messages {
+        return Ok(vec![]);
+    }
+    let mut out: Vec<MessageSender> = settings
+        .email
+        .imap
+        .iter()
+        .filter(|m| firstlight_core::mail::smtp::server_for(m.preset).is_some())
+        .map(|m| MessageSender {
+            id: format!("imap:{}", m.id),
+            address: m.address.clone(),
+            label: m.preset.label().to_string(),
+        })
+        .collect();
+    for id in &settings.email.send_accounts {
+        if let Ok(Some(a)) = store.get_account(id)
+            && let Some(email) = a.email.clone()
+        {
+            out.push(MessageSender {
+                id: format!("account:{}", a.id),
+                address: email,
+                label: if a.provider == ProviderKind::Google {
+                    "Gmail".into()
+                } else {
+                    "Outlook".into()
+                },
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// Sends a short plain note the person has just read in full and chosen to send. Only on their press of Send.
+#[tauri::command]
+pub async fn send_message(
+    state: State<'_, AppState>,
+    sender_id: String,
+    to: String,
+    subject: String,
+    body: String,
+) -> CmdResult<()> {
+    use firstlight_core::invite;
+    use firstlight_core::mail::{send, smtp};
+    let to = invite::parse_list(&to)
+        .map_err(|_| "One of those email addresses doesn't look right.".to_string())?;
+    if to.is_empty() {
+        return Err("Add at least one email address.".into());
+    }
+    let clip = |s: &str, max: usize| -> String {
+        s.chars()
+            .filter(|c| !c.is_control() || *c == '\n')
+            .take(max)
+            .collect()
+    };
+    let (subject, body) = (clip(&subject, 200).replace('\n', " "), clip(&body, 4000));
+    if subject.trim().is_empty() || body.trim().is_empty() {
+        return Err("The message is empty.".into());
+    }
+    let settings = lock_store(&state)?.load_settings();
+    if !settings.email.send_messages {
+        return Err("Sending from Firstlight is turned off in Settings.".into());
+    }
+    if !crate::commands::within_send_limit() {
+        return Err("That's a lot of messages for one hour. Try again later.".into());
+    }
+    let now = Utc::now();
+    let explain = |e: Error| match e {
+        Error::Invalid(m) => m.to_string(),
+        Error::AuthRevoked => {
+            "The mail service didn't accept the saved sign-in. Allow sending again in Settings."
+                .to_string()
+        }
+        Error::PermissionNeeded => {
+            "Sending isn't allowed for that account (it may be blocked by your organisation)."
+                .to_string()
+        }
+        Error::Offline => "Couldn't reach the mail service. Nothing was sent.".to_string(),
+        Error::Provider(m) => format!("The mail service didn't send it ({m})."),
+        _ => "The message couldn't be sent.".to_string(),
+    };
+    if let Some(mailbox_id) = sender_id.strip_prefix("imap:") {
+        let mailbox = settings
+            .email
+            .imap
+            .iter()
+            .find(|m| m.id == mailbox_id)
+            .cloned()
+            .ok_or("That mailbox is no longer connected.")?;
+        let server =
+            smtp::server_for(mailbox.preset).ok_or("Sending isn't available for that mailbox.")?;
+        let password =
+            smtp::password_for(state.deps.secrets.as_ref(), &mailbox.id).map_err(|_| {
+                "Firstlight can't find that mailbox's password. Add the mailbox again.".to_string()
+            })?;
+        return tauri::async_runtime::spawn_blocking(move || {
+            smtp::send(
+                &smtp::TlsTransport::default(),
+                &server,
+                &mailbox.address,
+                &password,
+                &smtp::Outgoing {
+                    from: &mailbox.address,
+                    to: &to,
+                    subject: &subject,
+                    text: &body,
+                    ics: None,
+                    method: "",
+                    now,
+                },
+            )
+        })
+        .await
+        .map_err(|_| "Sending was interrupted.".to_string())?
+        .map_err(explain);
+    }
+    let account_id = sender_id
+        .strip_prefix("account:")
+        .ok_or("Choose who it is from.")?;
+    if !settings.email.send_accounts.iter().any(|a| a == account_id) {
+        return Err("Allow sending for that account in Settings first.".into());
+    }
+    let account = lock_store(&state)?
+        .get_account(account_id)
+        .map_err(internal("loading the account"))?
+        .ok_or("That account no longer exists.")?;
+    let cfg = match account.provider {
+        ProviderKind::Google => state.deps.oauth.google.clone(),
+        ProviderKind::Microsoft => state.deps.oauth.microsoft.clone(),
+        _ => None,
+    }
+    .ok_or("Sending isn't available for that account.")?;
+    let http = state.deps.http.clone();
+    let tokens = TokenManager {
+        http: http.clone(),
+        secrets: state.deps.secrets.clone(),
+        cfg,
+    };
+    let from = account.email.clone().unwrap_or_default();
+    tauri::async_runtime::spawn_blocking(move || {
+        let note = send::Note {
+            from: &from,
+            to: &to,
+            subject: &subject,
+            text: &body,
+            now,
+        };
+        match account.provider {
+            ProviderKind::Google => {
+                send::send_gmail(http.as_ref(), &tokens, &account.id, &note, send::GMAIL_API)
+            }
+            _ => send::send_graph(http.as_ref(), &tokens, &account.id, &note, send::GRAPH_API),
+        }
+    })
+    .await
+    .map_err(|_| "Sending was interrupted.".to_string())?
+    .map_err(explain)
+}
+
+/// Asks the account (in the browser) for the separate permission to send mail, then lets notes be sent from it.
+#[tauri::command]
+pub async fn enable_account_send(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    account_id: String,
+) -> CmdResult<AppSettings> {
+    use firstlight_core::mail::send::{GMAIL_SEND_SCOPE, GRAPH_SEND_SCOPE};
+    let account = lock_store(&state)?
+        .get_account(&account_id)
+        .map_err(internal("loading the account"))?
+        .ok_or("That account no longer exists.")?;
+    let scope = match account.provider {
+        ProviderKind::Google => GMAIL_SEND_SCOPE,
+        ProviderKind::Microsoft => GRAPH_SEND_SCOPE,
+        _ => return Err("Only Google and Microsoft accounts can send.".into()),
+    };
+    upgrade_grant(&app, &state, &account, scope).await?;
+    save_settings(&app, &state, |s| {
+        if !s.email.send_accounts.contains(&account.id) {
+            s.email.send_accounts.push(account.id.clone());
+        }
+    })
+}
+
+/// Stops sending from that account. (The permission stays granted at Google or Microsoft until removed there.)
+#[tauri::command]
+pub async fn disable_account_send(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    account_id: String,
+) -> CmdResult<AppSettings> {
+    save_settings(&app, &state, |s| {
+        s.email.send_accounts.retain(|a| a != &account_id)
+    })
 }

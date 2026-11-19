@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -94,6 +94,13 @@ export interface Backend {
   /** The lines of a meeting note that could become tasks. */
   noteTaskLines(text: string): Promise<string[]>;
   addTasksFromNote(titles: string[], meeting: string | null): Promise<Task[]>;
+  /** Where notes can be sent from: empty unless sending is turned on in Settings. */
+  messageSenders(): Promise<MessageSender[]>;
+  /** Sends a plain note the person has just read in full. Only on their press of Send. */
+  sendMessage(senderId: string, to: string, subject: string, body: string): Promise<void>;
+  /** Asks the account for its separate permission to send mail (in the browser). */
+  enableAccountSend(accountId: string): Promise<AppSettings>;
+  disableAccountSend(accountId: string): Promise<AppSettings>;
   /** Meetings that ended in the last three hours with notes written for them. */
   getFollowUps(): Promise<FollowUp[]>;
   /** Moves tasks to another day (YYYY-MM-DD), keeping each one's time of day. */

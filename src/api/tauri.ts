@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -19,6 +19,10 @@ export const tauriBackend: Backend = {
   planTask: (id, start, end) => invoke<Task>("plan_task", { id, start, end }),
   noteTaskLines: (text) => invoke<string[]>("note_task_lines", { text }),
   addTasksFromNote: (titles, meeting) => invoke<Task[]>("add_tasks_from_note", { titles, meeting }),
+  messageSenders: () => invoke<MessageSender[]>("message_senders"),
+  sendMessage: (senderId, to, subject, body) => invoke<void>("send_message", { senderId, to, subject, body }),
+  enableAccountSend: (accountId) => invoke<AppSettings>("enable_account_send", { accountId }),
+  disableAccountSend: (accountId) => invoke<AppSettings>("disable_account_send", { accountId }),
   getFollowUps: () => invoke<FollowUp[]>("get_follow_ups"),
   moveTasks: (ids, date) => invoke<void>("move_tasks", { ids, date }),
   getDayStatus: () => invoke<DayStatus>("get_day_status"),

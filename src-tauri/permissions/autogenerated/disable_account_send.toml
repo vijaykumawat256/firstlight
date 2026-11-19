@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-disable-account-send"
+description = "Enables the disable_account_send command without any pre-configured scope."
+commands.allow = ["disable_account_send"]
+
+[[permission]]
+identifier = "deny-disable-account-send"
+description = "Denies the disable_account_send command without any pre-configured scope."
+commands.deny = ["disable_account_send"]

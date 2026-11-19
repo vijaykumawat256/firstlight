@@ -19,6 +19,7 @@ pub mod gmail;
 pub mod imap;
 pub mod microsoft;
 pub mod related;
+pub mod send;
 pub mod smtp;
 
 /// The longest snippet kept. Enough to recognise a message, far too little to be a copy of it.

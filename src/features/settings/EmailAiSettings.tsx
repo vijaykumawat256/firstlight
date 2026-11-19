@@ -501,3 +501,58 @@ function ConsentBody({ onOpenChange, onDone }: { onOpenChange: (o: boolean) => v
     </Dialog>
   );
 }
+
+// ------------------------------------------------------------------------------- Sending notes
+
+/** Lets "Running late" and meeting recaps be sent from Firstlight after you read them, instead of only opening a draft. */
+export function SendingGroup() {
+  const { settings: s, update } = useSettings();
+  const push = useToasts((t) => t.push);
+  const put = useSettingsCache();
+  const accounts = useQuery({ queryKey: ["accounts"], queryFn: () => api.listAccounts() });
+  const allow = useMutation({
+    mutationFn: (id: string) => api.enableAccountSend(id),
+    onSuccess: put,
+    onError: (e) => push({ title: "Couldn't allow sending", description: errorMessage(e), tone: "danger" }),
+  });
+  const stop = useMutation({ mutationFn: (id: string) => api.disableAccountSend(id), onSuccess: put });
+  if (!s) return null;
+  const e = s.email;
+  const mailboxes = e.imap.filter((m) => m.preset !== "custom");
+  const sendAccounts = (accounts.data ?? []).filter((a) => a.provider === "google" || a.provider === "microsoft");
+  return (
+    <Group title="Sending notes" footer="Off by default. You always see the exact message first, and nothing goes out until you press Send. Without this, notes open as drafts in your own mail app.">
+      <SettingRow title="Send notes from Firstlight" description="“Running late” notes and meeting recaps, from a mailbox or account below.">
+        <Switch label="Send notes from Firstlight" checked={e.send_messages} onCheckedChange={(v) => update((d) => void (d.email.send_messages = v))} />
+      </SettingRow>
+      {e.send_messages && (
+        <>
+          {mailboxes.map((m) => (
+            <SettingRow key={m.id} title={m.address} description={`${m.preset === "yahoo" ? "Yahoo" : "iCloud"} mailbox · can send with its app password.`} />
+          ))}
+          {sendAccounts.map((a) => {
+            const on = e.send_accounts.includes(a.id);
+            return (
+              <SettingRow
+                key={a.id}
+                title={a.display_name}
+                description={on ? `Can send from ${a.email ?? "this account"}.` : `Needs a separate permission to send from ${a.provider === "google" ? "Gmail" : "Outlook"}. You'll be asked in your browser.`}
+              >
+                {on ? (
+                  <Button size="sm" variant="plain" onClick={() => stop.mutate(a.id)} aria-label={`Stop sending from ${a.display_name}`}>
+                    Stop sending
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="secondary" disabled={allow.isPending} onClick={() => allow.mutate(a.id)} aria-label={`Allow sending from ${a.display_name}`}>
+                    {allow.isPending && allow.variables === a.id ? "Waiting…" : "Allow sending"}
+                  </Button>
+                )}
+              </SettingRow>
+            );
+          })}
+          {mailboxes.length === 0 && sendAccounts.length === 0 && <SettingRow title="Nothing to send from yet" description="Add a Yahoo or iCloud mailbox above, or connect a Google or Microsoft account." />}
+        </>
+      )}
+    </Group>
+  );
+}

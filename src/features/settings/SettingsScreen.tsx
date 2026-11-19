@@ -5,7 +5,7 @@ import { api, errorMessage, type DefaultView, type ThemeChoice, type TimeFormat,
 import { useNav, type View } from "@/app/nav";
 import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
 import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
-import { AiGroup, EmailGroup } from "./EmailAiSettings";
+import { AiGroup, EmailGroup, SendingGroup } from "./EmailAiSettings";
 import { useSettings } from "./useSettings";
 
 const ACCENTS = ["system", ...CALENDAR_COLOURS.filter((c) => !["blue", "yellow", "brown"].includes(c))];
@@ -453,7 +453,12 @@ export function SettingsScreen() {
             </Group>
           </div>
         )}
-        {section === "email" && <EmailGroup />}
+        {section === "email" && (
+          <div className="flex flex-col gap-7">
+            <EmailGroup />
+            <SendingGroup />
+          </div>
+        )}
         {section === "ai" && <AiGroup />}
         {section === "privacy" && (
           <div className="flex flex-col gap-7">

@@ -206,6 +206,12 @@ pub struct EmailSettings {
     /// opening a draft. Off by default; a settings file can never turn it on. Each message still needs a press
     /// of Send in the invitation window.
     pub send_invitations: bool,
+    /// Let "Running late" and meeting recaps be sent from Firstlight with one press of Send, after the exact message
+    /// is shown, instead of only opening a draft. Off by default; a settings file can never turn it on.
+    pub send_messages: bool,
+    /// Google/Microsoft accounts that granted the separate permission to send (`gmail.send` / `Mail.Send`). Changed
+    /// only by `enable_account_send` / `disable_account_send`; never by a save or a settings file.
+    pub send_accounts: Vec<String>,
     /// Addresses, `@domain`s, domains or names whose mail always shows.
     pub important_senders: Vec<String>,
     pub days_back: i64,
@@ -219,6 +225,8 @@ impl Default for EmailSettings {
             account_ids: vec![],
             imap: vec![],
             send_invitations: false,
+            send_messages: false,
+            send_accounts: vec![],
             important_senders: vec![],
             days_back: 3,
         }
@@ -786,6 +794,8 @@ impl AppSettings {
         imported.general.write_to_calendar_app = false;
         imported.general.writable_accounts.clear();
         imported.email.send_invitations = false;
+        imported.email.send_messages = false;
+        imported.email.send_accounts.clear();
         imported.ai.consented = None;
         imported.ai.consented_host = None;
         imported.ai.plan_consented = None;
