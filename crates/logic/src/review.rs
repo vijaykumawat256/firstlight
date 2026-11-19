@@ -254,6 +254,7 @@ mod tests {
             from_meeting: None,
             planned_event: None,
             link: None,
+            deleted_at: None,
         };
         let old = Task {
             done_at: Some(t("2026-11-12T15:00:00Z")),

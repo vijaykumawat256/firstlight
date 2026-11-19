@@ -2,7 +2,10 @@ import { ChevronLeft, ListChecks } from "lucide-react";
 import { useState } from "react";
 import type { TaskView } from "@/api";
 import { useNav } from "@/app/nav";
-import { Button, EmptyState, ListGroup, Segmented, Skeleton } from "@/design";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { api, errorMessage } from "@/api";
+import { Button, EmptyState, ListGroup, Segmented, Skeleton, useToasts } from "@/design";
+import { useSettings } from "@/features/settings/useSettings";
 import { AddTaskField, TaskRow, useTaskLists } from "./shared";
 import { PlanTask, TaskForm } from "./TaskDialogs";
 import { PlanDay } from "./PlanDay";
@@ -24,6 +27,18 @@ export function TasksScreen() {
   const [editing, setEditing] = useState<TaskView | null>(null);
   const [planning, setPlanning] = useState<TaskView | null>(null);
   const [planDay, setPlanDay] = useState(false);
+  const push = useToasts((s) => s.push);
+  const qc = useQueryClient();
+  const syncing = (useSettings().settings?.tasks.sync_accounts.length ?? 0) > 0;
+  const syncNow = useMutation({
+    mutationFn: () => api.syncTasksNow(),
+    onSuccess: (r) => {
+      void qc.invalidateQueries({ queryKey: ["tasks"] });
+      if (r.problems.length) push({ title: `Couldn't sync with ${r.problems.map(([name, why]) => `${name} (${why})`).join(", ")}`, tone: "danger" });
+      else push({ title: "Tasks are in step" });
+    },
+    onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
+  });
   const l = lists.data;
   const count = (t: Tab) => (l ? l[t].length : 0);
   const shown = l ? l[tab] : [];
@@ -39,7 +54,14 @@ export function TasksScreen() {
         <div className="flex flex-col gap-4">
           <header>
             <h1 className="text-display font-bold tracking-tight text-fg">Tasks</h1>
-            <p className="mt-0.5 text-footnote text-fg-2">Kept only on this computer. Unfinished tasks stay in Today until they are done.</p>
+            <p className="mt-0.5 text-footnote text-fg-2">
+              {syncing ? "Kept in step with your task list online (Settings, General)." : "Kept only on this computer."} Unfinished tasks stay in Today until they are done.
+            </p>
+            {syncing && (
+              <Button className="mt-1" size="sm" variant="plain" disabled={syncNow.isPending} onClick={() => syncNow.mutate()}>
+                {syncNow.isPending ? "Syncing…" : "Sync now"}
+              </Button>
+            )}
           </header>
           <div className="flex flex-col gap-1">
             <AddTaskField autoFocus />

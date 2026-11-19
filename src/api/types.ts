@@ -335,6 +335,8 @@ export interface AppSettings {
   privacy: { crash_reports: boolean };
   day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean; follow_ups: boolean; travel_minutes: number; weekly_review: boolean };
   templates: EventTemplate[];
+  /** Accounts your tasks are kept in step with (the first takes tasks made here). */
+  tasks: { sync_accounts: string[] };
 }
 
 export type AiProvider = "anthropic" | "local" | "openai" | "xai" | "gemini" | "mistral" | "groq" | "openrouter" | "custom";

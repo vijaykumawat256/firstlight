@@ -203,6 +203,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   privacy: { crash_reports: false },
   day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true },
   templates: [],
+  tasks: { sync_accounts: [] },
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
 if (["week", "day", "month"].includes(params.get("defaultview") ?? "")) settings.general.default_view = params.get("defaultview") as "day" | "week" | "month";
@@ -948,6 +949,26 @@ export const fixtureBackend: Backend = {
     settings = { ...settings, email: { ...settings.email, send_accounts: settings.email.send_accounts.filter((a) => a !== accountId) } };
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
+  },
+  async enableTaskSync(accountId) {
+    if (params.has("oauthfail")) throw new Error("Sign-in was cancelled.");
+    settings = { ...settings, tasks: { sync_accounts: [...new Set([...settings.tasks.sync_accounts, accountId])] } };
+    // The phone's list arrives, and tasks here go to the first account.
+    const now = new Date().toISOString();
+    if (!tasks.some((t) => t.title === "Pick up dry cleaning"))
+      tasks.push({ id: `task-remote-${Date.now()}`, title: "Pick up dry cleaning", notes: null, due: null, minutes: null, done_at: null, created_at: now, updated_at: now, from_meeting: null, planned_event: null, link: { account_id: accountId, list_id: "@default", remote_id: "r1", remote_updated: "s1" } });
+    tasks = tasks.map((t) => (t.link || t.done_at ? t : { ...t, link: { account_id: settings.tasks.sync_accounts[0]!, list_id: "@default", remote_id: `r-${t.id}`, remote_updated: "s1" } }));
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async disableTaskSync(accountId) {
+    settings = { ...settings, tasks: { sync_accounts: settings.tasks.sync_accounts.filter((a) => a !== accountId) } };
+    tasks = tasks.map((t) => (t.link?.account_id === accountId ? { ...t, link: null } : t));
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async syncTasksNow() {
+    return { problems: params.has("taskfail") ? [["Work Google", "offline"]] : [] };
   },
   async getWeekReview() {
     // A small stand-in for crates/logic/src/review.rs.

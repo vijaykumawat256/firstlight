@@ -11,12 +11,21 @@ use crate::{Error, Result};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 
-/// Every task. A record that cannot be read is skipped, never allowed to hide the others.
-pub fn all(store: &Store) -> Result<Vec<Task>> {
+/// Every task, deletion markers included (for sync). A record that cannot be read is skipped.
+pub fn all_records(store: &Store) -> Result<Vec<Task>> {
     Ok(store
         .all_tasks()?
         .into_iter()
         .filter_map(|(_, json)| serde_json::from_str::<Task>(&json).ok())
+        .collect())
+}
+
+/// Every task (not the markers left by deleting a synced one). A record that cannot be read is skipped, never
+/// allowed to hide the others.
+pub fn all(store: &Store) -> Result<Vec<Task>> {
+    Ok(all_records(store)?
+        .into_iter()
+        .filter(|t| t.deleted_at.is_none())
         .collect())
 }
 
@@ -28,6 +37,7 @@ pub fn get(store: &Store, id: &str) -> Result<Task> {
     store
         .get_task(id)?
         .and_then(|j| serde_json::from_str::<Task>(&j).ok())
+        .filter(|t| t.deleted_at.is_none())
         .ok_or(Error::Invalid("That task is no longer on your list."))
 }
 
@@ -56,6 +66,7 @@ pub fn add(store: &Store, input: &TaskInput, tz: Tz, now: DateTime<Utc>) -> Resu
         from_meeting: c.from_meeting,
         planned_event: None,
         link: None,
+        deleted_at: None,
     };
     put(store, &task)?;
     Ok(task)
@@ -112,9 +123,14 @@ pub fn move_to(
     Ok(task)
 }
 
-/// Deletes the task. An event planned for it stays in the calendar (the person may still want that time).
+/// Deletes the task. An event planned for it stays in the calendar (the person may still want that time). A task kept
+/// in step with Google Tasks or Microsoft To Do leaves a marker until the next sync has deleted it there too.
 pub fn delete(store: &Store, id: &str) -> Result<()> {
-    get(store, id)?;
+    let mut task = get(store, id)?;
+    if task.link.is_some() {
+        task.deleted_at = Some(chrono::Utc::now());
+        return put(store, &task);
+    }
     store.delete_task(id)
 }
 

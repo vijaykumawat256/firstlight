@@ -97,6 +97,15 @@ impl EventTemplate {
     }
 }
 
+/// Keeping the task list in step with Google Tasks or Microsoft To Do.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct TaskSyncSettings {
+    /// Accounts that granted the separate task permission, in order (the first takes tasks made here). Changed only
+    /// by `enable_task_sync` / `disable_task_sync`; never by a save or a settings file.
+    pub sync_accounts: Vec<String>,
+}
+
 /// Choices about what Firstlight does on its own and what it keeps.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -454,6 +463,7 @@ pub struct AppSettings {
     pub day: crate::day::DaySettings,
     /// Your own event templates (the built-in ones live in the page).
     pub templates: Vec<EventTemplate>,
+    pub tasks: TaskSyncSettings,
 }
 
 impl Default for AppSettings {
@@ -471,6 +481,7 @@ impl Default for AppSettings {
             privacy: Default::default(),
             day: Default::default(),
             templates: vec![],
+            tasks: Default::default(),
         }
     }
 }
@@ -571,6 +582,7 @@ impl AppSettings {
             ai: merge_valid(&d.ai, &section("ai")),
             privacy: merge_valid(&d.privacy, &section("privacy")),
             day: merge_valid(&d.day, &section("day")),
+            tasks: merge_valid(&d.tasks, &section("tasks")),
             // One bad template costs only itself.
             templates: section("templates")
                 .as_array()
@@ -805,6 +817,7 @@ impl AppSettings {
         imported.email.send_invitations = false;
         imported.email.send_messages = false;
         imported.email.send_accounts.clear();
+        imported.tasks.sync_accounts.clear();
         imported.ai.consented = None;
         imported.ai.consented_host = None;
         imported.ai.plan_consented = None;

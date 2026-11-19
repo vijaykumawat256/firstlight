@@ -18,6 +18,7 @@ pub mod notes;
 pub mod prep;
 pub mod review;
 pub mod tasks;
+pub mod tasksync;
 pub mod tz;
 pub mod weekahead;
 pub mod window;

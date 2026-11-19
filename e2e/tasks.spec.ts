@@ -140,3 +140,32 @@ test("planning with AI needs its own agreement, shows what is sent, and falls ba
   await page.getByRole("button", { name: "Withdraw" }).click();
   await expect(page.getByText("Plan my day with AI")).toHaveCount(0);
 });
+
+test("task sync is turned on per account, brings in the phone's tasks, and can be stopped", async ({ page }) => {
+  await page.goto("/?withgoogle&tasks");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^General/ }).click();
+  const allow = page.getByRole("button", { name: /^Sync tasks with / }).first();
+  await allow.click();
+  await expect(page.getByText(/Kept in step with Google Tasks; new tasks go here\./)).toBeVisible();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Briefing", exact: true }).click();
+  await page.getByRole("button", { name: "Tasks", exact: true }).click();
+  await expect(page.getByText("Kept in step with your task list online")).toBeVisible();
+  await page.getByRole("radio", { name: "Someday" }).click();
+  await expect(page.getByText("Pick up dry cleaning")).toBeVisible();
+  await page.getByRole("button", { name: "Sync now" }).click();
+  await expect(page.getByText("Tasks are in step").first()).toBeVisible();
+});
+
+test("a failed task sync names the account and why", async ({ page }) => {
+  await page.goto("/?withgoogle&tasks&taskfail");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^General/ }).click();
+  await page.getByRole("button", { name: /^Sync tasks with / }).first().click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Briefing", exact: true }).click();
+  await page.getByRole("button", { name: "Tasks", exact: true }).click();
+  await page.getByRole("button", { name: "Sync now" }).click();
+  await expect(page.getByText("Couldn't sync with Work Google (offline)").first()).toBeVisible();
+});

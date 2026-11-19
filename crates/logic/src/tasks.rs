@@ -48,6 +48,9 @@ pub struct TaskLink {
     /// What the service last said about it (its own change stamp), so a change on either side can be told apart.
     #[serde(default)]
     pub remote_updated: Option<String>,
+    /// When it was last brought in step; a local change after this is one to send.
+    #[serde(default)]
+    pub synced_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,6 +76,10 @@ pub struct Task {
     pub planned_event: Option<String>,
     #[serde(default)]
     pub link: Option<TaskLink>,
+    /// Set when a task kept in step with a service was deleted here: the record stays (shown nowhere) until the
+    /// deletion has reached the service, so the task cannot come back on the next sync.
+    #[serde(default)]
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 /// What the page sends when a task is added or changed.
@@ -223,7 +230,7 @@ fn sort_key(t: &Task) -> (i64, DateTime<Utc>) {
 pub fn lists(tasks: &[Task], now: DateTime<Utc>, tz: Tz) -> TaskLists {
     let today = now.with_timezone(&tz).date_naive();
     let mut out = TaskLists::default();
-    for t in tasks {
+    for t in tasks.iter().filter(|t| t.deleted_at.is_none()) {
         let view = |days_late| TaskView {
             task: t.clone(),
             days_late,
@@ -263,7 +270,7 @@ pub struct TaskReminder {
 pub fn due_reminders(tasks: &[Task], now: DateTime<Utc>) -> Vec<TaskReminder> {
     tasks
         .iter()
-        .filter(|t| t.done_at.is_none())
+        .filter(|t| t.done_at.is_none() && t.deleted_at.is_none())
         .filter_map(|t| match t.due {
             Some(Due::At { at })
                 if at <= now && now - at < Duration::minutes(REMINDER_GRACE_MINUTES) =>
@@ -332,6 +339,7 @@ mod tests {
             from_meeting: None,
             planned_event: None,
             link: None,
+            deleted_at: None,
         }
     }
 

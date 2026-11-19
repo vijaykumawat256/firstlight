@@ -20,6 +20,7 @@ pub mod meeting_flow;
 pub mod oauth;
 pub mod profile;
 pub mod providers;
+pub mod remote_tasks;
 pub mod secrets;
 pub mod settings;
 pub mod store;
@@ -30,6 +31,6 @@ pub mod updates;
 pub use firstlight_logic::{Error, Result};
 pub use firstlight_logic::{
     ask, briefing, conflict, contain, day, dayplan, dedupe, error, followup, ics, join, model,
-    notes, prep, review, tasks, tz, weekahead, xml,
+    notes, prep, review, tasks, tasksync, tz, weekahead, xml,
 };
 pub use sync::SyncReport;

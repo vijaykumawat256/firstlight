@@ -101,6 +101,12 @@ export interface Backend {
   /** Asks the account for its separate permission to send mail (in the browser). */
   enableAccountSend(accountId: string): Promise<AppSettings>;
   disableAccountSend(accountId: string): Promise<AppSettings>;
+  /** Asks the account for its task permission (in the browser), then keeps your tasks in step with Google Tasks or Microsoft To Do. */
+  enableTaskSync(accountId: string): Promise<AppSettings>;
+  /** Stops it; the tasks stay here as ordinary tasks. */
+  disableTaskSync(accountId: string): Promise<AppSettings>;
+  /** Syncs tasks now. Lists accounts that could not be synced, with a one-word reason. */
+  syncTasksNow(): Promise<{ problems: [string, string][] }>;
   /** This week so far next to the same days last week. */
   getWeekReview(): Promise<WeekReview>;
   /** Meetings that ended in the last three hours with notes written for them. */

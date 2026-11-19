@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-disable-task-sync"
+description = "Enables the disable_task_sync command without any pre-configured scope."
+commands.allow = ["disable_task_sync"]
+
+[[permission]]
+identifier = "deny-disable-task-sync"
+description = "Denies the disable_task_sync command without any pre-configured scope."
+commands.deny = ["disable_task_sync"]

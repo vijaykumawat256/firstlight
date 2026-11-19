@@ -79,6 +79,13 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted, deps: Deps) -> Syn
                 }
                 if let Some(summary) = round.flatten() {
                     let _ = app.emit("sync-finished", summary);
+                    // Tasks follow each round of calendar sync, on the same cadence and connection.
+                    let changed = firstlight_core::contain::contained(|| {
+                        crate::task_sync::run(&store, &deps)
+                    });
+                    if changed == Some(true) {
+                        let _ = app.emit("tasks-changed", ());
+                    }
                 }
             }
         })

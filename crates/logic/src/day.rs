@@ -503,6 +503,7 @@ mod tests {
                 from_meeting: None,
                 planned_event: None,
                 link: None,
+                deleted_at: None,
             },
             days_late: 0,
         }

@@ -351,9 +351,15 @@ pub async fn remove_account(state: State<'_, AppState>, id: String) -> CmdResult
             .delete(secret)
             .map_err(internal("removing saved credentials"))?;
     }
+    // Its tasks stay here as ordinary tasks; nothing more is sent to it.
+    let _ = firstlight_core::remote_tasks::unlink_account(&store, &id);
     store
         .remove_account(&id)
-        .map_err(internal("removing the account"))
+        .map_err(internal("removing the account"))?;
+    let mut s = store.load_settings();
+    s.tasks.sync_accounts.retain(|a| a != &id);
+    s.email.send_accounts.retain(|a| a != &id);
+    store.save_settings(&s).map_err(internal("saving settings"))
 }
 
 /// Adds an event of the user's own. With `calendar_id` (one of `writable_calendars`) it is saved into that
@@ -1603,8 +1609,9 @@ fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdR
     s.ai.plan_consented = stored.ai.plan_consented;
     // Mailboxes change only through add/remove, which keep their keychain passwords in step.
     s.email.imap = stored.email.imap;
-    // Which accounts may send is recorded only when that permission is granted.
+    // Which accounts may send, or keep tasks in step, is recorded only when that permission is granted.
     s.email.send_accounts = stored.email.send_accounts;
+    s.tasks = stored.tasks;
     s.sanitize();
     // Try the shortcut first: if the system refuses it, nothing is saved and the user is told why.
     crate::apply_dock(app, s.general.show_in_dock);

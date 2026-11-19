@@ -556,3 +556,57 @@ export function SendingGroup() {
     </Group>
   );
 }
+
+// --------------------------------------------------------------------------------- Task sync
+
+/** Keep your tasks in step with Google Tasks or Microsoft To Do, per account, with its own permission. */
+export function TaskSyncGroup() {
+  const { settings: s } = useSettings();
+  const push = useToasts((t) => t.push);
+  const put = useSettingsCache();
+  const qc = useQueryClient();
+  const accounts = useQuery({ queryKey: ["accounts"], queryFn: () => api.listAccounts() });
+  const allow = useMutation({
+    mutationFn: (id: string) => api.enableTaskSync(id),
+    onSuccess: (v) => {
+      put(v);
+      void qc.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: (e) => push({ title: "Couldn't turn on task sync", description: errorMessage(e), tone: "danger" }),
+  });
+  const stop = useMutation({
+    mutationFn: (id: string) => api.disableTaskSync(id),
+    onSuccess: (v) => {
+      put(v);
+      void qc.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+  if (!s) return null;
+  const list = (accounts.data ?? []).filter((a) => a.provider === "google" || a.provider === "microsoft");
+  const on = s.tasks.sync_accounts;
+  return (
+    <Group title="Task sync" footer="Your tasks and your Google Tasks or Microsoft To Do list stay the same on both sides, so they are on your phone too. When a task changed on both, the newer change wins. Google Tasks keeps only the day a task is due, not the time.">
+      {list.length === 0 ? (
+        <SettingRow title="No account to sync with" description="Connect a Google or Microsoft account in Accounts first." />
+      ) : (
+        list.map((a) => {
+          const syncing = on.includes(a.id);
+          const service = a.provider === "google" ? "Google Tasks" : "Microsoft To Do";
+          return (
+            <SettingRow key={a.id} title={a.display_name} description={syncing ? `Kept in step with ${service}${on[0] === a.id ? "; new tasks go here" : ""}.` : `Needs a separate permission for ${service}. You'll be asked in your browser.`}>
+              {syncing ? (
+                <Button size="sm" variant="plain" aria-label={`Stop task sync with ${a.display_name}`} onClick={() => stop.mutate(a.id)}>
+                  Stop
+                </Button>
+              ) : (
+                <Button size="sm" variant="secondary" aria-label={`Sync tasks with ${a.display_name}`} disabled={allow.isPending} onClick={() => allow.mutate(a.id)}>
+                  {allow.isPending && allow.variables === a.id ? "Waiting…" : "Sync tasks"}
+                </Button>
+              )}
+            </SettingRow>
+          );
+        })
+      )}
+    </Group>
+  );
+}

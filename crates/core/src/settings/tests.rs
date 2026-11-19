@@ -797,3 +797,16 @@ fn extra_time_zones_must_be_real_unique_and_at_most_two() {
     }));
     assert_eq!(s.appearance.extra_zones, ["Europe/London", "Asia/Tokyo"]);
 }
+
+#[test]
+fn task_sync_is_never_switched_on_by_a_settings_file() {
+    let mut s = AppSettings::default();
+    s.tasks.sync_accounts = vec!["acct".into()];
+    assert!(
+        AppSettings::import(&s.export())
+            .unwrap()
+            .tasks
+            .sync_accounts
+            .is_empty()
+    );
+}

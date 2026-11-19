@@ -5,7 +5,7 @@ import { api, errorMessage, type DefaultView, type ThemeChoice, type TimeFormat,
 import { useNav, type View } from "@/app/nav";
 import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
 import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
-import { AiGroup, EmailGroup, SendingGroup } from "./EmailAiSettings";
+import { AiGroup, EmailGroup, SendingGroup, TaskSyncGroup } from "./EmailAiSettings";
 import { COMMON_ZONES, zoneLabel } from "@/features/calendar/zones";
 import { useSettings } from "./useSettings";
 
@@ -150,6 +150,7 @@ export function SettingsScreen() {
         )}
         {section === "general" && (
           <div className="flex flex-col gap-7">
+            <TaskSyncGroup />
             <Group title="Event templates" footer="1:1, Interview, Standup and Kickoff are built in. Make your own with “Keep as a template” in the new-event form; a title that starts with a template's name (“1:1 with Sam”) picks it up.">
               {s.templates.length === 0 ? (
                 <SettingRow title="Your templates" description="None yet." />
