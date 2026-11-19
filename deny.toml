@@ -14,6 +14,10 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained; D-Bus, Linux only" },
   { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained; D-Bus, Linux only" },
   { id = "RUSTSEC-2026-0372", reason = "zvariant_derive unmaintained; D-Bus, Linux only" },
+  # Not Tauri: our own date and time libraries. "Unmaintained" notices (2026-11), no known bug and no replacement
+  # version; moving to another date library (e.g. jiff) is a large change. Revisit if a security advisory appears.
+  { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; no vulnerability reported" },
+  { id = "RUSTSEC-2026-0555", reason = "chrono-tz unmaintained; no vulnerability reported" },
 ]
 
 [licenses]
