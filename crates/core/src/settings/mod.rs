@@ -61,6 +61,33 @@ pub enum Theme {
     System,
     Light,
     Dark,
+    /// Light, on paper tones.
+    Warm,
+    /// Dark, on true black.
+    Black,
+}
+
+/// The typeface for the whole app. Only fonts already on the computer; a style the system lacks falls back to the
+/// normal one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum FontStyle {
+    #[default]
+    System,
+    Rounded,
+    Serif,
+    Mono,
+}
+
+/// How big text is, relative to the normal size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TextSize {
+    Small,
+    #[default]
+    Default,
+    Large,
+    Larger,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -187,6 +214,8 @@ pub struct AppearanceSettings {
     pub accent: String,
     /// A soft tint behind the app that follows the time of day. Off by default.
     pub ambient: bool,
+    pub font: FontStyle,
+    pub text_size: TextSize,
     /// Up to two other time zones (IANA names) shown next to your own in the day and week views and Find a time.
     pub extra_zones: Vec<String>,
 }
@@ -197,6 +226,8 @@ impl Default for AppearanceSettings {
             theme: Theme::System,
             accent: "system".into(),
             ambient: false,
+            font: FontStyle::System,
+            text_size: TextSize::Default,
             extra_zones: vec![],
         }
     }

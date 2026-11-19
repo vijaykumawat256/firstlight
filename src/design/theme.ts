@@ -1,13 +1,14 @@
 import { create } from "zustand";
 
-export type ThemeChoice = "system" | "light" | "dark";
+export type ThemeChoice = "system" | "light" | "dark" | "warm" | "black";
+const CHOICES: readonly string[] = ["system", "light", "dark", "warm", "black"];
 
 const STORAGE_KEY = "firstlight.theme";
 
 function read(): ThemeChoice {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    if (v === "light" || v === "dark" || v === "system") return v;
+    if (v && CHOICES.includes(v)) return v as ThemeChoice;
   } catch {
     /* storage unavailable: fall through */
   }

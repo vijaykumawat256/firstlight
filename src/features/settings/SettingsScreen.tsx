@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, CalendarDays, ChevronLeft, Info, LockOpen, Mail, Palette, Settings2, ShieldCheck, Sparkles, Sunrise, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { api, errorMessage, type DefaultView, type ThemeChoice, type TimeFormat, type WeekStart } from "@/api";
+import { api, errorMessage, type DefaultView, type FontStyle, type TextSize, type ThemeChoice, type TimeFormat, type WeekStart } from "@/api";
 import { useNav, type View } from "@/app/nav";
 import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
 import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
@@ -27,7 +27,7 @@ interface HomeItem {
 const HOME: HomeItem[][] = [
   [
     { section: "general", title: "General", description: "Start at login, shortcut, sync and updates", icon: Settings2 },
-    { section: "appearance", title: "Appearance", description: "Theme, accent colour, time format and week start", icon: Palette },
+    { section: "appearance", title: "Appearance", description: "Theme, font, text size, accent colour, time format and week start", icon: Palette },
   ],
   [
     { section: "briefing", title: "Briefing", description: "What the briefing shows and your working hours", icon: Sunrise },
@@ -245,7 +245,7 @@ export function SettingsScreen() {
               ))}
             </Group>
             <Group title="Look">
-              <SettingRow title="Theme">
+              <SettingRow title="Theme" description="Auto follows your computer's light or dark setting. Warm is light on paper tones; Black is dark on true black." stack>
                 <Segmented
                   label="Theme"
                   value={s.appearance.theme}
@@ -254,6 +254,34 @@ export function SettingsScreen() {
                     { value: "system", label: "Auto" },
                     { value: "light", label: "Light" },
                     { value: "dark", label: "Dark" },
+                    { value: "warm", label: "Warm" },
+                    { value: "black", label: "Black" },
+                  ]}
+                />
+              </SettingRow>
+              <SettingRow title="Font" description="Uses fonts already on your computer.">
+                <Select
+                  label="Font"
+                  value={s.appearance.font}
+                  onValueChange={(v) => update((d) => void (d.appearance.font = v as FontStyle))}
+                  options={[
+                    { value: "system", label: "System" },
+                    { value: "rounded", label: "Rounded" },
+                    { value: "serif", label: "Serif" },
+                    { value: "mono", label: "Monospace" },
+                  ]}
+                />
+              </SettingRow>
+              <SettingRow title="Text size" stack>
+                <Segmented
+                  label="Text size"
+                  value={s.appearance.text_size}
+                  onValueChange={(v) => update((d) => void (d.appearance.text_size = v as TextSize))}
+                  options={[
+                    { value: "small", label: "Small" },
+                    { value: "default", label: "Normal" },
+                    { value: "large", label: "Large" },
+                    { value: "larger", label: "Larger" },
                   ]}
                 />
               </SettingRow>

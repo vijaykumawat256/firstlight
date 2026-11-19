@@ -197,3 +197,53 @@ for (const scheme of ["light", "dark"] as const) {
     await scan(page, "briefing with a custom accent");
   });
 }
+
+// Warm and Black set their own colours: scan the main screens in each, with the default and every custom accent.
+for (const theme of ["Warm", "Black"] as const) {
+  test(`${theme} theme keeps everything readable`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.clock.install({ time: at(9, 30) });
+    await page.goto("/?mailon&aion&tasks");
+    await page.getByRole("button", { name: "Settings" }).click();
+    await section(page, "Appearance");
+    await page.getByRole("radio", { name: theme }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme.toLowerCase());
+    await scan(page, `${theme}: appearance settings`);
+    for (const accent of ["red", "orange", "green", "teal", "indigo", "purple", "pink", "Default"]) {
+      await page.getByRole("radio", { name: accent }).click();
+      await scan(page, `${theme}: settings with ${accent} accent`);
+    }
+    await toList(page);
+    await page.getByRole("button", { name: "Briefing", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Inbox" })).toBeVisible();
+    await scan(page, `${theme}: briefing`);
+    await page.getByRole("button", { name: /^(?!Join|Copy).*Design review/ }).first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await scan(page, `${theme}: event sheet`);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Calendar" }).click();
+    await page.getByRole("radio", { name: "Week" }).click();
+    await expect(page.getByRole("region", { name: "Week", exact: true })).toBeVisible();
+    await scan(page, `${theme}: week`);
+  });
+}
+
+test("the largest text size and every font stay readable and fit the narrow window", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/?tasks");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await section(page, "Appearance");
+  await page.getByRole("radio", { name: "Larger" }).click();
+  for (const font of ["Rounded", "Serif", "Monospace"]) {
+    await page.getByRole("combobox", { name: "Font" }).click();
+    await page.getByRole("option", { name: font }).click();
+    await scan(page, `larger text, ${font}`);
+  }
+  await toList(page);
+  await page.getByRole("button", { name: "Briefing", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
+  await scan(page, "briefing with larger monospace text");
+  const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(sideways, "no sideways scroll at the largest text size").toBeLessThanOrEqual(0);
+});

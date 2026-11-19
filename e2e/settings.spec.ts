@@ -117,6 +117,13 @@ test("theme and accent apply at once", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByRole("radio", { name: "Light" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.getByRole("radio", { name: "Warm" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "warm");
+  await page.getByRole("radio", { name: "Black" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "black");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+  await page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: "Auto" }).click();
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.+/);
 
   await page.getByRole("radio", { name: "purple" }).click();
   await expect(page.getByRole("radio", { name: "purple" })).toHaveAttribute("aria-checked", "true");
@@ -351,4 +358,36 @@ test("showing in the Dock or taskbar is on by default and can be turned off", as
   await expect(sw).toHaveAttribute("aria-checked", "false");
   await sw.click();
   await expect(sw).toHaveAttribute("aria-checked", "true");
+});
+
+test("font and text size apply at once, are kept, and Normal puts them back", async ({ page }) => {
+  await openSection(page, "Appearance");
+  const title = page.getByRole("heading", { name: "Appearance", level: 1 });
+  const size = () => title.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  const normal = await size();
+
+  await page.getByRole("radio", { name: "Larger" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-text-size", "larger");
+  await expect.poll(size).toBeCloseTo(normal * 1.3, 0);
+  await page.getByRole("radio", { name: "Small" }).click();
+  await expect.poll(size).toBeLessThan(normal);
+
+  await page.getByRole("combobox", { name: "Font" }).click();
+  await page.getByRole("option", { name: "Serif" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-font", "serif");
+  await expect.poll(() => page.locator("body").evaluate((el) => getComputedStyle(el).fontFamily)).toContain("serif");
+
+  // Kept: leave and come back.
+  await back(page);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await section(page, "Appearance");
+  await expect(page.getByRole("radio", { name: "Small" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("combobox", { name: "Font" })).toContainText("Serif");
+
+  await page.getByRole("radio", { name: "Normal" }).click();
+  await page.getByRole("combobox", { name: "Font" }).click();
+  await page.getByRole("option", { name: "System" }).click();
+  await expect(page.locator("html")).not.toHaveAttribute("data-text-size", /.+/);
+  await expect(page.locator("html")).not.toHaveAttribute("data-font", /.+/);
+  await expect.poll(size).toBeCloseTo(normal, 0);
 });

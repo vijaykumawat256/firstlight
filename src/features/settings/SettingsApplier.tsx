@@ -19,6 +19,22 @@ export function periodOf(d: Date): "morning" | "day" | "evening" | "night" {
   return "night";
 }
 
+const FONT_CACHE = "firstlight.font";
+const TEXT_SIZE_CACHE = "firstlight.textSize";
+
+/** Sets (or, for the default, removes) a look attribute on <html> and remembers it for the next launch's first paint. */
+function setLook(attr: string, value: string | null, cache: string) {
+  const root = document.documentElement;
+  if (value) root.setAttribute(attr, value);
+  else root.removeAttribute(attr);
+  try {
+    if (value) localStorage.setItem(cache, value);
+    else localStorage.removeItem(cache);
+  } catch {
+    /* storage unavailable: the cache is only a convenience */
+  }
+}
+
 function applyAccent(accent: string) {
   const root = document.documentElement;
   // The stylesheet derives readable text and fill colours from the palette colour (see tokens.css).
@@ -64,6 +80,18 @@ export function SettingsApplier({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (effectiveAccent) applyAccent(effectiveAccent);
   }, [effectiveAccent]);
+
+  // Font and text size: attributes on <html> that tokens.css turns into the font list and a text scale.
+  const font = settings?.appearance.font;
+  const textSize = settings?.appearance.text_size;
+  useEffect(() => {
+    if (!font) return;
+    setLook("data-font", font === "system" ? null : font, FONT_CACHE);
+  }, [font]);
+  useEffect(() => {
+    if (!textSize) return;
+    setLook("data-text-size", textSize === "default" ? null : textSize, TEXT_SIZE_CACHE);
+  }, [textSize]);
 
   // Optional time-of-day tint behind the app.
   const ambient = settings?.appearance.ambient;

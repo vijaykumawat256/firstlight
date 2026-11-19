@@ -197,7 +197,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sections: { tomorrow: true, free_time: true, attention: true },
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true, open_every_time: false },
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, week_preview: true, time_24h: false, hide_titles: false },
-  appearance: { theme: "system", accent: "system", ambient: params.has("ambient"), extra_zones: params.has("zones") ? ["Europe/London", "Asia/Kolkata"] : [] },
+  appearance: { theme: "system", accent: "system", ambient: params.has("ambient"), font: "system", text_size: "default", extra_zones: params.has("zones") ? ["Europe/London", "Asia/Kolkata"] : [] },
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, send_messages: false, send_accounts: [], important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null, plan_consented: null },
   privacy: { crash_reports: false },

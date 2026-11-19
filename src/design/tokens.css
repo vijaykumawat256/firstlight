@@ -4,7 +4,7 @@
    Design tokens. Every colour, size, radius, shadow and duration the UI uses
    is defined here. Components never use raw hex values or pixel sizes.
    Light is the default; dark follows the system unless the user overrides it
-   (html[data-theme="light" | "dark"]).
+   (html[data-theme="light" | "dark" | "warm" | "black"]; no attribute = follow the system).
    ------------------------------------------------------------------------ */
 
 :root {
@@ -48,7 +48,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme]) {
     color-scheme: dark;
     --bg: #1c1c1e;
     --surface: #2c2c2e;
@@ -83,7 +83,8 @@
   }
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+:root[data-theme="black"] {
   color-scheme: dark;
   --bg: #1c1c1e;
   --surface: #2c2c2e;
@@ -117,6 +118,46 @@
   --cal-brown: #ac8e68;
 }
 
+/* Black: the dark theme on true black (easier on OLED screens and in a dark room). Text colours are unchanged, and
+   every one of them is lighter against black than against the dark theme's grey. */
+:root[data-theme="black"] {
+  --bg: #000000;
+  --surface: #121214;
+  --surface-raised: #1f1f22;
+  --separator: rgb(255 255 255 / 0.12);
+}
+
+/* Warm: the light theme on paper tones. Text is darker than the light theme's to keep 4.5:1 on cream. */
+:root[data-theme="warm"] {
+  color-scheme: light;
+  --bg: #f3ede3;
+  --surface: #fcf9f3;
+  --surface-raised: #fffdf8;
+  --fill: rgb(60 40 10 / 0.06);
+  --fill-strong: rgb(60 40 10 / 0.1);
+  --fg: #27221b;
+  --fg-2: #504840;
+  --fg-3: #5a5148;
+  --separator: rgb(60 40 10 / 0.1);
+  --accent: #005bb8;
+  --accent-fill: #005bb8;
+  --accent-soft: rgb(0 91 184 / 0.1);
+  --danger: #b00018;
+  --warning: #7f3a00;
+}
+
+/* Font (Settings, Appearance). Only fonts already on the computer: nothing is downloaded. Each list falls back to
+   the normal system font where the style is missing (rounded exists on macOS only). */
+:root[data-font="rounded"] { --font-sans: ui-rounded, "SF Pro Rounded", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+:root[data-font="serif"] { --font-sans: ui-serif, "New York", "Iowan Old Style", Georgia, Cambria, "Times New Roman", serif; }
+:root[data-font="mono"] { --font-sans: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, monospace; }
+
+/* Text size (Settings, Appearance): every text size below is multiplied by this. */
+:root { --text-scale: 1; }
+:root[data-text-size="small"] { --text-scale: 0.92; }
+:root[data-text-size="large"] { --text-scale: 1.15; }
+:root[data-text-size="larger"] { --text-scale: 1.3; }
+
 /* Expose tokens to Tailwind utilities (bg-surface, text-fg-2, rounded-card, ...). */
 @theme inline {
   --color-bg: var(--bg);
@@ -142,20 +183,20 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui,
     sans-serif;
 
-  --text-caption: 11px;
-  --text-caption--line-height: 14px;
-  --text-footnote: 12px;
-  --text-footnote--line-height: 16px;
-  --text-body: 13px;
-  --text-body--line-height: 18px;
-  --text-headline: 15px;
-  --text-headline--line-height: 20px;
-  --text-title: 20px;
-  --text-title--line-height: 25px;
-  --text-largetitle: 28px;
-  --text-largetitle--line-height: 34px;
-  --text-display: 34px;
-  --text-display--line-height: 40px;
+  --text-caption: calc(11px * var(--text-scale));
+  --text-caption--line-height: calc(14px * var(--text-scale));
+  --text-footnote: calc(12px * var(--text-scale));
+  --text-footnote--line-height: calc(16px * var(--text-scale));
+  --text-body: calc(13px * var(--text-scale));
+  --text-body--line-height: calc(18px * var(--text-scale));
+  --text-headline: calc(15px * var(--text-scale));
+  --text-headline--line-height: calc(20px * var(--text-scale));
+  --text-title: calc(20px * var(--text-scale));
+  --text-title--line-height: calc(25px * var(--text-scale));
+  --text-largetitle: calc(28px * var(--text-scale));
+  --text-largetitle--line-height: calc(34px * var(--text-scale));
+  --text-display: calc(34px * var(--text-scale));
+  --text-display--line-height: calc(40px * var(--text-scale));
 
   --radius-control: 6px;
   --radius-card: 10px;
@@ -202,12 +243,13 @@
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"])[data-accent] {
+  :root:not([data-theme])[data-accent] {
     --accent: color-mix(in srgb, var(--accent-base) 55%, white);
     --accent-fill: color-mix(in srgb, var(--accent-base) 50%, black);
   }
 }
-:root[data-theme="dark"][data-accent] {
+:root[data-theme="dark"][data-accent],
+:root[data-theme="black"][data-accent] {
   --accent: color-mix(in srgb, var(--accent-base) 55%, white);
   --accent-fill: color-mix(in srgb, var(--accent-base) 50%, black);
 }
@@ -216,9 +258,12 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* Only scale and a small drop here: centring is done by the element's own `translate` property (Tailwind v4's
+   -translate-x/y-1/2), which adds to `transform`. Putting -50% in the keyframes moved the dialog twice, so it opened
+   off to the left and then jumped to the centre. */
 @keyframes pop-in {
-  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: translateY(2%) scale(0.97); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes sheet-in {
   from { transform: translateY(100%); }
@@ -240,8 +285,8 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: calc(13px * var(--text-scale));
+  line-height: calc(18px * var(--text-scale));
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   /* A desktop app, not a web page: no text-selection by drag on chrome, no rubber-banding. */
@@ -251,11 +296,11 @@ body {
 }
 
 /* Inside the desktop shell with the system theme, let the window's vibrancy material show through. */
-:root[data-shell="tauri"][data-platform="windows"]:not([data-theme="light"]):not([data-theme="dark"]) body {
+:root[data-shell="tauri"][data-platform="windows"]:not([data-theme]) body {
   /* Windows windows are opaque: nothing is painted behind the page, so the page paints its own background. */
   background: var(--bg);
 }
-:root[data-shell="tauri"]:not([data-theme="light"]):not([data-theme="dark"]) body {
+:root[data-shell="tauri"]:not([data-theme]) body {
   background: transparent;
 }
 

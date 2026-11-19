@@ -32,6 +32,8 @@ fn defaults_are_sensible_and_round_trip() {
             theme: Theme::System,
             accent: "system".into(),
             ambient: false,
+            font: FontStyle::System,
+            text_size: TextSize::Default,
             extra_zones: vec![],
         }
     );
@@ -809,4 +811,26 @@ fn task_sync_is_never_switched_on_by_a_settings_file() {
             .sync_accounts
             .is_empty()
     );
+}
+
+#[test]
+fn font_text_size_and_the_new_themes_load_and_a_bad_one_costs_only_itself() {
+    let s = parse(
+        r#"{"appearance":{"theme":"black","font":"serif","text_size":"larger","accent":"teal"}}"#,
+    );
+    assert_eq!(
+        (
+            s.appearance.theme,
+            s.appearance.font,
+            s.appearance.text_size
+        ),
+        (Theme::Black, FontStyle::Serif, TextSize::Larger)
+    );
+    let s = parse(
+        r#"{"appearance":{"theme":"warm","font":"comic","text_size":"huge","accent":"teal"}}"#,
+    );
+    assert_eq!(s.appearance.theme, Theme::Warm);
+    assert_eq!(s.appearance.font, FontStyle::System);
+    assert_eq!(s.appearance.text_size, TextSize::Default);
+    assert_eq!(s.appearance.accent, "teal");
 }

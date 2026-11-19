@@ -299,7 +299,9 @@ export interface ImapMailbox {
 export type DefaultView = "briefing" | "day" | "week" | "month";
 export type WeekStart = "auto" | "monday" | "sunday" | "saturday";
 export type TimeFormat = "auto" | "h12" | "h24";
-export type ThemeChoice = "system" | "light" | "dark";
+export type ThemeChoice = "system" | "light" | "dark" | "warm" | "black";
+export type FontStyle = "system" | "rounded" | "serif" | "mono";
+export type TextSize = "small" | "default" | "large" | "larger";
 
 export interface AppSettings {
   version: number;
@@ -331,7 +333,7 @@ export interface AppSettings {
     open_every_time: boolean;
   };
   notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; week_preview: boolean; time_24h: boolean; hide_titles: boolean };
-  appearance: { theme: ThemeChoice; accent: string; ambient: boolean; extra_zones: string[] };
+  appearance: { theme: ThemeChoice; accent: string; ambient: boolean; font: FontStyle; text_size: TextSize; extra_zones: string[] };
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; send_messages: boolean; send_accounts: string[]; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null; plan_consented: AiProvider | null };
   privacy: { crash_reports: boolean };
