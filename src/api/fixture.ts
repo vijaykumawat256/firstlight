@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, PlanSuggestion, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -197,11 +197,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sections: { tomorrow: true, free_time: true, attention: true },
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true, open_every_time: false },
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, week_preview: true, time_24h: false, hide_titles: false },
-  appearance: { theme: "system", accent: "system", ambient: params.has("ambient") },
+  appearance: { theme: "system", accent: "system", ambient: params.has("ambient"), extra_zones: params.has("zones") ? ["Europe/London", "Asia/Kolkata"] : [] },
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, send_messages: false, send_accounts: [], important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null, plan_consented: null },
   privacy: { crash_reports: false },
-  day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true },
+  day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true },
   templates: [],
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
@@ -949,6 +949,37 @@ export const fixtureBackend: Backend = {
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
   },
+  async getWeekReview() {
+    // A small stand-in for crates/logic/src/review.rs.
+    const now = new Date();
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+    const ids = visibleCalendarIds();
+    const timed = fixtureEvents().filter((e) => ids.has(e.calendar_id) && e.status !== "cancelled" && e.my_response !== "declined" && e.when.kind === "timed");
+    const minutes = (from: number, to: number) => {
+      const spans = timed.map((e) => (e.when.kind === "timed" ? [Math.max(Date.parse(e.when.start), from), Math.min(Date.parse(e.when.end), to)] : [0, 0])).filter(([s, e]) => e! > s!).sort((a, b) => a[0]! - b[0]!);
+      let total = 0;
+      let cur: number[] | null = null;
+      for (const [s, e] of spans) {
+        if (cur && s! <= cur[1]!) cur[1] = Math.max(cur[1]!, e!);
+        else {
+          if (cur) total += cur[1]! - cur[0]!;
+          cur = [s!, e!];
+        }
+      }
+      return Math.round((total + (cur ? cur[1]! - cur[0]! : 0)) / 60_000);
+    };
+    const meeting = minutes(monday.getTime(), now.getTime());
+    return {
+      from: ymd(monday),
+      to: ymd(now),
+      meetings: timed.filter((e) => e.when.kind === "timed" && Date.parse(e.when.start) >= monday.getTime() && Date.parse(e.when.start) < now.getTime()).length,
+      meeting_minutes: meeting,
+      previous_meeting_minutes: minutes(monday.getTime() - 7 * 86_400_000, now.getTime() - 7 * 86_400_000),
+      focus_minutes: 0,
+      tasks_done: tasks.filter((t) => t.done_at && Date.parse(t.done_at) >= monday.getTime()).length,
+      busiest: null,
+    } satisfies WeekReview;
+  },
   async getFollowUps() {
     // A small stand-in for crates/logic/src/followup.rs.
     const now = Date.now();
@@ -1005,7 +1036,25 @@ export const fixtureBackend: Backend = {
         }
       }
     }
-    return { wrap_up: wrap, lunch } satisfies DayStatus;
+    // Travel (a stand-in for day::travel_warnings): in-person = a place, no video link, not an online word.
+    const travel: DayStatus["travel"] = [];
+    if (d.travel_minutes > 0) {
+      const ids = visibleCalendarIds();
+      const todays = fixtureEvents()
+        .filter((e) => ids.has(e.calendar_id) && e.status !== "cancelled" && e.my_response !== "declined" && e.when.kind === "timed" && new Date(e.when.start).toDateString() === now.toDateString())
+        .sort((a, b) => (a.when.kind === "timed" && b.when.kind === "timed" ? a.when.start.localeCompare(b.when.start) : 0));
+      const inPerson = (e: (typeof todays)[number]) => !!e.location?.trim() && !e.join_url && !/zoom|teams|meet\.google|webex|online|virtual|call|phone|http|remote/i.test(e.location);
+      todays.forEach((e, i) => {
+        if (e.when.kind !== "timed" || Date.parse(e.when.start) <= now.getTime() || !inPerson(e)) return;
+        const start = Date.parse(e.when.start);
+        const prev = todays.slice(0, i).filter((p) => p.when.kind === "timed" && Date.parse(p.when.end) <= start).sort((a, b) => (a.when.kind === "timed" && b.when.kind === "timed" ? Date.parse(b.when.end) - Date.parse(a.when.end) : 0))[0];
+        if (!prev || prev.when.kind !== "timed" || prev.location?.trim().toLowerCase() === e.location?.trim().toLowerCase()) return;
+        const gap = Math.round((start - Date.parse(prev.when.end)) / 60_000);
+        if (gap < d.travel_minutes) travel.push({ event_id: e.id, title: e.title, start: e.when.start, previous_title: prev.title, gap_minutes: gap });
+      });
+    }
+    const review = d.weekly_review && (day === 0 || day === 6 || (day === 5 && now.getHours() >= 12));
+    return { wrap_up: wrap, lunch, travel, review } satisfies DayStatus;
   },
   async planMyDay(useAi) {
     // A small stand-in for crates/logic/src/dayplan.rs: tasks in order, each in the first free stretch with room.

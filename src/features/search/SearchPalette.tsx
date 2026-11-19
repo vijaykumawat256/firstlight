@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, CalendarPlus, ListPlus, Search, Sparkles } from "lucide-react";
+import { CalendarDays, CalendarPlus, Globe, ListPlus, Search, Sparkles } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
 import { useNav } from "@/app/nav";
@@ -10,6 +10,7 @@ import { startOfLocalDay } from "@/features/calendar/layout";
 import { describeQuick, EventForm } from "@/features/events/EventForm";
 import { parseQuickAdd, parseQuickTask, taskLine, type QuickEvent, type QuickTask } from "@/features/events/quickAdd";
 import { dueText, quickToTaskInput } from "@/features/tasks/shared";
+import { parseZoneQuestion, timeIn, zoneLabel, type ZoneAnswer } from "@/features/calendar/zones";
 import { AskAnswer } from "./AskAnswer";
 import { parseJump, searchEvents } from "./search";
 import { useSearch } from "./store";
@@ -18,7 +19,7 @@ const DAY = 86_400_000;
 
 const startOf = (e: CalEvent): Date => (e.when.kind === "all_day" ? new Date(`${e.when.start}T00:00:00`) : new Date(e.when.start));
 
-type Row = { kind: "task"; task: QuickTask } | { kind: "add"; line: string; event: QuickEvent } | { kind: "ask"; question: string } | { kind: "day"; date: Date } | { kind: "event"; event: CalEvent };
+type Row = { kind: "zone"; answer: ZoneAnswer } | { kind: "task"; task: QuickTask } | { kind: "add"; line: string; event: QuickEvent } | { kind: "ask"; question: string } | { kind: "day"; date: Date } | { kind: "event"; event: CalEvent };
 
 /** Press ⌘K (Ctrl+K) anywhere: find an event by name or place, or type a date to jump to that day. */
 export function SearchHost() {
@@ -66,14 +67,16 @@ export function SearchHost() {
     const jump = parseJump(query, new Date());
     // A line with a title and a day or time can become a new event ("lunch with Riya friday 1pm").
     // "task …" or "todo …" adds to the task list instead.
+    const zone = parseZoneQuestion(query, new Date());
     const asTask = taskLine(query);
     const task = asTask ? parseQuickTask(asTask, new Date()) : null;
-    const quick = jump || asTask ? null : parseQuickAdd(query, new Date());
+    const quick = jump || asTask || zone ? null : parseQuickAdd(query, new Date());
     const found = searchEvents(events.data ?? [], query, new Date());
     // A question needs AI to be on and agreed to. It looks like one when it has a few words or ends with "?".
     const words = query.trim().split(/\s+/).filter(Boolean).length;
     const canAsk = !!ai.data?.enabled && ai.data.consented && (words >= 3 || query.trim().endsWith("?"));
     return [
+      ...(zone ? [{ kind: "zone" as const, answer: zone }] : []),
       ...(task ? [{ kind: "task" as const, task }] : []),
       ...(quick ? [{ kind: "add" as const, line: query.trim(), event: quick }] : []),
       ...(canAsk ? [{ kind: "ask" as const, question: query.trim() }] : []),
@@ -94,6 +97,7 @@ export function SearchHost() {
       setAsked(row.question);
       return;
     }
+    if (row.kind === "zone") return; // the answer is the row itself
     close();
     if (row.kind === "task") {
       api
@@ -173,7 +177,7 @@ export function SearchHost() {
             <ul id={listId} role="listbox" aria-label={query.trim() ? "Results" : "Coming up"} className="flex max-h-72 flex-col overflow-y-auto">
               {rows.map((r, i) => (
                 <li
-                  key={r.kind === "task" ? "task" : r.kind === "add" ? "add" : r.kind === "ask" ? "ask" : r.kind === "day" ? "day" : r.event.id}
+                  key={r.kind === "zone" ? "zone" : r.kind === "task" ? "task" : r.kind === "add" ? "add" : r.kind === "ask" ? "ask" : r.kind === "day" ? "day" : r.event.id}
                   id={`${listId}-${i}`}
                   role="option"
                   aria-selected={i === active}
@@ -181,7 +185,15 @@ export function SearchHost() {
                   onClick={() => choose(r)}
                   className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-card px-3 py-2 ${i === active ? "bg-fill" : ""}`}
                 >
-                  {r.kind === "task" ? (
+                  {r.kind === "zone" ? (
+                    <>
+                      <Globe className="size-4 shrink-0 text-accent" aria-hidden />
+                      <span className="min-w-0 text-headline text-fg">
+                        {timeIn(r.answer.at, r.answer.zone)} in {zoneLabel(r.answer.zone)} is {formatTime(r.answer.at)} here
+                        {new Date().toDateString() !== r.answer.at.toDateString() ? `, ${formatDate(r.answer.at)}` : ""}
+                      </span>
+                    </>
+                  ) : r.kind === "task" ? (
                     <>
                       <ListPlus className="size-4 shrink-0 text-accent" aria-hidden />
                       <span className="min-w-0 truncate text-headline text-fg">

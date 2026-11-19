@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -101,6 +101,8 @@ export interface Backend {
   /** Asks the account for its separate permission to send mail (in the browser). */
   enableAccountSend(accountId: string): Promise<AppSettings>;
   disableAccountSend(accountId: string): Promise<AppSettings>;
+  /** This week so far next to the same days last week. */
+  getWeekReview(): Promise<WeekReview>;
   /** Meetings that ended in the last three hours with notes written for them. */
   getFollowUps(): Promise<FollowUp[]>;
   /** Moves tasks to another day (YYYY-MM-DD), keeping each one's time of day. */

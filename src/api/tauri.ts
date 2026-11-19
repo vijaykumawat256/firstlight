@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -23,6 +23,7 @@ export const tauriBackend: Backend = {
   sendMessage: (senderId, to, subject, body) => invoke<void>("send_message", { senderId, to, subject, body }),
   enableAccountSend: (accountId) => invoke<AppSettings>("enable_account_send", { accountId }),
   disableAccountSend: (accountId) => invoke<AppSettings>("disable_account_send", { accountId }),
+  getWeekReview: () => invoke<WeekReview>("get_week_review"),
   getFollowUps: () => invoke<FollowUp[]>("get_follow_ups"),
   moveTasks: (ids, date) => invoke<void>("move_tasks", { ids, date }),
   getDayStatus: () => invoke<DayStatus>("get_day_status"),

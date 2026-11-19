@@ -28,3 +28,17 @@ pub fn follow_ups(
     }
     Ok(candidates(&events, &notes, now, tz, bs))
 }
+
+/// This week so far next to the same days of last week (see `review`).
+pub fn week_review(
+    store: &Store,
+    now: DateTime<Utc>,
+    tz: Tz,
+    bs: &BriefingSettings,
+) -> Result<crate::review::WeekReview> {
+    let from = now - Duration::days(15);
+    let events = crate::dedupe::dedupe(store.events_between(from, now + Duration::seconds(1))?);
+    let focus = crate::local::focus_event_ids(store, from, now + Duration::seconds(1))?;
+    let tasks = crate::todo::all(store)?;
+    Ok(crate::review::review(&events, &focus, &tasks, now, tz, bs))
+}

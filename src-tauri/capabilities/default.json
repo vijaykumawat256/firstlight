@@ -23,6 +23,7 @@
     "allow-open-mail-draft",
     "allow-find-free-times",
     "allow-get-meeting-note",
+    "allow-get-week-review",
     "allow-message-senders",
     "allow-send-message",
     "allow-enable-account-send",

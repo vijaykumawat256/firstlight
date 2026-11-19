@@ -144,6 +144,10 @@ pub struct DayStatus {
     wrap_up: bool,
     /// Meetings leave too little room for lunch today.
     lunch: Option<firstlight_core::day::LunchWarning>,
+    /// In-person meetings the meeting before leaves too little time to get to.
+    travel: Vec<firstlight_core::day::TravelWarning>,
+    /// It is Friday afternoon or the weekend: the briefing shows the week's review.
+    review: bool,
 }
 
 /// What the briefing needs to know about the rest of the day beyond meetings.
@@ -168,6 +172,19 @@ pub async fn get_day_status(state: State<'_, AppState>) -> CmdResult<DayStatus> 
             &settings.day,
             &settings.briefing,
         ),
+        travel: firstlight_core::day::travel_warnings(
+            &events,
+            now,
+            tz,
+            &settings.day,
+            &settings.briefing,
+        ),
+        review: settings.day.weekly_review && {
+            use chrono::{Datelike, Timelike};
+            let local = now.with_timezone(&tz);
+            matches!(local.weekday(), chrono::Weekday::Sat | chrono::Weekday::Sun)
+                || (local.weekday() == chrono::Weekday::Fri && local.hour() >= 12)
+        },
     })
 }
 
@@ -180,4 +197,15 @@ pub async fn get_follow_ups(
     let bs = store.load_settings().briefing;
     firstlight_core::meeting_flow::follow_ups(&store, Utc::now(), crate::local_tz(), &bs)
         .map_err(internal("loading follow-ups"))
+}
+
+/// This week so far (Monday to now) next to the same days last week: meeting time, focus time, tasks done.
+#[tauri::command]
+pub async fn get_week_review(
+    state: State<'_, AppState>,
+) -> CmdResult<firstlight_core::review::WeekReview> {
+    let store = lock_store(&state)?;
+    let bs = store.load_settings().briefing;
+    firstlight_core::meeting_flow::week_review(&store, Utc::now(), crate::local_tz(), &bs)
+        .map_err(internal("working out the week"))
 }

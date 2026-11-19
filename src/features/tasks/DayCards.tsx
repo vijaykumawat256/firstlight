@@ -1,8 +1,8 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Moon, UtensilsCrossed } from "lucide-react";
+import { BarChart3, Car, Moon, UtensilsCrossed } from "lucide-react";
 import { api, errorMessage } from "@/api";
 import { Button, Card, useToasts } from "@/design";
-import { formatTime } from "@/features/briefing/format";
+import { formatDate, formatTime } from "@/features/briefing/format";
 import { useTaskChanged, useTaskLists } from "./shared";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -101,6 +101,71 @@ export function LunchCard() {
               Keep {formatTime(new Date(w.longest[0]))} to {formatTime(new Date(w.longest[1]))} for lunch
             </Button>
           )}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+/** "2 h 30 min", "45 min". */
+const hours = (m: number) => (m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m / 60} h`);
+
+/** In-person meetings the meeting before leaves too little time to get to (with the travel time you set). */
+export function TravelCard() {
+  const status = useDayStatus();
+  const list = status.data?.travel ?? [];
+  if (list.length === 0) return null;
+  return (
+    <section aria-label="Travel">
+      <Card className="flex items-start gap-3">
+        <Car className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-headline font-semibold text-fg">Tight for travel</h2>
+          <ul className="mt-1 flex flex-col gap-1">
+            {list.map((w) => (
+              <li key={w.event_id} className="text-body text-fg-2">
+                <span className="text-fg">{w.title}</span> at {formatTime(new Date(w.start))}: {w.gap_minutes <= 0 ? "straight after" : `${w.gap_minutes} min after`} {w.previous_title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+/** Friday afternoon and the weekend: the week so far next to last week. */
+export function WeekReviewCard() {
+  const status = useDayStatus();
+  const review = useQuery({ queryKey: ["week-review"], queryFn: () => api.getWeekReview(), enabled: !!status.data?.review, staleTime: 5 * 60_000 });
+  const r = review.data;
+  if (!status.data?.review || !r) return null;
+  const diff = r.meeting_minutes - r.previous_meeting_minutes;
+  const compare = Math.abs(diff) < 30 ? "about the same as last week" : diff > 0 ? `${hours(diff)} more than last week` : `${hours(-diff)} less than last week`;
+  return (
+    <section aria-label="Your week">
+      <Card className="flex items-start gap-3">
+        <BarChart3 className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-headline font-semibold text-fg">Your week</h2>
+          <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-body">
+            <dt className="text-fg-2">Meetings</dt>
+            <dd className="text-fg">
+              {hours(r.meeting_minutes)} in {r.meetings} {r.meetings === 1 ? "meeting" : "meetings"}, {compare}
+            </dd>
+            <dt className="text-fg-2">Focus</dt>
+            <dd className="text-fg">{r.focus_minutes ? hours(r.focus_minutes) : "None set"}</dd>
+            <dt className="text-fg-2">Tasks</dt>
+            <dd className="text-fg">{r.tasks_done} done</dd>
+            {r.busiest && (
+              <>
+                <dt className="text-fg-2">Busiest</dt>
+                <dd className="text-fg">
+                  {formatDate(new Date(`${r.busiest[0]}T00:00:00`))}, {hours(r.busiest[1])}
+                </dd>
+              </>
+            )}
+          </dl>
         </div>
       </Card>
     </section>

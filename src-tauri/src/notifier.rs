@@ -254,10 +254,19 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                         } else {
                             vec![]
                         };
+                        // Friday's look back at the week (worked out only on Fridays, when it can be due).
+                        let review = (settings.day.weekly_review
+                            && chrono::Datelike::weekday(&now.with_timezone(&tz)) == chrono::Weekday::Fri)
+                            .then(|| firstlight_core::meeting_flow::week_review(&store, now, tz, &bs).ok())
+                            .flatten()
+                            .and_then(|r| {
+                                firstlight_core::review::due(&r, now, tz, &settings.day, &rules, &sent)
+                            });
                         for n in due(&events, now, tz, &ns, &bs, &rules, &sent)
                             .into_iter()
                             .chain(day)
                             .chain(follow)
+                            .chain(review)
                         {
                             if focusing && n.kind != firstlight_core::briefing::notify::Kind::Before
                             {

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-week-review"
+description = "Enables the get_week_review command without any pre-configured scope."
+commands.allow = ["get_week_review"]
+
+[[permission]]
+identifier = "deny-get-week-review"
+description = "Denies the get_week_review command without any pre-configured scope."
+commands.deny = ["get_week_review"]

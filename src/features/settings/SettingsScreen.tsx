@@ -6,6 +6,7 @@ import { useNav, type View } from "@/app/nav";
 import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
 import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
 import { AiGroup, EmailGroup, SendingGroup } from "./EmailAiSettings";
+import { COMMON_ZONES, zoneLabel } from "@/features/calendar/zones";
 import { useSettings } from "./useSettings";
 
 const ACCENTS = ["system", ...CALENDAR_COLOURS.filter((c) => !["blue", "yellow", "brown"].includes(c))];
@@ -221,6 +222,25 @@ export function SettingsScreen() {
         )}
         {section === "appearance" && (
           <div className="flex flex-col gap-7">
+            <Group title="Other time zones" footer="Shown beside your own hours in the day and week views, and in Find a time. In Search, type “3pm in London” to see it in your time.">
+              {[0, 1].map((i) => (
+                <SettingRow key={i} title={i === 0 ? "First" : "Second"}>
+                  <Select
+                    label={i === 0 ? "First other time zone" : "Second other time zone"}
+                    value={s.appearance.extra_zones[i] ?? "none"}
+                    onValueChange={(v) =>
+                      update((d) => {
+                        const z = [...d.appearance.extra_zones];
+                        if (v === "none") z.splice(i, 1);
+                        else z[i] = v;
+                        d.appearance.extra_zones = z.filter(Boolean).slice(0, 2);
+                      })
+                    }
+                    options={[{ value: "none", label: "None" }, ...COMMON_ZONES.map((z) => ({ value: z, label: zoneLabel(z) }))]}
+                  />
+                </SettingRow>
+              ))}
+            </Group>
             <Group title="Look">
               <SettingRow title="Theme">
                 <Segmented
@@ -446,6 +466,17 @@ export function SettingsScreen() {
               )}
               <SettingRow title="Follow up after meetings" description="After a meeting you wrote notes in: turn them into tasks or email a recap.">
                 <Switch label="Follow up after meetings" checked={s.day.follow_ups} onCheckedChange={(v) => update((d) => void (d.day.follow_ups = v))} />
+              </SettingRow>
+              <SettingRow title="Travel time" description="For meetings held somewhere (not online): a “Leave now” notice and a warning when the meeting before leaves too little time. Your own estimate; no addresses are looked up.">
+                <Select
+                  label="Travel time"
+                  value={String(s.day.travel_minutes)}
+                  onValueChange={(v) => update((d) => void (d.day.travel_minutes = Number(v)))}
+                  options={[0, 10, 15, 30, 45, 60, 90].map((m) => ({ value: String(m), label: m === 0 ? "Off" : `${m} min` }))}
+                />
+              </SettingRow>
+              <SettingRow title="Weekly review" description="On Friday afternoon: time in meetings next to last week, focus time and tasks done. Numbers only.">
+                <Switch label="Weekly review" checked={s.day.weekly_review} onCheckedChange={(v) => update((d) => void (d.day.weekly_review = v))} />
               </SettingRow>
               <SettingRow title="Stop-work reminder" description="A note when your working hours end.">
                 <Switch label="Stop-work reminder" checked={s.day.stop_work} onCheckedChange={(v) => update((d) => void (d.day.stop_work = v))} />

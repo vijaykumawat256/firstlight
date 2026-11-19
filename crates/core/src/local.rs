@@ -850,6 +850,31 @@ pub fn focus_until(store: &Store, now: DateTime<Utc>) -> Result<Option<DateTime<
     Ok(until)
 }
 
+/// The ids of the dated events that are focus time (for the weekly review, which counts them apart from meetings).
+pub fn focus_event_ids(
+    store: &Store,
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+) -> Result<std::collections::HashSet<String>> {
+    let focus: std::collections::HashSet<String> = store
+        .all_own_events()?
+        .into_iter()
+        .filter_map(|(id, json)| {
+            let stored = serde_json::from_str::<Stored>(&json).ok()?;
+            stored.input.focus.then_some(id)
+        })
+        .collect();
+    if focus.is_empty() {
+        return Ok(Default::default());
+    }
+    Ok(store
+        .events_between(from, to)?
+        .into_iter()
+        .filter(|e| e.calendar_id == CALENDAR_ID && focus.contains(master_of(e)))
+        .map(|e| e.id)
+        .collect())
+}
+
 // ---- reminders ---------------------------------------------------------------------------
 
 /// A reminder that is due.

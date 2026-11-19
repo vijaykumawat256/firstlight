@@ -178,6 +178,8 @@ pub struct AppearanceSettings {
     pub accent: String,
     /// A soft tint behind the app that follows the time of day. Off by default.
     pub ambient: bool,
+    /// Up to two other time zones (IANA names) shown next to your own in the day and week views and Find a time.
+    pub extra_zones: Vec<String>,
 }
 
 impl Default for AppearanceSettings {
@@ -186,6 +188,7 @@ impl Default for AppearanceSettings {
             theme: Theme::System,
             accent: "system".into(),
             ambient: false,
+            extra_zones: vec![],
         }
     }
 }
@@ -707,6 +710,12 @@ impl AppSettings {
         }
 
         self.day.sanitize();
+        // Only real zone names, each once, at most two.
+        let mut seen = std::collections::HashSet::new();
+        self.appearance
+            .extra_zones
+            .retain(|z| z.parse::<chrono_tz::Tz>().is_ok() && seen.insert(z.clone()));
+        self.appearance.extra_zones.truncate(2);
         self.templates.retain(EventTemplate::is_valid);
         for t in &mut self.templates {
             t.name = t.name.trim().to_string();

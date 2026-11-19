@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { api, errorMessage, type FreeSlot } from "@/api";
 import { Dialog, IconButton, Segmented, useToasts } from "@/design";
 import { formatDate, formatTime } from "@/features/briefing/format";
+import { timeIn, zoneLabel } from "@/features/calendar/zones";
+import { useSettings } from "@/features/settings/useSettings";
 
 const LENGTHS = [
   { value: "15", label: "15 min" },
@@ -23,6 +25,7 @@ const range = (s: FreeSlot) => `${formatDate(new Date(s.start))}, ${formatTime(n
 export function FindATime({ onClose }: { onClose: () => void }) {
   const push = useToasts((s) => s.push);
   const qc = useQueryClient();
+  const zones = useSettings().settings?.appearance.extra_zones ?? [];
   const [minutes, setMinutes] = useState("30");
   const [days, setDays] = useState("7");
   const slots = useQuery({
@@ -90,8 +93,13 @@ export function FindATime({ onClose }: { onClose: () => void }) {
               <ul className="mt-1 flex flex-col">
                 {group.map((s) => (
                   <li key={s.start} className="flex items-center justify-between gap-2 py-1">
-                    <span className="text-body text-fg">
+                    <span className="min-w-0 text-body text-fg">
                       {formatTime(new Date(s.start))} to {formatTime(new Date(s.end))}
+                      {zones.map((z) => (
+                        <span key={z} className="block text-footnote text-fg-2">
+                          {timeIn(new Date(s.start), z)} to {timeIn(new Date(s.end), z)} in {zoneLabel(z)}
+                        </span>
+                      ))}
                     </span>
                     <span className="flex shrink-0 items-center gap-1">
                       <IconButton label={`Block ${LENGTHS.find((l) => l.value === minutes)?.label ?? ""} for focus from ${range(s)}`} disabled={block.isPending} onClick={() => block.mutate(s)}>

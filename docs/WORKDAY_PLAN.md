@@ -23,6 +23,6 @@ Decisions taken (the recommendations):
 | 3 | B Daily rhythm | end-of-day wrap-up (on), break nudge (off), lunch protection, stop-work reminder (off) | done |
 | 4 | C Meeting flow | follow-ups after meetings with notes, running late (mail draft), templates | done |
 | 5 | E3 Sending emails | one-tap send after preview for running late / follow-ups: Yahoo, iCloud (exists), Microsoft Mail.Send, Gmail gmail.send (restricted scope) | done |
-| 6 | D Context (+E4) | extra time zones, travel buffer, weekly review; Apple Maps travel times on Mac, opt-in | |
+| 6 | D Context (+E4) | extra time zones, travel buffer, weekly review; Apple Maps travel times on Mac, opt-in | done except Apple Maps |
 | 7 | E1 Task sync | Google Tasks (date only, no time) and Microsoft To Do, opt-in per account, last change wins | |
 | 8 | E2 Phone version | Phase 7; waiting for the user's decisions | waiting |

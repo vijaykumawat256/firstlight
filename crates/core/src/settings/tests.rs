@@ -32,6 +32,7 @@ fn defaults_are_sensible_and_round_trip() {
             theme: Theme::System,
             accent: "system".into(),
             ambient: false,
+            extra_zones: vec![],
         }
     );
     assert_eq!(
@@ -787,4 +788,12 @@ fn sending_is_never_switched_on_by_a_settings_file() {
     let back = AppSettings::import(&s.export()).unwrap();
     assert!(!back.email.send_messages);
     assert!(back.email.send_accounts.is_empty());
+}
+
+#[test]
+fn extra_time_zones_must_be_real_unique_and_at_most_two() {
+    let s = AppSettings::from_value(&serde_json::json!({
+        "appearance": { "extra_zones": ["Europe/London", "Mars/Olympus", "Europe/London", "Asia/Tokyo", "America/New_York"] }
+    }));
+    assert_eq!(s.appearance.extra_zones, ["Europe/London", "Asia/Tokyo"]);
 }

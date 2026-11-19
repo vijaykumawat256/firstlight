@@ -4,6 +4,7 @@ import type { CalEvent } from "@/api";
 import { calendarColour } from "@/design";
 import { formatHour, formatTime } from "@/features/briefing/format";
 import { layoutColumn, sameDay } from "./layout";
+import { timeIn, zoneLabel } from "./zones";
 
 const HOUR = 52; // px per hour
 const GUTTER = 48; // px for the hour labels
@@ -26,9 +27,13 @@ interface Props {
   now: Date;
   colourOf: (calendarId: string) => string;
   onOpen: (e: CalEvent) => void;
+  /** Other time zones to label the hours in as well (at most two). */
+  zones?: string[];
 }
 
-export function TimeGrid({ days, events, now, colourOf, onOpen }: Props) {
+export function TimeGrid({ days, events, now, colourOf, onOpen, zones = [] }: Props) {
+  // One label column per extra zone, to the left of your own.
+  const gutter = GUTTER * (1 + zones.length);
   const scroller = useRef<HTMLDivElement>(null);
   const shown = useMemo(() => events.filter(isShown), [events]);
   const timed = useMemo(() => shown.filter((e) => e.when.kind === "timed"), [shown]);
@@ -46,8 +51,17 @@ export function TimeGrid({ days, events, now, colourOf, onOpen }: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" role="region" aria-label={compact ? "Week" : "Day"}>
-      {/* Day headers */}
-      <div className="flex shrink-0 border-b border-separator" style={{ paddingLeft: GUTTER }}>
+      {/* Day headers (with the names of any other zones over their hour labels) */}
+      <div className="relative flex shrink-0 border-b border-separator" style={{ paddingLeft: gutter }}>
+        {zones.length > 0 && (
+          <div className="absolute inset-y-0 left-0 flex items-end pb-1.5" style={{ width: gutter }}>
+            {[...zones, null].map((z) => (
+              <span key={z ?? "here"} className="truncate pr-2 text-right text-caption text-fg-2" style={{ width: GUTTER }}>
+                {z ? zoneLabel(z) : "Here"}
+              </span>
+            ))}
+          </div>
+        )}
         {days.map((d) => {
           const today = sameDay(d, now);
           return (
@@ -63,7 +77,7 @@ export function TimeGrid({ days, events, now, colourOf, onOpen }: Props) {
 
       {/* All-day strip */}
       {hasAllDay && (
-        <div className="flex shrink-0 border-b border-separator py-1" style={{ paddingLeft: GUTTER }}>
+        <div className="flex shrink-0 border-b border-separator py-1" style={{ paddingLeft: gutter }}>
           {days.map((d) => (
             <div key={d.getTime()} className="flex min-w-0 flex-1 flex-col gap-0.5 px-0.5">
               {allDayOn(shown, d).map((e) => (
@@ -84,7 +98,16 @@ export function TimeGrid({ days, events, now, colourOf, onOpen }: Props) {
 
       {/* Hours */}
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overflow-x-auto">
-        <div className="relative flex" style={{ height: HOUR * 24, minWidth: compact ? 7 * 56 + GUTTER : undefined }}>
+        <div className="relative flex" style={{ height: HOUR * 24, minWidth: compact ? 7 * 56 + gutter : undefined }}>
+          {zones.map((z) => (
+            <div key={z} className="relative shrink-0" style={{ width: GUTTER }} aria-hidden>
+              {Array.from({ length: 24 }, (_, h) => (
+                <span key={h} className="absolute right-2 -translate-y-1/2 whitespace-nowrap text-caption text-fg-3 tabular-nums" style={{ top: h * HOUR, display: h === 0 ? "none" : undefined }}>
+                  {timeIn(new Date(days[0]!.getFullYear(), days[0]!.getMonth(), days[0]!.getDate(), h), z)}
+                </span>
+              ))}
+            </div>
+          ))}
           <div className="relative shrink-0" style={{ width: GUTTER }} aria-hidden>
             {Array.from({ length: 24 }, (_, h) => (
               <span key={h} className="absolute right-2 -translate-y-1/2 whitespace-nowrap text-caption text-fg-3 tabular-nums" style={{ top: h * HOUR, display: h === 0 ? "none" : undefined }}>

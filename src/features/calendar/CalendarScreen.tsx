@@ -7,6 +7,7 @@ import { Button, IconButton, Segmented, Skeleton, useToasts } from "@/design";
 import { EventDetail } from "@/features/briefing/EventDetail";
 import { EventForm } from "@/features/events/EventForm";
 import { useNow } from "@/features/briefing/hooks";
+import { useSettings } from "@/features/settings/useSettings";
 import { MonthGrid, monthWeeks } from "./MonthGrid";
 import { TimeGrid } from "./TimeGrid";
 import { localeFirstDay, sameDay, startOfLocalDay, startOfWeek } from "./layout";
@@ -22,6 +23,7 @@ export function CalendarScreen() {
   const go = useNav((s) => s.go);
   const push = useToasts((s) => s.push);
   const now = useNow(60_000);
+  const { settings } = useSettings();
   const [mode, setMode] = useState<Mode>(() => useNav.getState().calendarMode);
   const [anchor, setAnchor] = useState(() => startOfLocalDay(useNav.getState().calendarDate ?? new Date()));
   const [detail, setDetail] = useState<CalEvent | null>(null);
@@ -110,7 +112,7 @@ export function CalendarScreen() {
           onOpen={setDetail}
         />
       ) : (
-        <TimeGrid days={days} events={events.data} now={now} colourOf={(id) => colours.get(id) ?? "blue"} onOpen={setDetail} />
+        <TimeGrid days={days} events={events.data} now={now} colourOf={(id) => colours.get(id) ?? "blue"} onOpen={setDetail} zones={settings?.appearance.extra_zones ?? []} />
       )}
       <EventForm open={adding} onOpenChange={setAdding} day={mode === "month" ? undefined : from} />
       <EventDetail event={detail} calendars={calendars.data ?? []} onClose={() => setDetail(null)} onJoin={join} />

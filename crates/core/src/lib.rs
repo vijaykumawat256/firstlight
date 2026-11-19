@@ -30,6 +30,6 @@ pub mod updates;
 pub use firstlight_logic::{Error, Result};
 pub use firstlight_logic::{
     ask, briefing, conflict, contain, day, dayplan, dedupe, error, followup, ics, join, model,
-    notes, prep, tasks, tz, weekahead, xml,
+    notes, prep, review, tasks, tz, weekahead, xml,
 };
 pub use sync::SyncReport;

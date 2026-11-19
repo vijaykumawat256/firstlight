@@ -141,6 +141,22 @@ export interface DayStatus {
   wrap_up: boolean;
   /** Meetings leave too little room for lunch today. */
   lunch: { from: string; to: string; free_minutes: number; longest: [string, string] | null } | null;
+  /** In-person meetings the one before leaves too little time to get to. */
+  travel: { event_id: string; title: string; start: string; previous_title: string; gap_minutes: number }[];
+  /** Friday afternoon or the weekend: show the week's review. */
+  review: boolean;
+}
+
+/** This week so far (Monday to today) next to the same days last week. */
+export interface WeekReview {
+  from: string;
+  to: string;
+  meetings: number;
+  meeting_minutes: number;
+  previous_meeting_minutes: number;
+  focus_minutes: number;
+  tasks_done: number;
+  busiest: [string, number] | null;
 }
 
 export interface PlanSuggestion {
@@ -313,11 +329,11 @@ export interface AppSettings {
     open_every_time: boolean;
   };
   notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; week_preview: boolean; time_24h: boolean; hide_titles: boolean };
-  appearance: { theme: ThemeChoice; accent: string; ambient: boolean };
+  appearance: { theme: ThemeChoice; accent: string; ambient: boolean; extra_zones: string[] };
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; send_messages: boolean; send_accounts: string[]; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null; plan_consented: AiProvider | null };
   privacy: { crash_reports: boolean };
-  day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean; follow_ups: boolean };
+  day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean; follow_ups: boolean; travel_minutes: number; weekly_review: boolean };
   templates: EventTemplate[];
 }
 

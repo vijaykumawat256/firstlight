@@ -17,7 +17,7 @@ import { FindATime } from "@/features/events/FindATime";
 import { useSearch } from "@/features/search/store";
 import { InboxSection } from "./InboxSection";
 import { TasksSection } from "@/features/tasks/TasksSection";
-import { LunchCard, WrapUpCard } from "@/features/tasks/DayCards";
+import { LunchCard, TravelCard, WeekReviewCard, WrapUpCard } from "@/features/tasks/DayCards";
 import { FollowUpCard } from "@/features/meetings/FollowUpCard";
 import { summarise } from "./summary";
 
@@ -154,9 +154,11 @@ export function BriefingScreen() {
             <WrapUpCard />
             {sections.attention && <AttentionSection b={b} />}
             {sections.attention && <LunchCard />}
+            {sections.attention && <TravelCard />}
             <TodaySection b={b} now={now} colourOf={colourOf} onOpen={setDetail} onJoin={join} showFreeTime={sections.free_time} />
             <TasksSection />
             {sections.tomorrow && <TomorrowSection b={b} colourOf={colourOf} onOpen={setDetail} />}
+            <WeekReviewCard />
             <WeekAhead />
             <UpcomingDays colourOf={colourOf} onOpen={setDetail} onJoin={join} />
             {settings?.email.enabled && <InboxSection />}

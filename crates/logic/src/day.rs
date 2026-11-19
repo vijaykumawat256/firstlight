@@ -37,6 +37,10 @@ pub struct DaySettings {
     pub stop_work: bool,
     /// After a meeting you wrote notes in: a nudge to turn them into tasks or send a recap.
     pub follow_ups: bool,
+    /// Minutes to get to a meeting held somewhere (not online). 0 = off. Nothing is looked up: it is your estimate.
+    pub travel_minutes: i64,
+    /// On Friday afternoon, a look back at the week: meeting time, focus time, tasks done.
+    pub weekly_review: bool,
 }
 
 impl Default for DaySettings {
@@ -54,6 +58,8 @@ impl Default for DaySettings {
             lunch_minutes: 30,
             stop_work: false,
             follow_ups: true,
+            travel_minutes: 0,
+            weekly_review: true,
         }
     }
 }
@@ -72,6 +78,7 @@ impl DaySettings {
             self.lunch_to_hour = d.lunch_to_hour;
         }
         self.lunch_minutes = self.lunch_minutes.clamp(10, 120);
+        self.travel_minutes = self.travel_minutes.clamp(0, 180);
     }
 }
 
@@ -184,6 +191,152 @@ pub fn due(
         && !sent.contains(&n.id)
     {
         out.push(n);
+    }
+    out.extend(
+        leave_now(events, now, tz, ds, bs, ns)
+            .into_iter()
+            .filter(|n| !sent.contains(&n.id)),
+    );
+    out
+}
+
+/// Words in a place that mean the meeting is not somewhere you travel to.
+const ONLINE_WORDS: [&str; 10] = [
+    "zoom",
+    "teams",
+    "meet.google",
+    "webex",
+    "online",
+    "virtual",
+    "call",
+    "phone",
+    "http",
+    "remote",
+];
+
+/// A meeting you go to: it has a place, no video link, and the place does not read as online.
+pub fn in_person(e: &Event) -> bool {
+    let Some(place) = e
+        .location
+        .as_deref()
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+    else {
+        return false;
+    };
+    let lower = place.to_lowercase();
+    e.join_url.is_none() && !ONLINE_WORDS.iter().any(|w| lower.contains(w))
+}
+
+/// "Leave now": when the travel time before an in-person meeting begins (for ten minutes, if the app was asleep).
+/// Comes regardless of quiet hours only if the summaries could (it is part of `due`, which checks them).
+fn leave_now(
+    events: &[Event],
+    now: DateTime<Utc>,
+    tz: Tz,
+    ds: &DaySettings,
+    bs: &BriefingSettings,
+    ns: &NotifySettings,
+) -> Vec<Notification> {
+    if ds.travel_minutes <= 0 {
+        return vec![];
+    }
+    let travel = Duration::minutes(ds.travel_minutes);
+    events
+        .iter()
+        .filter(|e| is_shown(e, bs) && in_person(e))
+        .filter_map(|e| match e.when {
+            When::Timed { start, .. }
+                if start - travel <= now
+                    && now < start - travel + Duration::minutes(10)
+                    && now < start =>
+            {
+                Some((e, start))
+            }
+            _ => None,
+        })
+        .map(|(e, start)| Notification {
+            id: format!("leave:{}:{}", e.id, start.timestamp()),
+            kind: Kind::Leave,
+            title: if ns.hide_titles {
+                "Time to leave".into()
+            } else {
+                format!("Leave now for {}", e.title)
+            },
+            body: if ns.hide_titles {
+                format!(
+                    "Your next meeting starts at {}.",
+                    fmt_time(start, tz, ns.time_24h)
+                )
+            } else {
+                format!(
+                    "Starts at {} at {}. You allow {} minutes to get there.",
+                    fmt_time(start, tz, ns.time_24h),
+                    e.location.as_deref().unwrap_or_default().trim(),
+                    ds.travel_minutes
+                )
+            },
+        })
+        .collect()
+}
+
+/// An in-person meeting today that the meeting before it leaves too little time to get to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TravelWarning {
+    pub event_id: String,
+    pub title: String,
+    pub start: DateTime<Utc>,
+    pub previous_title: String,
+    /// Minutes between the end of the meeting before and the start of this one.
+    pub gap_minutes: i64,
+}
+
+/// Today's upcoming in-person meetings that start less than the travel time after the meeting before them ends (when
+/// that one is somewhere else). Nothing when travel time is off.
+pub fn travel_warnings(
+    events: &[Event],
+    now: DateTime<Utc>,
+    tz: Tz,
+    ds: &DaySettings,
+    bs: &BriefingSettings,
+) -> Vec<TravelWarning> {
+    if ds.travel_minutes <= 0 {
+        return vec![];
+    }
+    let (from, to) = day_bounds(now.with_timezone(&tz).date_naive(), tz);
+    let mut timed: Vec<(&Event, DateTime<Utc>, DateTime<Utc>)> = events
+        .iter()
+        .filter(|e| is_shown(e, bs))
+        .filter_map(|e| match e.when {
+            When::Timed { start, end, .. } if start < to && end > from => Some((e, start, end)),
+            _ => None,
+        })
+        .collect();
+    timed.sort_by_key(|(_, s, _)| *s);
+    let mut out = Vec::new();
+    for (i, (e, start, _)) in timed.iter().enumerate() {
+        if *start <= now || !in_person(e) {
+            continue;
+        }
+        let Some((prev, _, prev_end)) = timed[..i]
+            .iter()
+            .filter(|(_, _, end)| *end <= *start)
+            .max_by_key(|(_, _, end)| *end)
+        else {
+            continue;
+        };
+        let same_place = prev.location.as_deref().map(|l| l.trim().to_lowercase())
+            == e.location.as_deref().map(|l| l.trim().to_lowercase());
+        let gap = (*start - *prev_end).num_minutes();
+        if !same_place && gap < ds.travel_minutes {
+            out.push(TravelWarning {
+                event_id: e.id.clone(),
+                title: e.title.clone(),
+                start: *start,
+                previous_title: prev.title.clone(),
+                gap_minutes: gap,
+            });
+        }
     }
     out
 }
@@ -559,6 +712,70 @@ mod tests {
             lunch_check(&squeezed, t("2026-11-21T15:00:00Z"), NY, &ds, &bs),
             None
         );
+    }
+
+    #[test]
+    fn travel_time_warns_about_tight_gaps_and_says_when_to_leave() {
+        let ds = DaySettings {
+            travel_minutes: 30,
+            ..Default::default()
+        };
+        let bs = BriefingSettings::default();
+        let mut online = ev(
+            "a",
+            "Standup",
+            "2026-11-18T14:00:00Z",
+            "2026-11-18T14:45:00Z",
+        );
+        online.join_url = Some("https://zoom.us/j/1".into());
+        let mut offsite = ev(
+            "b",
+            "Offsite",
+            "2026-11-18T15:00:00Z",
+            "2026-11-18T16:00:00Z",
+        );
+        offsite.location = Some("Granary Square".into());
+        let mut lunch = ev("c", "Lunch", "2026-11-18T16:10:00Z", "2026-11-18T17:00:00Z");
+        lunch.location = Some("granary square ".into()); // same place: no travel
+        let mut phone = ev(
+            "d",
+            "Vendor",
+            "2026-11-18T17:05:00Z",
+            "2026-11-18T17:30:00Z",
+        );
+        phone.location = Some("Phone call".into());
+        let events = [online, offsite, lunch, phone];
+        let w = travel_warnings(&events, t("2026-11-18T13:00:00Z"), NY, &ds, &bs);
+        assert_eq!(w.len(), 1);
+        assert_eq!(
+            (
+                w[0].title.as_str(),
+                w[0].previous_title.as_str(),
+                w[0].gap_minutes
+            ),
+            ("Offsite", "Standup", 15)
+        );
+        assert!(
+            travel_warnings(
+                &events,
+                t("2026-11-18T13:00:00Z"),
+                NY,
+                &DaySettings::default(),
+                &bs
+            )
+            .is_empty()
+        );
+
+        let at = |now: &str| leave_now(&events, t(now), NY, &ds, &bs, &NotifySettings::default());
+        assert!(at("2026-11-18T14:29:00Z").is_empty());
+        let n = at("2026-11-18T14:30:00Z");
+        assert_eq!(n.len(), 1);
+        assert_eq!(n[0].title, "Leave now for Offsite");
+        assert_eq!(
+            n[0].body,
+            "Starts at 10:00 AM at Granary Square. You allow 30 minutes to get there."
+        );
+        assert!(at("2026-11-18T14:41:00Z").is_empty());
     }
 
     #[test]

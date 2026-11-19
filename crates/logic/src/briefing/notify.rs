@@ -64,6 +64,10 @@ pub enum Kind {
     StopWork,
     /// After a meeting with notes (`followup`).
     FollowUp,
+    /// Time to leave for an in-person meeting (`day`, travel time).
+    Leave,
+    /// Friday's look back at the week (`review`).
+    WeekReview,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
