@@ -1025,3 +1025,148 @@ pub async fn get_ai_summary(state: State<'_, AppState>) -> CmdResult<Option<Stri
         Some((Instant::now(), signature, text.clone()));
     Ok(text)
 }
+
+// ---- plan my day -------------------------------------------------------------------------
+
+const PLAN_LIMIT_PER_HOUR: usize = 20;
+static PLANNED: std::sync::Mutex<Vec<Instant>> = std::sync::Mutex::new(Vec::new());
+
+fn within_plan_limit() -> bool {
+    let Ok(mut done) = PLANNED.lock() else {
+        return false;
+    };
+    done.retain(|t| t.elapsed() < StdDuration::from_secs(3600));
+    if done.len() >= PLAN_LIMIT_PER_HOUR {
+        return false;
+    }
+    done.push(Instant::now());
+    true
+}
+
+/// The tasks worth planning and today's free stretches (from now, in working hours).
+fn plan_inputs(
+    state: &AppState,
+) -> CmdResult<(
+    AppSettings,
+    Vec<firstlight_core::dayplan::PlanTask>,
+    Vec<firstlight_core::briefing::slots::Slot>,
+)> {
+    use firstlight_core::briefing::slots::find_free_slots;
+    let (now, tz) = (Utc::now(), crate::local_tz());
+    let store = lock_store(state)?;
+    let settings = store.load_settings();
+    let lists = firstlight_core::todo::lists(&store, now, tz).map_err(internal("loading tasks"))?;
+    let today = now.with_timezone(&tz).date_naive();
+    let (from, to) = day_bounds(today, tz);
+    let events = dedupe(
+        store
+            .events_between(from, to)
+            .map_err(internal("loading events"))?,
+    );
+    let slots = find_free_slots(&events, today, 1, 15, now, tz, &settings.briefing);
+    Ok((
+        settings,
+        firstlight_core::dayplan::candidates(&lists),
+        slots,
+    ))
+}
+
+#[derive(Serialize)]
+pub struct DayPlanReply {
+    /// AI summaries are on and agreed to, so planning with AI could be offered.
+    ai_available: bool,
+    /// The person also agreed to send task titles for planning.
+    ai_allowed: bool,
+    /// These suggestions came from the AI service (otherwise they were worked out on this computer).
+    by_ai: bool,
+    /// "limit" | "ai" when AI was asked for and could not be used; the plan from this computer is shown instead.
+    problem: Option<&'static str>,
+    /// How many tasks were looked at, and how much free time there is today (minutes).
+    tasks: usize,
+    free_minutes: i64,
+    suggestions: Vec<firstlight_core::dayplan::Suggestion>,
+}
+
+/// Suggests when today's tasks could be done, in today's free stretches. Nothing is changed: the page asks for the
+/// time to be set aside only when the person accepts. With `use_ai` (and both agreements), the task titles, their
+/// lengths and the free times are sent to the person's AI service; its answer is checked line by line here.
+#[tauri::command]
+pub async fn plan_my_day(state: State<'_, AppState>, use_ai: bool) -> CmdResult<DayPlanReply> {
+    use firstlight_core::ai::{build_day_plan_prompt, plan_if_allowed};
+    use firstlight_core::dayplan::{local_plan, parse_ai_plan};
+    let (settings, tasks, slots) = plan_inputs(&state)?;
+    let ai_available = settings.ai.enabled && settings.ai.consented == Some(settings.ai.provider);
+    let ai_allowed = ai_available && settings.ai.plan_consented == Some(settings.ai.provider);
+    let mut reply = DayPlanReply {
+        ai_available,
+        ai_allowed,
+        by_ai: false,
+        problem: None,
+        tasks: tasks.len(),
+        free_minutes: slots.iter().map(|s| s.minutes).sum(),
+        suggestions: local_plan(&tasks, &slots),
+    };
+    if !use_ai || !ai_allowed || tasks.is_empty() || slots.is_empty() {
+        return Ok(reply);
+    }
+    if !within_plan_limit() {
+        reply.problem = Some("limit");
+        return Ok(reply);
+    }
+    let (now, tz) = (Utc::now(), crate::local_tz());
+    let prompt = build_day_plan_prompt(&tasks, &slots, now, tz);
+    let summariser = make_summariser(&state, &settings);
+    let ai = settings.ai.clone();
+    let raw = tauri::async_runtime::spawn_blocking(move || {
+        plan_if_allowed(&ai, || prompt, || summariser)
+    })
+    .await
+    .ok()
+    .flatten();
+    let today = now.with_timezone(&tz).date_naive();
+    match raw.and_then(|r| parse_ai_plan(&r, &tasks, &slots, today, tz)) {
+        Some(s) => {
+            reply.by_ai = true;
+            reply.suggestions = s;
+        }
+        None => reply.problem = Some("ai"),
+    }
+    Ok(reply)
+}
+
+/// Exactly what "Plan my day" would send right now, shown before the person agrees.
+#[tauri::command]
+pub async fn day_plan_preview(state: State<'_, AppState>) -> CmdResult<String> {
+    let (_, tasks, slots) = plan_inputs(&state)?;
+    Ok(
+        firstlight_core::ai::build_day_plan_prompt(&tasks, &slots, Utc::now(), crate::local_tz())
+            .disclosure(),
+    )
+}
+
+/// Records the agreement to send task titles for planning. Needs `confirm` (the person read the preview) and AI on.
+#[tauri::command]
+pub async fn enable_ai_planning(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    confirm: bool,
+) -> CmdResult<AppSettings> {
+    if !confirm {
+        return Err("Please confirm what will be shared first.".into());
+    }
+    let settings = lock_store(&state)?.load_settings();
+    if !settings.ai.enabled || settings.ai.consented != Some(settings.ai.provider) {
+        return Err("Turn on AI in Settings first.".into());
+    }
+    let provider = settings.ai.provider;
+    save_settings(&app, &state, |s| s.ai.plan_consented = Some(provider))
+}
+
+/// Withdraws the agreement to send task titles. AI summaries (if on) stay as they are.
+#[tauri::command]
+pub async fn disable_ai_planning(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<AppSettings> {
+    save_settings(&app, &state, |s| s.ai.plan_consented = None)
+}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-plan-my-day"
+description = "Enables the plan_my_day command without any pre-configured scope."
+commands.allow = ["plan_my_day"]
+
+[[permission]]
+identifier = "deny-plan-my-day"
+description = "Denies the plan_my_day command without any pre-configured scope."
+commands.deny = ["plan_my_day"]

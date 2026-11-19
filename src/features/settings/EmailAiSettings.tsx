@@ -278,6 +278,13 @@ export function AiGroup() {
               <Switch label="Include important email in AI summaries" checked={ai.include_email} onCheckedChange={(v) => update((d) => void (d.ai.include_email = v))} />
             </SettingRow>
           )}
+          {ai.plan_consented === ai.provider && (
+            <SettingRow title="Plan my day with AI" description="Allowed: your task titles, how long they take and today's free times are sent when you ask AI for a plan.">
+              <Button size="sm" variant="plain" onClick={() => void api.disableAiPlanning().then((v) => (put(v), refresh()))}>
+                Withdraw
+              </Button>
+            </SettingRow>
+          )}
           {status.data?.has_key && (
             <SettingRow title="API key" description={`Saved in the system keychain, for ${label}.`}>
               <Button size="sm" variant="danger" disabled={forget.isPending} onClick={() => forget.mutate()}>

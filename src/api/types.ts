@@ -112,6 +112,25 @@ export interface TaskInput {
   from_meeting?: string | null;
 }
 
+export interface PlanSuggestion {
+  task_id: string;
+  title: string;
+  start: string;
+  end: string;
+}
+
+export interface DayPlan {
+  /** AI summaries are on and agreed to, so planning with AI can be offered. */
+  ai_available: boolean;
+  /** The separate agreement to send task titles for planning was given. */
+  ai_allowed: boolean;
+  by_ai: boolean;
+  problem: "limit" | "ai" | null;
+  tasks: number;
+  free_minutes: number;
+  suggestions: PlanSuggestion[];
+}
+
 /** Your private note for a meeting. Shared by every time the meeting happens; kept only on this computer. */
 export interface MeetingNote {
   text: string;
@@ -265,7 +284,7 @@ export interface AppSettings {
   notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; week_preview: boolean; time_24h: boolean; hide_titles: boolean };
   appearance: { theme: ThemeChoice; accent: string; ambient: boolean };
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; important_senders: string[]; days_back: number };
-  ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null };
+  ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null; plan_consented: AiProvider | null };
   privacy: { crash_reports: boolean };
   day: { task_reminders: boolean };
 }

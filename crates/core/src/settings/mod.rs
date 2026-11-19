@@ -367,6 +367,9 @@ pub struct AiSettings {
     /// For a custom service, the host the user agreed to send data to. If the address changes to another host,
     /// the agreement no longer applies and AI turns off until it is given again.
     pub consented_host: Option<String>,
+    /// The provider the user agreed to send task titles to, for "Plan my day". A separate agreement, set only by the
+    /// explicit enable action; it lapses whenever the main agreement does.
+    pub plan_consented: Option<AiProvider>,
 }
 
 impl Default for AiSettings {
@@ -380,6 +383,7 @@ impl Default for AiSettings {
             include_email: false,
             consented: None,
             consented_host: None,
+            plan_consented: None,
         }
     }
 }
@@ -648,6 +652,10 @@ impl AppSettings {
         if ai.consented != Some(AiProvider::Custom) {
             ai.consented_host = None;
         }
+        // Planning with AI rests on the main agreement: it lapses with it, or when the provider changes.
+        if ai.plan_consented.is_some() && ai.plan_consented != ai.consented {
+            ai.plan_consented = None;
+        }
         // AI can only be on for a provider the user explicitly agreed to on this computer.
         if ai.consented != Some(ai.provider) {
             ai.enabled = false;
@@ -733,6 +741,7 @@ impl AppSettings {
         imported.email.send_invitations = false;
         imported.ai.consented = None;
         imported.ai.consented_host = None;
+        imported.ai.plan_consented = None;
         imported.ai.enabled = false;
         // Passwords are not in the file, so a mailbox from it could never sign in.
         imported.email.imap.clear();

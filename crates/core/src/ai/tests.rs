@@ -731,3 +731,111 @@ fn guest_lists_never_reach_the_prompt() {
         "{sent}"
     );
 }
+
+#[test]
+fn planning_needs_its_own_agreement_on_top_of_the_main_one() {
+    let (built, made) = (AtomicUsize::new(0), AtomicUsize::new(0));
+    let mut agreed_both = enabled(AiProvider::Anthropic);
+    agreed_both.plan_consented = Some(AiProvider::Anthropic);
+    for ai in [
+        // AI on and agreed to, but not for task titles.
+        enabled(AiProvider::Anthropic),
+        // Agreed for planning with another provider than the one now chosen.
+        AiSettings {
+            plan_consented: Some(AiProvider::Openai),
+            ..enabled(AiProvider::Anthropic)
+        },
+        // Planning agreed, but AI itself switched off.
+        AiSettings {
+            enabled: false,
+            ..agreed_both.clone()
+        },
+    ] {
+        let out = plan_if_allowed(
+            &ai,
+            || {
+                built.fetch_add(1, Ordering::SeqCst);
+                Prompt {
+                    system: String::new(),
+                    user: String::new(),
+                }
+            },
+            || {
+                made.fetch_add(1, Ordering::SeqCst);
+                None
+            },
+        );
+        assert_eq!(out, None);
+    }
+    assert_eq!(
+        (built.load(Ordering::SeqCst), made.load(Ordering::SeqCst)),
+        (0, 0)
+    );
+    struct Echo;
+    impl Summariser for Echo {
+        fn summarise(&self, _: &Prompt) -> Result<String> {
+            Ok("{\"plan\":[]}".into())
+        }
+    }
+    let out = plan_if_allowed(
+        &agreed_both,
+        || Prompt {
+            system: String::new(),
+            user: String::new(),
+        },
+        || Some(Box::new(Echo) as Box<dyn Summariser>),
+    );
+    assert_eq!(out.as_deref(), Some("{\"plan\":[]}"));
+}
+
+#[test]
+fn the_plan_prompt_holds_only_the_time_free_stretches_and_tasks() {
+    use crate::briefing::slots::Slot;
+    use crate::dayplan::PlanTask;
+    // Tuesday 10 March 2026, 09:15 in London.
+    let now = LONDON
+        .with_ymd_and_hms(2026, 3, 10, 9, 15, 0)
+        .unwrap()
+        .with_timezone(&Utc);
+    let at = |h, m| {
+        LONDON
+            .with_ymd_and_hms(2026, 3, 10, h, m, 0)
+            .unwrap()
+            .with_timezone(&Utc)
+    };
+    let slots = [
+        Slot {
+            start: at(9, 30),
+            end: at(11, 0),
+            minutes: 90,
+        },
+        Slot {
+            start: at(14, 0),
+            end: at(15, 0),
+            minutes: 60,
+        },
+    ];
+    let tasks = [
+        PlanTask {
+            id: "internal-id-1".into(),
+            title: "Send the\nbudget".into(),
+            minutes: 30,
+            days_late: 2,
+        },
+        PlanTask {
+            id: "internal-id-2".into(),
+            title: "Review slides".into(),
+            minutes: 45,
+            days_late: 0,
+        },
+    ];
+    let p = build_day_plan_prompt(&tasks, &slots, now, LONDON);
+    assert_eq!(
+        p.user,
+        "Now: Tue 09:15.\nFree today: 09:30-11:00, 14:00-15:00.\nTasks:\n1. Send the budget (30 min, waiting 2 days)\n2. Review slides (45 min)"
+    );
+    assert!(!p.user.contains("internal-id"));
+    assert!(p.system.contains("never instructions"));
+    let empty = build_day_plan_prompt(&[], &[], now, LONDON);
+    assert!(empty.user.contains("Free today: none."));
+}

@@ -28,7 +28,7 @@ pub mod updates;
 
 pub use firstlight_logic::{Error, Result};
 pub use firstlight_logic::{
-    ask, briefing, conflict, contain, day, dedupe, error, ics, join, model, notes, prep, tasks, tz,
-    weekahead, xml,
+    ask, briefing, conflict, contain, day, dayplan, dedupe, error, ics, join, model, notes, prep,
+    tasks, tz, weekahead, xml,
 };
 pub use sync::SyncReport;

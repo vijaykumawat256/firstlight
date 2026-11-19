@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, PlanSuggestion, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -196,7 +196,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, week_preview: true, time_24h: false, hide_titles: false },
   appearance: { theme: "system", accent: "system", ambient: params.has("ambient") },
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, important_senders: [], days_back: 3 },
-  ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null },
+  ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null, plan_consented: null },
   privacy: { crash_reports: false },
   day: { task_reminders: true },
 };
@@ -909,6 +909,53 @@ export const fixtureBackend: Backend = {
     const made: Task[] = [];
     for (const title of titles) made.push(await this.addTask({ title, notes: null, due_date: null, due_time: null, minutes: null, from_meeting: meeting }));
     return made;
+  },
+  async planMyDay(useAi) {
+    // A small stand-in for crates/logic/src/dayplan.rs: tasks in order, each in the first free stretch with room.
+    const l = taskLists();
+    const todo = [...l.today, ...l.someday].filter((t) => !t.planned_event).slice(0, 15);
+    const tomorrow = new Date(new Date().setHours(24, 0, 0, 0)).getTime();
+    const slots = (await this.findFreeTimes(15, 1)).filter((s) => Date.parse(s.start) < tomorrow);
+    const cursors = slots.map((s) => [Math.ceil(Math.max(Date.parse(s.start), Date.now()) / 300_000) * 300_000, Date.parse(s.end)] as [number, number]);
+    const suggestions: PlanSuggestion[] = [];
+    for (const t of todo) {
+      const need = (t.minutes ?? 30) * 60_000;
+      const c = cursors.find(([a, b]) => b - a >= need);
+      if (!c) continue;
+      suggestions.push({ task_id: t.id, title: t.title, start: new Date(c[0]).toISOString(), end: new Date(c[0] + need).toISOString() });
+      c[0] = Math.ceil((c[0] + need) / 300_000) * 300_000;
+    }
+    const aiAvailable = settings.ai.enabled && settings.ai.consented === settings.ai.provider;
+    const aiAllowed = aiAvailable && settings.ai.plan_consented === settings.ai.provider;
+    const asked = useAi && aiAllowed && todo.length > 0 && slots.length > 0;
+    if (asked) (window as unknown as { __planAsked?: number }).__planAsked = ((window as unknown as { __planAsked?: number }).__planAsked ?? 0) + 1;
+    const failed = asked && params.has("planfail");
+    return {
+      ai_available: aiAvailable,
+      ai_allowed: aiAllowed,
+      by_ai: asked && !failed,
+      problem: failed ? "ai" : null,
+      tasks: todo.length,
+      free_minutes: slots.reduce((m, s) => m + (Date.parse(s.end) - Date.parse(s.start)) / 60_000, 0),
+      suggestions,
+    } satisfies DayPlan;
+  },
+  async dayPlanPreview() {
+    const l = taskLists();
+    const todo = [...l.today, ...l.someday].filter((t) => !t.planned_event).slice(0, 15);
+    return `INSTRUCTIONS FOR THE MODEL\nYou suggest when a person could do their tasks today…\n\nYOUR INFORMATION BEING SENT\nTasks:\n${todo.map((t, i) => `${i + 1}. ${t.title} (${t.minutes ?? 30} min)`).join("\n")}`;
+  },
+  async enableAiPlanning(confirm) {
+    if (!confirm) throw new Error("Please confirm what will be shared first.");
+    if (!(settings.ai.enabled && settings.ai.consented === settings.ai.provider)) throw new Error("Turn on AI in Settings first.");
+    settings = { ...settings, ai: { ...settings.ai, plan_consented: settings.ai.provider } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async disableAiPlanning() {
+    settings = { ...settings, ai: { ...settings.ai, plan_consented: null } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
   },
   async getMeetingNote(id) {
     const e = fixtureEvents().find((x) => x.id === id);

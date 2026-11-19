@@ -5,6 +5,7 @@ import { useNav } from "@/app/nav";
 import { Button, EmptyState, ListGroup, Segmented, Skeleton } from "@/design";
 import { AddTaskField, TaskRow, useTaskLists } from "./shared";
 import { PlanTask, TaskForm } from "./TaskDialogs";
+import { PlanDay } from "./PlanDay";
 
 type Tab = "today" | "upcoming" | "someday" | "done";
 
@@ -22,6 +23,7 @@ export function TasksScreen() {
   const [tab, setTab] = useState<Tab>("today");
   const [editing, setEditing] = useState<TaskView | null>(null);
   const [planning, setPlanning] = useState<TaskView | null>(null);
+  const [planDay, setPlanDay] = useState(false);
   const l = lists.data;
   const count = (t: Tab) => (l ? l[t].length : 0);
   const shown = l ? l[tab] : [];
@@ -39,7 +41,14 @@ export function TasksScreen() {
             <h1 className="text-display font-bold tracking-tight text-fg">Tasks</h1>
             <p className="mt-0.5 text-footnote text-fg-2">Kept only on this computer. Unfinished tasks stay in Today until they are done.</p>
           </header>
-          <AddTaskField autoFocus />
+          <div className="flex flex-col gap-1">
+            <AddTaskField autoFocus />
+            <div className="flex justify-end">
+              <Button variant="secondary" size="sm" onClick={() => setPlanDay(true)}>
+                Plan my day
+              </Button>
+            </div>
+          </div>
           <Segmented
             label="Which tasks"
             value={tab}
@@ -66,6 +75,7 @@ export function TasksScreen() {
       </main>
       {editing && <TaskForm task={editing} onClose={() => setEditing(null)} />}
       {planning && <PlanTask task={planning} onClose={() => setPlanning(null)} />}
+      {planDay && <PlanDay onClose={() => setPlanDay(false)} />}
     </div>
   );
 }

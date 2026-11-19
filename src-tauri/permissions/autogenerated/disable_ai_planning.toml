@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-disable-ai-planning"
+description = "Enables the disable_ai_planning command without any pre-configured scope."
+commands.allow = ["disable_ai_planning"]
+
+[[permission]]
+identifier = "deny-disable-ai-planning"
+description = "Denies the disable_ai_planning command without any pre-configured scope."
+commands.deny = ["disable_ai_planning"]

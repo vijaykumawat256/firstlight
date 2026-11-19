@@ -99,3 +99,44 @@ test("task reminders can be turned off in Settings", async ({ page }) => {
   await sw.click();
   await expect(sw).not.toBeChecked();
 });
+
+test("plan my day suggests times for today's tasks, and sets time aside only for the ones kept", async ({ page }) => {
+  await page.clock.install({ time: at(9, 0) });
+  await page.goto("/?tasks");
+  await page.getByRole("region", { name: "Tasks" }).getByRole("button", { name: "Plan my day" }).click();
+  const dialog = page.getByRole("dialog", { name: "Plan my day" });
+  const list = dialog.getByRole("list", { name: "Suggestions" });
+  await expect(list.getByRole("listitem").first()).toBeVisible();
+  await expect(dialog).toContainText("Worked out on this computer");
+  // AI is off, so it is not offered.
+  await expect(dialog.getByRole("button", { name: "Ask AI instead…" })).toHaveCount(0);
+  const count = await list.getByRole("checkbox").count();
+  expect(count).toBeGreaterThan(1);
+  await list.getByRole("checkbox").first().uncheck();
+  await dialog.getByRole("button", { name: "Set time aside" }).click();
+  await expect(page.getByText(count - 1 === 1 ? "Time set aside for 1 task" : `Time set aside for ${count - 1} tasks`).first()).toBeVisible();
+});
+
+test("planning with AI needs its own agreement, shows what is sent, and falls back when AI fails", async ({ page }) => {
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  await page.clock.install({ time: at(9, 0) });
+  await page.goto("/?tasks&aion&planfail");
+  await page.getByRole("region", { name: "Tasks" }).getByRole("button", { name: "Plan my day" }).click();
+  await page.getByRole("dialog", { name: "Plan my day" }).getByRole("button", { name: "Ask AI instead…" }).click();
+  const consent = page.getByRole("dialog", { name: "Plan with AI?" });
+  await expect(consent.getByLabel("What would be sent")).toContainText("Review Sam's slides");
+  expect(await page.evaluate(() => (window as unknown as { __planAsked?: number }).__planAsked ?? 0)).toBe(0);
+  expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
+  await consent.getByRole("button", { name: "Agree and ask AI" }).click();
+  const dialog = page.getByRole("dialog", { name: "Plan my day" });
+  await expect(dialog.getByRole("radio", { name: "AI" })).toBeChecked();
+  await expect(dialog.getByRole("status")).toContainText("AI couldn't help this time");
+  expect(await page.evaluate(() => (window as unknown as { __planAsked?: number }).__planAsked ?? 0)).toBe(1);
+  await dialog.getByRole("button", { name: "Close" }).first().click();
+
+  // The agreement can be withdrawn in Settings.
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^AI/ }).click();
+  await page.getByRole("button", { name: "Withdraw" }).click();
+  await expect(page.getByText("Plan my day with AI")).toHaveCount(0);
+});

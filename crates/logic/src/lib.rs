@@ -7,6 +7,7 @@ pub mod briefing;
 pub mod conflict;
 pub mod contain;
 pub mod day;
+pub mod dayplan;
 pub mod dedupe;
 pub mod error;
 pub mod ics;

@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -19,6 +19,10 @@ export const tauriBackend: Backend = {
   planTask: (id, start, end) => invoke<Task>("plan_task", { id, start, end }),
   noteTaskLines: (text) => invoke<string[]>("note_task_lines", { text }),
   addTasksFromNote: (titles, meeting) => invoke<Task[]>("add_tasks_from_note", { titles, meeting }),
+  planMyDay: (useAi) => invoke<DayPlan>("plan_my_day", { useAi }),
+  dayPlanPreview: () => invoke<string>("day_plan_preview"),
+  enableAiPlanning: (confirm) => invoke<AppSettings>("enable_ai_planning", { confirm }),
+  disableAiPlanning: () => invoke<AppSettings>("disable_ai_planning"),
   getMeetingNote: (id) => invoke<MeetingNote | null>("get_meeting_note", { id }),
   saveMeetingNote: (id, text) => invoke<MeetingNote | null>("save_meeting_note", { id, text }),
   askCalendar: (question) => invoke<AskReply>("ask_calendar", { question }),

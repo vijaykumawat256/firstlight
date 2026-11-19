@@ -4,6 +4,7 @@ import { useNav } from "@/app/nav";
 import { Button, ListGroup, SectionHeader } from "@/design";
 import { AddTaskField, TaskRow, useTaskLists } from "./shared";
 import { PlanTask, TaskForm } from "./TaskDialogs";
+import { PlanDay } from "./PlanDay";
 
 const SHOWN = 6;
 
@@ -13,6 +14,7 @@ export function TasksSection() {
   const lists = useTaskLists();
   const [editing, setEditing] = useState<TaskView | null>(null);
   const [planning, setPlanning] = useState<TaskView | null>(null);
+  const [planDay, setPlanDay] = useState(false);
   const l = lists.data;
   if (!l) return null;
   const today = l.today;
@@ -29,13 +31,19 @@ export function TasksSection() {
         </ListGroup>
       )}
       <AddTaskField />
-      <div className="mt-1 flex justify-end">
+      <div className="mt-1 flex justify-end gap-1">
+        {today.length + l.someday.length > 0 && (
+          <Button variant="plain" size="sm" onClick={() => setPlanDay(true)}>
+            Plan my day
+          </Button>
+        )}
         <Button variant="plain" size="sm" onClick={() => go("tasks")}>
           {more > 0 ? `All tasks (${more} more today)` : "All tasks"}
         </Button>
       </div>
       {editing && <TaskForm task={editing} onClose={() => setEditing(null)} />}
       {planning && <PlanTask task={planning} onClose={() => setPlanning(null)} />}
+      {planDay && <PlanDay onClose={() => setPlanDay(false)} />}
     </section>
   );
 }

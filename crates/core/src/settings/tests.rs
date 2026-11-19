@@ -735,3 +735,26 @@ fn the_list_of_writable_accounts_is_cleaned_and_capped() {
     s.sanitize();
     assert_eq!(s.general.writable_accounts.len(), 50);
 }
+
+#[test]
+fn the_planning_agreement_lapses_with_the_main_one_and_never_comes_from_a_file() {
+    let mut s = AppSettings::default();
+    s.ai.enabled = true;
+    s.ai.consented = Some(AiProvider::Anthropic);
+    s.ai.plan_consented = Some(AiProvider::Anthropic);
+    s.sanitize();
+    assert_eq!(s.ai.plan_consented, Some(AiProvider::Anthropic));
+    let exported = s.export();
+    assert_eq!(
+        AppSettings::import(&exported).unwrap().ai.plan_consented,
+        None
+    );
+    s.ai.consented = None;
+    s.sanitize();
+    assert_eq!(s.ai.plan_consented, None);
+    let mut other = AppSettings::default();
+    other.ai.consented = Some(AiProvider::Openai);
+    other.ai.plan_consented = Some(AiProvider::Anthropic);
+    other.sanitize();
+    assert_eq!(other.ai.plan_consented, None);
+}
