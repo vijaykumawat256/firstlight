@@ -14,6 +14,7 @@ mod notifier;
 mod outlook_win;
 mod providers;
 mod scheduler;
+mod tasks_cmd;
 mod unlock;
 mod updates;
 
@@ -463,6 +464,14 @@ pub fn run() {
             commands::open_mail_draft,
             commands::find_free_times,
             commands::get_meeting_note,
+            tasks_cmd::list_tasks,
+            tasks_cmd::add_task,
+            tasks_cmd::update_task,
+            tasks_cmd::set_task_done,
+            tasks_cmd::delete_task,
+            tasks_cmd::plan_task,
+            tasks_cmd::note_task_lines,
+            tasks_cmd::add_tasks_from_note,
             commands::save_meeting_note,
             commands::get_calendars,
             commands::list_accounts,

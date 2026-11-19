@@ -132,7 +132,7 @@ fn explain_outlook(deps: &crate::providers::Deps) -> Option<String> {
     }
 }
 
-fn user_input_error(e: Error) -> String {
+pub(crate) fn user_input_error(e: Error) -> String {
     match e {
         Error::Invalid(m) => m.to_string(),
         _ => "invalid input".to_string(),

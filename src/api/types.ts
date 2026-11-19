@@ -67,6 +67,51 @@ export interface EventInput {
   focus?: boolean;
 }
 
+/** When a task is due: a day, or a day and a time. Mirrors `firstlight_logic::tasks::Due`. */
+export type Due = { kind: "date"; date: string } | { kind: "at"; at: string };
+
+export interface Task {
+  id: string;
+  title: string;
+  notes: string | null;
+  due: Due | null;
+  /** How long it is expected to take. */
+  minutes: number | null;
+  done_at: string | null;
+  created_at: string;
+  updated_at: string;
+  /** The meeting it was written down in. */
+  from_meeting: string | null;
+  /** The event made to do it, when it was planned into the calendar. */
+  planned_event: string | null;
+  /** Set when it is kept in sync with Google Tasks or Microsoft To Do. */
+  link: { account_id: string; list_id: string; remote_id: string; remote_updated: string | null } | null;
+}
+
+export interface TaskView extends Task {
+  /** Days it has waited since it was due (carried over); 0 otherwise. */
+  days_late: number;
+}
+
+export interface TaskLists {
+  today: TaskView[];
+  upcoming: TaskView[];
+  someday: TaskView[];
+  done: TaskView[];
+  done_today: number;
+}
+
+export interface TaskInput {
+  title: string;
+  notes: string | null;
+  /** YYYY-MM-DD */
+  due_date: string | null;
+  /** HH:MM on due_date */
+  due_time: string | null;
+  minutes: number | null;
+  from_meeting?: string | null;
+}
+
 /** Your private note for a meeting. Shared by every time the meeting happens; kept only on this computer. */
 export interface MeetingNote {
   text: string;
@@ -222,6 +267,7 @@ export interface AppSettings {
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null };
   privacy: { crash_reports: boolean };
+  day: { task_reminders: boolean };
 }
 
 export type AiProvider = "anthropic" | "local" | "openai" | "xai" | "gemini" | "mistral" | "groq" | "openrouter" | "custom";

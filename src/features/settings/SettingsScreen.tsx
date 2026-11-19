@@ -385,6 +385,9 @@ export function SettingsScreen() {
                   <Switch label="Week preview on Sundays" checked={s.notify.week_preview} onCheckedChange={(v) => update((d) => void (d.notify.week_preview = v))} />
                 </SettingRow>
               )}
+              <SettingRow title="Task reminders" description="A notification when a task with a time comes due.">
+                <Switch label="Task reminders" checked={s.day.task_reminders} onCheckedChange={(v) => update((d) => void (d.day.task_reminders = v))} />
+              </SettingRow>
             </Group>
           </div>
         )}

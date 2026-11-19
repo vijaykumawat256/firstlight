@@ -76,7 +76,7 @@ function take(text: string, re: RegExp, accept: (g: string[]) => boolean): strin
  * a time without a day is today, or tomorrow once that time has passed. One hour unless said otherwise.
  * Returns null when there is no title, no day or time, or the line reads like a question.
  */
-export function parseQuickAdd(input: string, now: Date): QuickEvent | null {
+export function parseQuickAdd(input: string, now: Date, opts: { place?: boolean } = {}): QuickEvent | null {
   let text = ` ${input.trim().replace(/\s+/g, " ")} `;
   if (!input.trim() || input.trim().endsWith("?") || QUESTION.test(input.trim())) return null;
 
@@ -183,7 +183,7 @@ export function parseQuickAdd(input: string, now: Date): QuickEvent | null {
 
   // What is left: the title, and a place after the last " at " or "@".
   let location: string | null = null;
-  text = take(text, /\s(?:at|@)\s+([^@]+?)\s*$/i, ([place]) => {
+  if (opts.place !== false) text = take(text, /\s(?:at|@)\s+([^@]+?)\s*$/i, ([place]) => {
     location = place!.trim().replace(/[,.;]+$/, "") || null;
     return !!location;
   });
@@ -236,4 +236,32 @@ export function quickToInput(q: QuickEvent): EventInput {
     reminder_minutes: null,
     invitees: [],
   };
+}
+
+/** A task typed in one line: "call the bank friday 3pm". The day and time are optional (no day = someday). */
+export interface QuickTask {
+  title: string;
+  /** YYYY-MM-DD */
+  dueDate: string | null;
+  /** HH:MM */
+  dueTime: string | null;
+}
+
+/** Words that say a line in search is a task, not an event: "task …", "todo …", "to do: …". */
+const TASK_PREFIX = /^\s*(?:task|todo|to-do|to do)\s*:?\s+/i;
+
+/** In search, only a line starting with "task" or "todo" is a task. Returns the rest of the line, or null. */
+export function taskLine(input: string): string | null {
+  const m = TASK_PREFIX.exec(input);
+  const rest = m ? input.slice(m[0].length).trim() : "";
+  return rest ? rest : null;
+}
+
+/** Reads a task line; "at" is kept in the title ("buy milk at the shop"). */
+export function parseQuickTask(input: string, now: Date): QuickTask | null {
+  const text = input.trim().replace(/\s+/g, " ");
+  if (!text) return null;
+  const q = parseQuickAdd(text, now, { place: false });
+  if (!q) return { title: cap(text), dueDate: null, dueTime: null };
+  return { title: q.title, dueDate: ymd(q.start), dueTime: q.allDay ? null : `${pad(q.start.getHours())}:${pad(q.start.getMinutes())}` };
 }

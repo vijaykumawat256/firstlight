@@ -173,6 +173,32 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                             );
                             log::info!("own reminder shown");
                         }
+                        // Tasks with a time, once that time comes (still within the hour if the app was asleep).
+                        if settings.day.task_reminders {
+                            let tasks = firstlight_core::todo::all(&store).unwrap_or_default();
+                            for r in firstlight_core::tasks::due_reminders(&tasks, now) {
+                                if sent.contains(&r.id) {
+                                    continue;
+                                }
+                                let _ = store.mark_notification_sent(&r.id, now);
+                                let clock = if ns.time_24h { "%H:%M" } else { "%-I:%M %p" };
+                                let title = if ns.hide_titles {
+                                    "Task due"
+                                } else {
+                                    r.title.as_str()
+                                };
+                                show(
+                                    &app,
+                                    title,
+                                    &format!(
+                                        "Task due at {}",
+                                        r.at.with_timezone(&tz).format(clock)
+                                    ),
+                                    true,
+                                );
+                                log::info!("task reminder shown");
+                            }
+                        }
                         // During focus time the summaries and snoozed repeats wait (they are not marked as
                         // shown, so they come once it ends); heads-ups and reminders still come, so a meeting is
                         // never missed.

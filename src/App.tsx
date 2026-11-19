@@ -10,6 +10,7 @@ import { Onboarding } from "@/features/accounts/Onboarding";
 import { SettingsApplier } from "@/features/settings/SettingsApplier";
 const SettingsScreen = lazy(() => import("@/features/settings/SettingsScreen").then((m) => ({ default: m.SettingsScreen })));
 import { BriefingScreen } from "@/features/briefing/BriefingScreen";
+const TasksScreen = lazy(() => import("@/features/tasks/TasksScreen").then((m) => ({ default: m.TasksScreen })));
 const CalendarScreen = lazy(() => import("@/features/calendar/CalendarScreen").then((m) => ({ default: m.CalendarScreen })));
 import { UpNextPanel } from "@/features/briefing/UpNextPanel";
 import { SearchHost } from "@/features/search/SearchPalette";
@@ -72,7 +73,7 @@ function Shell() {
   }
   if ((accounts.data ?? []).length === 0) return <Onboarding />;
   // The briefing is what opens at every unlock, so it is in the main bundle. The screens reached from it load on demand.
-  const screen = view === "accounts" ? <AccountsScreen /> : view === "calendar" ? <CalendarScreen /> : view === "settings" ? <SettingsScreen /> : view === "about" ? <AboutScreen /> : <BriefingScreen />;
+  const screen = view === "accounts" ? <AccountsScreen /> : view === "calendar" ? <CalendarScreen /> : view === "settings" ? <SettingsScreen /> : view === "about" ? <AboutScreen /> : view === "tasks" ? <TasksScreen /> : <BriefingScreen />;
   return (
     <>
       <Suspense fallback={<ScreenSkeleton />}>{screen}</Suspense>

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type View = "briefing" | "accounts" | "calendar" | "settings" | "about";
+export type View = "briefing" | "accounts" | "calendar" | "settings" | "about" | "tasks";
 export type CalendarMode = "day" | "week" | "month";
 
 interface Nav {

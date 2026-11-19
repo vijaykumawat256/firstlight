@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseQuickAdd, quickToInput } from "./quickAdd";
+import { parseQuickAdd, parseQuickTask, quickToInput, taskLine } from "./quickAdd";
 
 // Wednesday 18 November 2026, 10:00 local time.
 const NOW = new Date(2026, 10, 18, 10, 0);
@@ -80,5 +80,22 @@ describe("quickToInput", () => {
     const i = quickToInput(parse("Lunch friday 1pm"));
     expect(i.start).toBe(at(20, 13).toISOString());
     expect(i.end).toBe(at(20, 14).toISOString());
+  });
+});
+
+describe("tasks typed in one line", () => {
+  it("reads an optional day and time, and keeps 'at' in the title", () => {
+    expect(parseQuickTask("call the bank friday 3pm", NOW)).toEqual({ title: "Call the bank", dueDate: "2026-11-20", dueTime: "15:00" });
+    expect(parseQuickTask("buy milk at the shop tomorrow", NOW)).toEqual({ title: "Buy milk at the shop", dueDate: "2026-11-19", dueTime: null });
+    expect(parseQuickTask("read the report", NOW)).toEqual({ title: "Read the report", dueDate: null, dueTime: null });
+    expect(parseQuickTask("  ", NOW)).toBeNull();
+  });
+
+  it("in search, only lines that start with task or todo are tasks", () => {
+    expect(taskLine("task call the bank")).toBe("call the bank");
+    expect(taskLine("To do: send report")).toBe("send report");
+    expect(taskLine("todo")).toBeNull();
+    expect(taskLine("taskforce meeting friday")).toBeNull();
+    expect(taskLine("lunch friday")).toBeNull();
   });
 });

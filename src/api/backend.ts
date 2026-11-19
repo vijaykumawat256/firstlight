@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -83,6 +83,17 @@ export interface Backend {
   openMailDraft(to: string | null, subject: string, body: string): Promise<void>;
   /** What is worth knowing before a meeting, worked out locally (no AI, no network). */
   getMeetingPrep(id: string): Promise<MeetingPrep>;
+  /** Your to-do list, worked out into Today (with carried-over tasks), Upcoming, Someday and Done. Kept on this computer. */
+  listTasks(): Promise<TaskLists>;
+  addTask(task: TaskInput): Promise<Task>;
+  updateTask(id: string, task: TaskInput): Promise<Task>;
+  setTaskDone(id: string, done: boolean): Promise<Task>;
+  deleteTask(id: string): Promise<void>;
+  /** Sets time aside for the task: an event of your own from `start` to `end`. */
+  planTask(id: string, start: string, end: string): Promise<Task>;
+  /** The lines of a meeting note that could become tasks. */
+  noteTaskLines(text: string): Promise<string[]>;
+  addTasksFromNote(titles: string[], meeting: string | null): Promise<Task[]>;
   /** Your private note for this meeting (shared by every time it happens), or null. */
   getMeetingNote(id: string): Promise<MeetingNote | null>;
   /** Keeps the note for this meeting; empty text removes it. Kept only on this computer. */

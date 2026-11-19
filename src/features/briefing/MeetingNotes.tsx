@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, errorMessage, type CalEvent, type MeetingNote } from "@/api";
+import { Button } from "@/design";
+import { NoteTasks } from "@/features/tasks/TaskDialogs";
 import { formatDate, formatTime } from "./format";
 
 const SAVE_AFTER_MS = 800;
@@ -17,6 +19,7 @@ export function MeetingNotes({ event }: { event: CalEvent }) {
   const key = ["meeting-note", event.id];
   const note = useQuery({ queryKey: key, queryFn: () => api.getMeetingNote(event.id), staleTime: 0 });
   const [text, setText] = useState<string | null>(null);
+  const [lines, setLines] = useState<string[] | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<string | null>(null);
 
@@ -70,9 +73,17 @@ export function MeetingNotes({ event }: { event: CalEvent }) {
         onBlur={flush}
         className="select-text rounded-card bg-fill px-3 py-2 text-body text-fg placeholder:text-fg-3"
       />
-      <p role="status" className={`text-footnote ${save.isError ? "text-danger" : "text-fg-2"}`}>
-        {status}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p role="status" className={`text-footnote ${save.isError ? "text-danger" : "text-fg-2"}`}>
+          {status}
+        </p>
+        {shown.trim() && (
+          <Button variant="plain" size="sm" onClick={() => void api.noteTaskLines(shown).then((l) => l.length > 0 && setLines(l))}>
+            Make tasks
+          </Button>
+        )}
+      </div>
+      {lines && <NoteTasks lines={lines} meeting={event.title} onClose={() => setLines(null)} />}
     </section>
   );
 }

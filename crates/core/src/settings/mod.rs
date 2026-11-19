@@ -411,6 +411,7 @@ pub struct AppSettings {
     pub email: EmailSettings,
     pub ai: AiSettings,
     pub privacy: PrivacySettings,
+    pub day: crate::day::DaySettings,
 }
 
 impl Default for AppSettings {
@@ -426,6 +427,7 @@ impl Default for AppSettings {
             email: Default::default(),
             ai: Default::default(),
             privacy: Default::default(),
+            day: Default::default(),
         }
     }
 }
@@ -525,6 +527,7 @@ impl AppSettings {
             email: merge_valid(&d.email, &section("email")),
             ai: merge_valid(&d.ai, &section("ai")),
             privacy: merge_valid(&d.privacy, &section("privacy")),
+            day: merge_valid(&d.day, &section("day")),
         };
         s.sanitize();
         s

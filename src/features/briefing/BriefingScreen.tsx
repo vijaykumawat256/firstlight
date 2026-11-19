@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, CalendarX, CloudOff, Hourglass, Plus, RefreshCw, Search, Settings as SettingsIcon } from "lucide-react";
+import { CalendarDays, CalendarX, CloudOff, Hourglass, ListChecks, Plus, RefreshCw, Search, Settings as SettingsIcon } from "lucide-react";
 import { useNav } from "@/app/nav";
 import { useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
@@ -16,6 +16,7 @@ import { EventForm } from "@/features/events/EventForm";
 import { FindATime } from "@/features/events/FindATime";
 import { useSearch } from "@/features/search/store";
 import { InboxSection } from "./InboxSection";
+import { TasksSection } from "@/features/tasks/TasksSection";
 import { summarise } from "./summary";
 
 function LoadingState() {
@@ -88,6 +89,11 @@ export function BriefingScreen() {
             <Plus className="size-[19px]" />
           </IconButton>
         </Tooltip>
+        <Tooltip content="Tasks">
+          <IconButton label="Tasks" onClick={() => go("tasks")}>
+            <ListChecks className="size-[18px]" />
+          </IconButton>
+        </Tooltip>
         <Tooltip content="Calendar">
           <IconButton label="Calendar" onClick={() => go("calendar")}>
             <CalendarDays className="size-[18px]" />
@@ -134,12 +140,16 @@ export function BriefingScreen() {
             }
           />
         ) : dayIsEmpty ? (
-          <ClearWeek colourOf={colourOf} onOpen={setDetail} />
+          <div className="flex flex-col gap-6">
+            <ClearWeek colourOf={colourOf} onOpen={setDetail} />
+            <TasksSection />
+          </div>
         ) : (
           <div className="flex flex-col gap-6">
             {b.next ? <UpNextCard next={b.next} now={now} colourOf={colourOf} onJoin={join} onOpen={setDetail} /> : <ClearDay />}
             {sections.attention && <AttentionSection b={b} />}
             <TodaySection b={b} now={now} colourOf={colourOf} onOpen={setDetail} onJoin={join} showFreeTime={sections.free_time} />
+            <TasksSection />
             {sections.tomorrow && <TomorrowSection b={b} colourOf={colourOf} onOpen={setDetail} />}
             <WeekAhead />
             <UpcomingDays colourOf={colourOf} onOpen={setDetail} onJoin={join} />

@@ -62,6 +62,8 @@ test("keyboard: tab reaches search, find a time, new event, calendar, refresh, t
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "New event" })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Tasks", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Calendar" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Refresh" })).toBeFocused();

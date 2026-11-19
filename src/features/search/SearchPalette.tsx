@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, CalendarPlus, Search, Sparkles } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CalendarDays, CalendarPlus, ListPlus, Search, Sparkles } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
 import { useNav } from "@/app/nav";
@@ -8,7 +8,8 @@ import { EventDetail } from "@/features/briefing/EventDetail";
 import { formatDate, formatTime } from "@/features/briefing/format";
 import { startOfLocalDay } from "@/features/calendar/layout";
 import { describeQuick, EventForm } from "@/features/events/EventForm";
-import { parseQuickAdd, type QuickEvent } from "@/features/events/quickAdd";
+import { parseQuickAdd, parseQuickTask, taskLine, type QuickEvent, type QuickTask } from "@/features/events/quickAdd";
+import { dueText, quickToTaskInput } from "@/features/tasks/shared";
 import { AskAnswer } from "./AskAnswer";
 import { parseJump, searchEvents } from "./search";
 import { useSearch } from "./store";
@@ -17,12 +18,13 @@ const DAY = 86_400_000;
 
 const startOf = (e: CalEvent): Date => (e.when.kind === "all_day" ? new Date(`${e.when.start}T00:00:00`) : new Date(e.when.start));
 
-type Row = { kind: "add"; line: string; event: QuickEvent } | { kind: "ask"; question: string } | { kind: "day"; date: Date } | { kind: "event"; event: CalEvent };
+type Row = { kind: "task"; task: QuickTask } | { kind: "add"; line: string; event: QuickEvent } | { kind: "ask"; question: string } | { kind: "day"; date: Date } | { kind: "event"; event: CalEvent };
 
 /** Press ⌘K (Ctrl+K) anywhere: find an event by name or place, or type a date to jump to that day. */
 export function SearchHost() {
   const { open, setOpen } = useSearch();
   const push = useToasts((s) => s.push);
+  const qc = useQueryClient();
   const openCalendar = useNav((s) => s.openCalendar);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -63,12 +65,16 @@ export function SearchHost() {
   const rows: Row[] = useMemo(() => {
     const jump = parseJump(query, new Date());
     // A line with a title and a day or time can become a new event ("lunch with Riya friday 1pm").
-    const quick = jump ? null : parseQuickAdd(query, new Date());
+    // "task …" or "todo …" adds to the task list instead.
+    const asTask = taskLine(query);
+    const task = asTask ? parseQuickTask(asTask, new Date()) : null;
+    const quick = jump || asTask ? null : parseQuickAdd(query, new Date());
     const found = searchEvents(events.data ?? [], query, new Date());
     // A question needs AI to be on and agreed to. It looks like one when it has a few words or ends with "?".
     const words = query.trim().split(/\s+/).filter(Boolean).length;
     const canAsk = !!ai.data?.enabled && ai.data.consented && (words >= 3 || query.trim().endsWith("?"));
     return [
+      ...(task ? [{ kind: "task" as const, task }] : []),
       ...(quick ? [{ kind: "add" as const, line: query.trim(), event: quick }] : []),
       ...(canAsk ? [{ kind: "ask" as const, question: query.trim() }] : []),
       ...(jump ? [{ kind: "day" as const, date: jump }] : []),
@@ -89,6 +95,16 @@ export function SearchHost() {
       return;
     }
     close();
+    if (row.kind === "task") {
+      api
+        .addTask(quickToTaskInput(row.task))
+        .then(() => {
+          void qc.invalidateQueries();
+          push({ title: `Task added: ${row.task.title}` });
+        })
+        .catch(() => push({ title: "Couldn't add that task", tone: "danger" }));
+      return;
+    }
     if (row.kind === "add") {
       // Opened after this key press has finished, so the Return that chose the row cannot also submit the new form.
       setTimeout(() => setAdding(row.line), 0);
@@ -101,7 +117,7 @@ export function SearchHost() {
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())} title="Search" description="Find an event by name or place, type a date such as “friday” or “24 dec”, or type a new event such as “lunch with Riya friday 1pm”.">
+      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())} title="Search" description="Find an event by name or place, type a date such as “friday” or “24 dec”, or type a new event such as “lunch with Riya friday 1pm”, or a task such as “task call the bank friday”.">
         {asked ? (
           <AskAnswer
             question={asked}
@@ -157,7 +173,7 @@ export function SearchHost() {
             <ul id={listId} role="listbox" aria-label={query.trim() ? "Results" : "Coming up"} className="flex max-h-72 flex-col overflow-y-auto">
               {rows.map((r, i) => (
                 <li
-                  key={r.kind === "add" ? "add" : r.kind === "ask" ? "ask" : r.kind === "day" ? "day" : r.event.id}
+                  key={r.kind === "task" ? "task" : r.kind === "add" ? "add" : r.kind === "ask" ? "ask" : r.kind === "day" ? "day" : r.event.id}
                   id={`${listId}-${i}`}
                   role="option"
                   aria-selected={i === active}
@@ -165,7 +181,15 @@ export function SearchHost() {
                   onClick={() => choose(r)}
                   className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-card px-3 py-2 ${i === active ? "bg-fill" : ""}`}
                 >
-                  {r.kind === "add" ? (
+                  {r.kind === "task" ? (
+                    <>
+                      <ListPlus className="size-4 shrink-0 text-accent" aria-hidden />
+                      <span className="min-w-0 truncate text-headline text-fg">
+                        Add task: {r.task.title}
+                        {r.task.dueDate ? ` · ${dueText({ due: r.task.dueTime ? { kind: "at", at: new Date(`${r.task.dueDate}T${r.task.dueTime}`).toISOString() } : { kind: "date", date: r.task.dueDate } } as Parameters<typeof dueText>[0])}` : ""}
+                      </span>
+                    </>
+                  ) : r.kind === "add" ? (
                     <>
                       <CalendarPlus className="size-4 shrink-0 text-accent" aria-hidden />
                       <span className="min-w-0 truncate text-headline text-fg">Add: {describeQuick(r.event)}</span>

@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -11,6 +11,14 @@ export const tauriBackend: Backend = {
   getConflictHelp: (a, b, moveId) => invoke<ConflictHelp | null>("get_conflict_help", { a, b, moveId }),
   openMailDraft: (to, subject, body) => invoke<void>("open_mail_draft", { to, subject, body }),
   getMeetingPrep: (id) => invoke<MeetingPrep>("get_meeting_prep", { id }),
+  listTasks: () => invoke<TaskLists>("list_tasks"),
+  addTask: (task) => invoke<Task>("add_task", { task }),
+  updateTask: (id, task) => invoke<Task>("update_task", { id, task }),
+  setTaskDone: (id, done) => invoke<Task>("set_task_done", { id, done }),
+  deleteTask: (id) => invoke<void>("delete_task", { id }),
+  planTask: (id, start, end) => invoke<Task>("plan_task", { id, start, end }),
+  noteTaskLines: (text) => invoke<string[]>("note_task_lines", { text }),
+  addTasksFromNote: (titles, meeting) => invoke<Task[]>("add_tasks_from_note", { titles, meeting }),
   getMeetingNote: (id) => invoke<MeetingNote | null>("get_meeting_note", { id }),
   saveMeetingNote: (id, text) => invoke<MeetingNote | null>("save_meeting_note", { id, text }),
   askCalendar: (question) => invoke<AskReply>("ask_calendar", { question }),

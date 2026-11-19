@@ -523,6 +523,37 @@ impl Store {
         Ok(())
     }
 
+    // ---- the to-do list (see `todo`) ----------------------------------------------------
+
+    pub fn put_task(&self, id: &str, json: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO tasks (id, json) VALUES (?1, ?2)
+             ON CONFLICT(id) DO UPDATE SET json = excluded.json",
+            params![id, json],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_task(&self, id: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row("SELECT json FROM tasks WHERE id = ?1", [id], |r| r.get(0))
+            .optional()?)
+    }
+
+    pub fn all_tasks(&self) -> Result<Vec<(String, String)>> {
+        let mut st = self
+            .conn
+            .prepare("SELECT id, json FROM tasks ORDER BY id")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    pub fn delete_task(&self, id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM tasks WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
     // ---- private meeting notes (see `notes`) ---------------------------------------------
 
     /// The note kept for a meeting, and when it was last changed.
@@ -694,6 +725,7 @@ impl Store {
              DELETE FROM notifications_sent;
              DELETE FROM own_events;
              DELETE FROM meeting_notes;
+             DELETE FROM tasks;
              DELETE FROM settings;",
         )?;
         self.conn
@@ -1026,6 +1058,7 @@ mod tests {
         s.mark_notification_sent("x", Utc::now()).unwrap();
         s.set_meeting_note("title:standup", Some("private"), Utc::now())
             .unwrap();
+        s.put_task("t1", "{}").unwrap();
         s.erase_all().unwrap();
         for table in [
             "accounts",
@@ -1037,6 +1070,7 @@ mod tests {
             "notifications_sent",
             "own_events",
             "meeting_notes",
+            "tasks",
         ] {
             let n: i64 = s
                 .conn

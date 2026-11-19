@@ -78,6 +78,11 @@ const MIGRATIONS: &[&str] = &[
         text TEXT NOT NULL,
         updated_at INTEGER NOT NULL
      );",
+    // 6: the person's own to-do list (see `todo`); one JSON record per task
+    "CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        json TEXT NOT NULL
+     );",
 ];
 
 pub fn run(conn: &mut Connection) -> Result<()> {

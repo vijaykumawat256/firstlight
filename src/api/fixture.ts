@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -198,6 +198,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null },
   privacy: { crash_reports: false },
+  day: { task_reminders: true },
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
 if (["week", "day", "month"].includes(params.get("defaultview") ?? "")) settings.general.default_view = params.get("defaultview") as "day" | "week" | "month";
@@ -318,6 +319,56 @@ function expandOwn(id: string, input: EventInput, calendar?: string): CalEvent[]
     out.push(make(at, input.all_day ? ymd(at).replaceAll("-", "") : String(Math.floor(at.getTime() / 1000))));
   }
   return out;
+}
+
+/** The to-do list: a small browser-only stand-in for crates/logic/src/tasks.rs and crates/core/src/todo.rs. */
+let tasks: Task[] = [];
+if (params.has("tasks")) {
+  const day = (n: number) => ymd(new Date(Date.now() + n * 86_400_000));
+  const base = (title: string, due: Task["due"], extra: Partial<Task> = {}): Task => ({ id: `task-${title.replace(/\W+/g, "-").toLowerCase()}`, title, notes: null, due, minutes: null, done_at: null, created_at: new Date(Date.now() - 86_400_000 * 3).toISOString(), updated_at: new Date().toISOString(), from_meeting: null, planned_event: null, link: null, ...extra });
+  tasks = [
+    base("Send the budget to Priya", { kind: "date", date: day(-2) }),
+    base("Review Sam's slides", { kind: "date", date: day(0) }, { minutes: 30 }),
+    base("Book flights", { kind: "date", date: day(3) }),
+    base("Read the security report", null),
+  ];
+}
+function checkTask(input: TaskInput) {
+  const title = input.title.trim().replace(/\s+/g, " ");
+  if (!title) throw new Error("Give the task a title.");
+  if (title.length > 300) throw new Error("That task title is too long.");
+  if (input.due_time && !input.due_date) throw new Error("Choose a day for that time.");
+  if (input.minutes !== null && (input.minutes < 5 || input.minutes > 720)) throw new Error("A task can take 5 minutes to 12 hours.");
+  const due: Task["due"] = !input.due_date ? null : input.due_time ? { kind: "at", at: new Date(`${input.due_date}T${input.due_time}`).toISOString() } : { kind: "date", date: input.due_date };
+  return { title, notes: input.notes?.trim() || null, due, minutes: input.minutes, from_meeting: input.from_meeting ?? null };
+}
+const taskDay = (t: Task) => (!t.due ? null : t.due.kind === "date" ? t.due.date : ymd(new Date(t.due.at)));
+function taskLists(): TaskLists {
+  const today = ymd(new Date());
+  const out: TaskLists = { today: [], upcoming: [], someday: [], done: [], done_today: 0 };
+  const key = (t: Task) => (t.due ? (t.due.kind === "at" ? t.due.at : `${t.due.date}T00:00:00`) : "~") + t.created_at;
+  for (const t of tasks) {
+    const v: TaskView = { ...structuredClone(t), days_late: 0 };
+    if (t.done_at) {
+      if (ymd(new Date(t.done_at)) === today) out.done_today++;
+      if (Date.now() - Date.parse(t.done_at) <= 30 * 86_400_000) out.done.push(v);
+      continue;
+    }
+    const d = taskDay(t);
+    if (!d) out.someday.push(v);
+    else if (d <= today) out.today.push({ ...v, days_late: Math.round((Date.parse(`${today}T12:00:00`) - Date.parse(`${d}T12:00:00`)) / 86_400_000) });
+    else out.upcoming.push(v);
+  }
+  out.today.sort((a, b) => key(a).localeCompare(key(b)));
+  out.upcoming.sort((a, b) => key(a).localeCompare(key(b)));
+  out.someday.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  out.done.sort((a, b) => (b.done_at ?? "").localeCompare(a.done_at ?? ""));
+  return out;
+}
+function findTask(id: string): Task {
+  const t = tasks.find((x) => x.id === id);
+  if (!t) throw new Error("That task is no longer on your list.");
+  return t;
 }
 
 /** Private meeting notes, keyed like crates/logic/src/notes.rs `meeting_key`. */
@@ -812,6 +863,53 @@ export const fixtureBackend: Backend = {
     const w = window as unknown as { __drafts?: Array<{ to: string | null; subject: string; body: string }> };
     (w.__drafts ??= []).push({ to, subject, body });
   },
+  async listTasks() {
+    return taskLists();
+  },
+  async addTask(input) {
+    const now = new Date().toISOString();
+    const t: Task = { id: `task-${tasks.length + 1}-${Date.now()}`, ...checkTask(input), done_at: null, created_at: now, updated_at: now, planned_event: null, link: null };
+    tasks.push(t);
+    return structuredClone(t);
+  },
+  async updateTask(id, input) {
+    const t = findTask(id);
+    const c = checkTask(input);
+    Object.assign(t, { ...c, from_meeting: c.from_meeting ?? t.from_meeting, updated_at: new Date().toISOString() });
+    return structuredClone(t);
+  },
+  async setTaskDone(id, done) {
+    const t = findTask(id);
+    t.done_at = done ? (t.done_at ?? new Date().toISOString()) : null;
+    return structuredClone(t);
+  },
+  async deleteTask(id) {
+    findTask(id);
+    tasks = tasks.filter((t) => t.id !== id);
+  },
+  async planTask(id, start, end) {
+    const t = findTask(id);
+    if (t.done_at) throw new Error("That task is already done.");
+    const e = saveFixtureEvent(null, { title: t.title, all_day: false, start, end, location: null, join_url: null, notes: "Time set aside for a task on your list.", repeat: null, reminder_minutes: null, invitees: [] });
+    t.planned_event = e.id;
+    return structuredClone(t);
+  },
+  async noteTaskLines(text) {
+    return text
+      .split("\n")
+      .map((l) => l.trim().replace(/^([-*•–]\s+|\d+\.\s+)/, "").trim())
+      .filter((l) => l && !/^\[x\]/i.test(l))
+      .map((l) => l.replace(/^\[\s?\]\s*/, ""))
+      .filter(Boolean)
+      .slice(0, 30);
+  },
+  async addTasksFromNote(titles, meeting) {
+    if (titles.length === 0 || titles.length > 30) throw new Error("Pick between 1 and 30 lines.");
+    titles.forEach((title) => checkTask({ title, notes: null, due_date: null, due_time: null, minutes: null }));
+    const made: Task[] = [];
+    for (const title of titles) made.push(await this.addTask({ title, notes: null, due_date: null, due_time: null, minutes: null, from_meeting: meeting }));
+    return made;
+  },
   async getMeetingNote(id) {
     const e = fixtureEvents().find((x) => x.id === id);
     return e ? structuredClone(meetingNotes.get(meetingKey(e)) ?? null) : null;
@@ -952,6 +1050,7 @@ export const fixtureBackend: Backend = {
   async eraseAllData() {
     accounts = [];
     meetingNotes.clear();
+    tasks = [];
     settings = structuredClone(DEFAULT_SETTINGS);
     settingsListeners.forEach((l) => l());
     notify();
