@@ -112,6 +112,13 @@ export interface TaskInput {
   from_meeting?: string | null;
 }
 
+export interface DayStatus {
+  /** The wrap-up moment has come today. */
+  wrap_up: boolean;
+  /** Meetings leave too little room for lunch today. */
+  lunch: { from: string; to: string; free_minutes: number; longest: [string, string] | null } | null;
+}
+
 export interface PlanSuggestion {
   task_id: string;
   title: string;
@@ -286,7 +293,7 @@ export interface AppSettings {
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null; plan_consented: AiProvider | null };
   privacy: { crash_reports: boolean };
-  day: { task_reminders: boolean };
+  day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean };
 }
 
 export type AiProvider = "anthropic" | "local" | "openai" | "xai" | "gemini" | "mistral" | "groq" | "openrouter" | "custom";

@@ -57,11 +57,11 @@ pub enum Action {
     ShowUpNext,
 }
 
-pub(crate) fn weekday_index(d: Weekday) -> usize {
+pub fn weekday_index(d: Weekday) -> usize {
     d.num_days_from_monday() as usize
 }
 
-pub(crate) fn in_quiet_hours(hour: u32, quiet: Option<(u32, u32)>) -> bool {
+pub fn in_quiet_hours(hour: u32, quiet: Option<(u32, u32)>) -> bool {
     match quiet {
         None => false,
         Some((from, to)) if from == to => false,

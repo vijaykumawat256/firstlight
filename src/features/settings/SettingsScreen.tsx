@@ -389,6 +389,52 @@ export function SettingsScreen() {
                 <Switch label="Task reminders" checked={s.day.task_reminders} onCheckedChange={(v) => update((d) => void (d.day.task_reminders = v))} />
               </SettingRow>
             </Group>
+            <Group title="Your day" footer="These follow your days and quiet hours, and wait while focus time runs.">
+              <SettingRow title="Wrap up your day" description="At the end of the day: tasks done and left, and how tomorrow starts. The briefing then offers to move what is left to tomorrow.">
+                <Switch label="Wrap up your day" checked={s.day.wrap_up} onCheckedChange={(v) => update((d) => void (d.day.wrap_up = v))} />
+              </SettingRow>
+              {s.day.wrap_up && (
+                <SettingRow title="Wrap-up time">
+                  <input
+                    type="time"
+                    aria-label="Wrap-up time"
+                    value={`${String(s.day.wrap_up_hour).padStart(2, "0")}:${String(s.day.wrap_up_minute).padStart(2, "0")}`}
+                    onChange={(e) => {
+                      const [h, m] = e.target.value.split(":").map(Number);
+                      if (Number.isFinite(h) && Number.isFinite(m)) update((d) => void ((d.day.wrap_up_hour = h!), (d.day.wrap_up_minute = m!)));
+                    }}
+                    className="h-8 rounded-control bg-fill px-2 text-body text-fg"
+                  />
+                </SettingRow>
+              )}
+              <SettingRow title="Break after long meetings" description="When a run of meetings with no real break ends, a nudge to step away.">
+                <Switch label="Break after long meetings" checked={s.day.break_nudge} onCheckedChange={(v) => update((d) => void (d.day.break_nudge = v))} />
+              </SettingRow>
+              {s.day.break_nudge && (
+                <SettingRow title="After">
+                  <Select
+                    label="Break after"
+                    value={String(s.day.break_after_minutes)}
+                    onValueChange={(v) => update((d) => void (d.day.break_after_minutes = Number(v)))}
+                    options={[90, 120, 150, 180, 240].map((m) => ({ value: String(m), label: m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m / 60} hours` }))}
+                  />
+                </SettingRow>
+              )}
+              <SettingRow title="Room for lunch" description="On weekdays, the briefing warns when meetings leave too little time for lunch.">
+                <Switch label="Room for lunch" checked={s.day.lunch_check} onCheckedChange={(v) => update((d) => void (d.day.lunch_check = v))} />
+              </SettingRow>
+              {s.day.lunch_check && (
+                <SettingRow title="Lunch between">
+                  <div className="flex items-center gap-1">
+                    <Select label="Lunch from" value={String(s.day.lunch_from_hour)} onValueChange={(v) => update((d) => void (d.day.lunch_from_hour = Number(v)))} options={[11, 12, 13].map((h) => ({ value: String(h), label: `${h}:00` }))} />
+                    <Select label="Lunch until" value={String(s.day.lunch_to_hour)} onValueChange={(v) => update((d) => void (d.day.lunch_to_hour = Number(v)))} options={[13, 14, 15].map((h) => ({ value: String(h), label: `${h}:00` }))} />
+                  </div>
+                </SettingRow>
+              )}
+              <SettingRow title="Stop-work reminder" description="A note when your working hours end.">
+                <Switch label="Stop-work reminder" checked={s.day.stop_work} onCheckedChange={(v) => update((d) => void (d.day.stop_work = v))} />
+              </SettingRow>
+            </Group>
           </div>
         )}
         {section === "email" && <EmailGroup />}

@@ -56,6 +56,12 @@ pub enum Kind {
     Evening,
     /// Sunday evening: the week ahead.
     Week,
+    /// The end-of-day wrap-up (`day::due`).
+    WrapUp,
+    /// A break after a long run of meetings.
+    Break,
+    /// The end of working hours.
+    StopWork,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

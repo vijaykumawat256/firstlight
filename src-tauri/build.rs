@@ -44,6 +44,8 @@ fn main() {
             "open_mail_draft",
             "find_free_times",
             "get_meeting_note",
+            "move_tasks",
+            "get_day_status",
             "plan_my_day",
             "day_plan_preview",
             "enable_ai_planning",

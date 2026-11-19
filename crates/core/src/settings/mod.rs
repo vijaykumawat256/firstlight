@@ -661,6 +661,8 @@ impl AppSettings {
             ai.enabled = false;
         }
 
+        self.day.sanitize();
+
         let accent = &self.appearance.accent;
         if accent != "system" && !CALENDAR_COLOURS.contains(&accent.as_str()) {
             self.appearance.accent = "system".into();

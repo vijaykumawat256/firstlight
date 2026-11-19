@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, PlanSuggestion, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, PlanSuggestion, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -102,7 +102,10 @@ export function fixtureEvents(base: Date = new Date()): CalEvent[] {
       description: "Agree the navigation pattern. See https://docs.example.com/nav?pw=secret for the mock-ups. Priya to share the revised flow.",
     }),
     ev("one-on-one", "fixture-work", "1:1 with Sam", 0, [11, 0], [11, 30], { my_response: "needs_action" }),
-    ev("lunch", "fixture-personal", "Lunch with Alex", 0, [12, 30], [13, 30], { location: "Café Nero" }),
+    // `?busylunch`: meetings instead of lunch, leaving only 20 free minutes between 12:00 and 14:00.
+    ...(typeof location !== "undefined" && new URLSearchParams(location.search).has("busylunch")
+      ? [ev("budget", "fixture-work", "Budget check", 0, [12, 0], [12, 45]), ev("hiring", "fixture-work", "Hiring sync", 0, [13, 5], [14, 0])]
+      : [ev("lunch", "fixture-personal", "Lunch with Alex", 0, [12, 30], [13, 30], { location: "Café Nero" })]),
     ev("focus", "fixture-work", "Focus time", 0, [14, 0], [16, 0], { status: "tentative", my_response: "tentative" }),
     ev("planning", "fixture-work", "Roadmap planning", 0, [8, 0], [9, 0], {
       join_url: "https://teams.example.com/l/meetup-join/abc",
@@ -198,7 +201,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null, plan_consented: null },
   privacy: { crash_reports: false },
-  day: { task_reminders: true },
+  day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false },
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
 if (["week", "day", "month"].includes(params.get("defaultview") ?? "")) settings.general.default_view = params.get("defaultview") as "day" | "week" | "month";
@@ -909,6 +912,49 @@ export const fixtureBackend: Backend = {
     const made: Task[] = [];
     for (const title of titles) made.push(await this.addTask({ title, notes: null, due_date: null, due_time: null, minutes: null, from_meeting: meeting }));
     return made;
+  },
+  async moveTasks(ids, date) {
+    for (const id of ids) {
+      const t = findTask(id);
+      t.due = t.due?.kind === "at" ? { kind: "at", at: new Date(`${date}T${new Date(t.due.at).toTimeString().slice(0, 5)}`).toISOString() } : { kind: "date", date };
+    }
+  },
+  async getDayStatus() {
+    // A small stand-in for crates/logic/src/day.rs (wrap_up_time, lunch_check).
+    const d = settings.day;
+    const now = new Date();
+    const wrap = d.wrap_up && now.getHours() * 60 + now.getMinutes() >= d.wrap_up_hour * 60 + d.wrap_up_minute;
+    const day = now.getDay();
+    const from = new Date(now).setHours(d.lunch_from_hour, 0, 0, 0);
+    const to = new Date(now).setHours(d.lunch_to_hour, 0, 0, 0);
+    let lunch: DayStatus["lunch"] = null;
+    if (d.lunch_check && day !== 0 && day !== 6 && now.getTime() < to) {
+      const ids = visibleCalendarIds();
+      const busy = fixtureEvents()
+        .filter((e) => ids.has(e.calendar_id) && e.status !== "cancelled" && e.my_response !== "declined" && e.when.kind === "timed")
+        .map((e) => (e.when.kind === "timed" ? [Date.parse(e.when.start), Date.parse(e.when.end), e.title] : [0, 0, ""]) as [number, number, string])
+        .filter(([s, e]) => s < to && e > from)
+        .sort((a, b) => a[0] - b[0]);
+      if (!busy.some(([, , t]) => /lunch/i.test(t))) {
+        const free: [number, number][] = [];
+        let cursor = from;
+        for (const [s, e] of busy) {
+          if (s > cursor) free.push([cursor, Math.min(s, to)]);
+          cursor = Math.max(cursor, e);
+        }
+        if (cursor < to) free.push([cursor, to]);
+        if (!free.some(([s, e]) => e - s >= d.lunch_minutes * 60_000)) {
+          const longest = free.sort((a, b) => b[1] - b[0] - (a[1] - a[0]))[0];
+          lunch = {
+            from: new Date(from).toISOString(),
+            to: new Date(to).toISOString(),
+            free_minutes: free.reduce((m, [s, e]) => m + (e - s) / 60_000, 0),
+            longest: longest && longest[1] - longest[0] >= 15 * 60_000 && longest[1] > now.getTime() ? [new Date(longest[0]).toISOString(), new Date(longest[1]).toISOString()] : null,
+          };
+        }
+      }
+    }
+    return { wrap_up: wrap, lunch } satisfies DayStatus;
   },
   async planMyDay(useAi) {
     // A small stand-in for crates/logic/src/dayplan.rs: tasks in order, each in the first free stretch with room.

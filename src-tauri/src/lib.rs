@@ -465,6 +465,8 @@ pub fn run() {
             commands::find_free_times,
             commands::get_meeting_note,
             tasks_cmd::list_tasks,
+            tasks_cmd::move_tasks,
+            tasks_cmd::get_day_status,
             tasks_cmd::add_task,
             tasks_cmd::update_task,
             tasks_cmd::set_task_done,

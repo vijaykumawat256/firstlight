@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -94,6 +94,10 @@ export interface Backend {
   /** The lines of a meeting note that could become tasks. */
   noteTaskLines(text: string): Promise<string[]>;
   addTasksFromNote(titles: string[], meeting: string | null): Promise<Task[]>;
+  /** Moves tasks to another day (YYYY-MM-DD), keeping each one's time of day. */
+  moveTasks(ids: string[], date: string): Promise<void>;
+  /** Whether the wrap-up moment has come, and whether meetings leave room for lunch today. */
+  getDayStatus(): Promise<DayStatus>;
   /** Suggests when today's tasks could be done in today's free time. Changes nothing. With `useAi` (and both agreements) task titles, lengths and free times go to your AI service. */
   planMyDay(useAi: boolean): Promise<DayPlan>;
   /** Exactly what planning with AI would send right now. */

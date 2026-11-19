@@ -20,7 +20,7 @@ Decisions taken (the recommendations):
 |---|---|---|---|
 | 1 | A To-do list | tasks table, due date/time, carry-over, briefing section, Tasks page, quick add "task ...", plan it into a free stretch, note line to task, reminders | done |
 | 2 | E5 AI plan my day | suggestions for today's free stretches; sends task titles + lengths + free stretches only; own consent; accept blocks time | done |
-| 3 | B Daily rhythm | end-of-day wrap-up (on), break nudge (off), lunch protection, stop-work reminder (off) | |
+| 3 | B Daily rhythm | end-of-day wrap-up (on), break nudge (off), lunch protection, stop-work reminder (off) | done |
 | 4 | C Meeting flow | follow-ups after meetings with notes, running late (mail draft), templates | |
 | 5 | E3 Sending emails | one-tap send after preview for running late / follow-ups: Yahoo, iCloud (exists), Microsoft Mail.Send, Gmail gmail.send (restricted scope) | |
 | 6 | D Context (+E4) | extra time zones, travel buffer, weekly review; Apple Maps travel times on Mac, opt-in | |

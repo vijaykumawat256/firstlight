@@ -115,3 +115,58 @@ pub async fn add_tasks_from_note(
     changed(&app);
     Ok(made)
 }
+
+/// Moves tasks to another day (`YYYY-MM-DD`), keeping each one's time of day.
+#[tauri::command]
+pub async fn move_tasks(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+    date: String,
+) -> CmdResult<()> {
+    let date = chrono::NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d")
+        .map_err(|_| "Choose a valid day.".to_string())?;
+    if ids.is_empty() || ids.len() > 200 {
+        return Err("Choose some tasks to move.".into());
+    }
+    let (store, tz, now) = (lock_store(&state)?, crate::local_tz(), Utc::now());
+    for id in &ids {
+        todo::move_to(&store, id, date, tz, now).map_err(user_input_error)?;
+    }
+    drop(store);
+    changed(&app);
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct DayStatus {
+    /// The wrap-up moment has come (the briefing shows its wrap-up card until midnight).
+    wrap_up: bool,
+    /// Meetings leave too little room for lunch today.
+    lunch: Option<firstlight_core::day::LunchWarning>,
+}
+
+/// What the briefing needs to know about the rest of the day beyond meetings.
+#[tauri::command]
+pub async fn get_day_status(state: State<'_, AppState>) -> CmdResult<DayStatus> {
+    use firstlight_core::briefing::day_bounds;
+    let (now, tz) = (Utc::now(), crate::local_tz());
+    let store = lock_store(&state)?;
+    let settings = store.load_settings();
+    let (from, to) = day_bounds(now.with_timezone(&tz).date_naive(), tz);
+    let events = firstlight_core::dedupe::dedupe(
+        store
+            .events_between(from, to)
+            .map_err(internal("loading events"))?,
+    );
+    Ok(DayStatus {
+        wrap_up: firstlight_core::day::wrap_up_time(now, tz, &settings.day),
+        lunch: firstlight_core::day::lunch_check(
+            &events,
+            now,
+            tz,
+            &settings.day,
+            &settings.briefing,
+        ),
+    })
+}

@@ -17,6 +17,7 @@ import { FindATime } from "@/features/events/FindATime";
 import { useSearch } from "@/features/search/store";
 import { InboxSection } from "./InboxSection";
 import { TasksSection } from "@/features/tasks/TasksSection";
+import { LunchCard, WrapUpCard } from "@/features/tasks/DayCards";
 import { summarise } from "./summary";
 
 function LoadingState() {
@@ -141,13 +142,16 @@ export function BriefingScreen() {
           />
         ) : dayIsEmpty ? (
           <div className="flex flex-col gap-6">
+            <WrapUpCard />
             <ClearWeek colourOf={colourOf} onOpen={setDetail} />
             <TasksSection />
           </div>
         ) : (
           <div className="flex flex-col gap-6">
             {b.next ? <UpNextCard next={b.next} now={now} colourOf={colourOf} onJoin={join} onOpen={setDetail} /> : <ClearDay />}
+            <WrapUpCard />
             {sections.attention && <AttentionSection b={b} />}
+            {sections.attention && <LunchCard />}
             <TodaySection b={b} now={now} colourOf={colourOf} onOpen={setDetail} onJoin={join} showFreeTime={sections.free_time} />
             <TasksSection />
             {sections.tomorrow && <TomorrowSection b={b} colourOf={colourOf} onOpen={setDetail} />}

@@ -219,7 +219,24 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                             show(&app, &s.title, &s.body, true);
                             log::info!("snoozed notification shown again");
                         }
-                        for n in due(&events, now, tz, &ns, &bs, &rules, &sent) {
+                        // The day's own notes: wrap-up, break, stop work (same days and quiet hours as the summaries).
+                        let tasks =
+                            firstlight_core::todo::lists(&store, now, tz).unwrap_or_default();
+                        let day = firstlight_core::day::due(
+                            &events,
+                            &tasks,
+                            now,
+                            tz,
+                            &settings.day,
+                            &bs,
+                            &rules,
+                            &ns,
+                            &sent,
+                        );
+                        for n in due(&events, now, tz, &ns, &bs, &rules, &sent)
+                            .into_iter()
+                            .chain(day)
+                        {
                             if focusing && n.kind != firstlight_core::briefing::notify::Kind::Before
                             {
                                 continue;

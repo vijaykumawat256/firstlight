@@ -91,6 +91,27 @@ pub fn set_done(store: &Store, id: &str, done: bool, now: DateTime<Utc>) -> Resu
     Ok(task)
 }
 
+/// Moves a task to another day, keeping its time of day if it has one (used by the end-of-day wrap-up).
+pub fn move_to(
+    store: &Store,
+    id: &str,
+    date: chrono::NaiveDate,
+    tz: Tz,
+    now: DateTime<Utc>,
+) -> Result<Task> {
+    use crate::tasks::Due;
+    let mut task = get(store, id)?;
+    task.due = Some(match task.due {
+        Some(Due::At { at }) => Due::At {
+            at: crate::tz::local_to_utc(tz, date.and_time(at.with_timezone(&tz).time())),
+        },
+        _ => Due::Date { date },
+    });
+    task.updated_at = now;
+    put(store, &task)?;
+    Ok(task)
+}
+
 /// Deletes the task. An event planned for it stays in the calendar (the person may still want that time).
 pub fn delete(store: &Store, id: &str) -> Result<()> {
     get(store, id)?;
@@ -281,6 +302,34 @@ mod tests {
         );
         assert!(add_many(&s, &["ok".into(), " ".into()], None, NY, now).is_err());
         assert_eq!(all(&s).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn moving_a_task_keeps_its_time_of_day() {
+        let s = store();
+        let now = t("2026-11-18T15:00:00Z");
+        let timed = add(
+            &s,
+            &TaskInput {
+                due_time: Some("15:30".into()),
+                ..input("Call", Some("2026-11-18"))
+            },
+            NY,
+            now,
+        )
+        .unwrap();
+        let day_only = add(&s, &input("Read", None), NY, now).unwrap();
+        let tomorrow: chrono::NaiveDate = "2026-11-19".parse().unwrap();
+        assert_eq!(
+            move_to(&s, &timed.id, tomorrow, NY, now).unwrap().due,
+            Some(crate::tasks::Due::At {
+                at: t("2026-11-19T20:30:00Z")
+            })
+        );
+        assert_eq!(
+            move_to(&s, &day_only.id, tomorrow, NY, now).unwrap().due,
+            Some(crate::tasks::Due::Date { date: tomorrow })
+        );
     }
 
     #[test]
