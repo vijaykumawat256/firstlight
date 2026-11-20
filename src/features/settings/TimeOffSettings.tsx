@@ -7,6 +7,10 @@ import { formatDate, formatTime } from "@/features/briefing/format";
 import { Group, SettingRow } from "./controls";
 import { useSettings } from "./useSettings";
 
+const todayYmd = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 const day = (ymd: string) => formatDate(new Date(`${ymd}T00:00:00`));
 export const offText = (t: TimeOff) => (t.from === t.to ? day(t.from) : `${day(t.from)} to ${day(t.to)}`);
 
@@ -40,7 +44,9 @@ export function TimeOffSettings() {
   const [to, setTo] = useState("");
   const [label, setLabel] = useState("");
   if (!s) return null;
-  const list = s.day.time_off;
+  // Stretches that are over are forgotten on the next save; until then they are not shown.
+  const today = todayYmd();
+  const list = s.day.time_off.filter((t) => t.to >= today);
   const add = (t: TimeOff) => {
     if (list.length >= 30) return push({ title: "That's the most stretches of time off kept. Remove an old one first.", tone: "danger" });
     update((d) => void (d.day.time_off = [...d.day.time_off, t].sort((a, b) => a.from.localeCompare(b.from))));
@@ -55,7 +61,7 @@ export function TimeOffSettings() {
       .catch(() => push({ title: "Couldn't copy", tone: "danger" }));
   return (
     <div className="flex flex-col gap-7">
-      <Group title="Your days off" footer="On these days only meeting heads-ups come; summaries, wrap-up and nudges stay quiet. Kept on this computer.">
+      <Group title="Your days off" footer="On these days only reminders about meetings come; summaries, task reminders, wrap-up and nudges stay quiet. Kept on this computer.">
         {list.length === 0 && (
           <li className="px-4 py-3 text-body text-fg-2">No time off planned.</li>
         )}

@@ -31,7 +31,7 @@ export function DndGroup() {
   if (!s || !st?.available) return null;
   const ready = st.on_found && st.off_found;
   return (
-    <Group title="Do Not Disturb" footer="Firstlight turns it off only if it turned it on, so a Focus you set yourself is left alone.">
+    <Group title="Do Not Disturb" footer="Firstlight turns it off only if it turned it on, and again if the app quits during a meeting.">
       <SettingRow title="Do Not Disturb in meetings" description="Turns your Mac's Do Not Disturb on while a meeting, a focus block or the focus timer runs, so chats and mail stay quiet.">
         <Switch label="Do Not Disturb in meetings" checked={s.day.dnd_meetings} disabled={!ready && !s.day.dnd_meetings} onCheckedChange={(v) => update((d) => void (d.day.dnd_meetings = v))} />
       </SettingRow>
@@ -44,7 +44,11 @@ export function DndGroup() {
           <Step found={st.off_found}>
             A shortcut named <strong>{st.off_name}</strong> with one action: Set Focus, Do Not Disturb, Turn Off.
           </Step>
+          <Step found={st.status_found}>
+            Optional: <strong>{st.status_name}</strong> with one action: Get Current Focus. With it, a Focus you turned on yourself is left alone.
+          </Step>
         </ol>
+        {ready && !st.status_found && <p className="text-footnote text-fg-2">Without the third shortcut Firstlight can't tell a Focus you turned on yourself, so it may turn Do Not Disturb off when a meeting ends.</p>}
         <div className="flex flex-wrap justify-end gap-2">
           {!ready && (
             <>

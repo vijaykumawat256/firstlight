@@ -114,8 +114,26 @@ pub fn last_workday(year: i32, month: u32) -> NaiveDate {
 }
 
 /// The day the next copy of a repeating task is due: the rule's next day after the old due day, moved on until it is
-/// after `today`.
-pub fn next_due_day(repeat: TaskRepeat, due: NaiveDate, today: NaiveDate) -> NaiveDate {
+/// after `today`. A monthly task counts its months from `anchor` (the first copy's day), so the 31st comes back as
+/// the 31st after a short month instead of drifting to the 28th.
+pub fn next_due_day(
+    repeat: TaskRepeat,
+    due: NaiveDate,
+    today: NaiveDate,
+    anchor: Option<NaiveDate>,
+) -> NaiveDate {
+    if repeat == TaskRepeat::Monthly
+        && let Some(anchor) = anchor.filter(|a| *a <= due)
+    {
+        for k in 1..1200u32 {
+            if let Some(next) = anchor.checked_add_months(Months::new(k))
+                && next > due
+                && next > today
+            {
+                return next;
+            }
+        }
+    }
     let mut next = repeat.step(due);
     // At most a few thousand steps (daily for ten years); the guard keeps a broken clock from looping long.
     for _ in 0..4000 {
@@ -176,6 +194,9 @@ pub struct Task {
     /// The next copy made when this repeating task was ticked, so ticking it again does not make another.
     #[serde(default)]
     pub next_made: Option<String>,
+    /// The first copy's due day: monthly repeats count from it, so they keep their day of the month.
+    #[serde(default)]
+    pub repeat_anchor: Option<NaiveDate>,
     /// Someone you are waiting on for this (a name or an address).
     #[serde(default)]
     pub waiting_on: Option<String>,
@@ -436,7 +457,8 @@ pub fn next_copy(t: &Task, id: String, tz: Tz, now: DateTime<Utc>) -> Option<Tas
     }
     let today = now.with_timezone(&tz).date_naive();
     let due = t.due?;
-    let day = next_due_day(repeat, due.day(tz), today);
+    let anchor = t.repeat_anchor.unwrap_or(due.day(tz));
+    let day = next_due_day(repeat, due.day(tz), today, Some(anchor));
     let due = match due {
         Due::Date { .. } => Due::Date { date: day },
         Due::At { at } => Due::At {
@@ -453,6 +475,7 @@ pub fn next_copy(t: &Task, id: String, tz: Tz, now: DateTime<Utc>) -> Option<Tas
         updated_at: now,
         from_meeting: t.from_meeting.clone(),
         repeat: Some(repeat),
+        repeat_anchor: Some(anchor),
         ..Default::default()
     })
 }
@@ -730,22 +753,28 @@ mod tests {
     fn repeating_tasks_come_back_on_the_next_day_the_rule_gives_and_never_already_late() {
         use TaskRepeat::*;
         let today = d("2026-11-19"); // a Thursday
-        assert_eq!(next_due_day(Daily, d("2026-11-19"), today), d("2026-11-20"));
-        assert_eq!(next_due_day(Daily, d("2026-11-10"), today), d("2026-11-20"));
         assert_eq!(
-            next_due_day(Weekdays, d("2026-11-20"), d("2026-11-20")),
+            next_due_day(Daily, d("2026-11-19"), today, None),
+            d("2026-11-20")
+        );
+        assert_eq!(
+            next_due_day(Daily, d("2026-11-10"), today, None),
+            d("2026-11-20")
+        );
+        assert_eq!(
+            next_due_day(Weekdays, d("2026-11-20"), d("2026-11-20"), None),
             d("2026-11-23")
         );
         assert_eq!(
-            next_due_day(Weekly, d("2026-11-19"), today),
+            next_due_day(Weekly, d("2026-11-19"), today, None),
             d("2026-11-26")
         );
         assert_eq!(
-            next_due_day(Weekly, d("2026-11-05"), today),
+            next_due_day(Weekly, d("2026-11-05"), today, None),
             d("2026-11-26")
         );
         assert_eq!(
-            next_due_day(Monthly, d("2026-01-31"), d("2026-01-31")),
+            next_due_day(Monthly, d("2026-01-31"), d("2026-01-31"), None),
             d("2026-02-28")
         );
         // Last working day: November 2026 ends on a Monday the 30th; January 2027 ends on a Sunday.
@@ -753,11 +782,11 @@ mod tests {
         assert_eq!(last_workday(2027, 1), d("2027-01-29"));
         assert_eq!(last_workday(2026, 12), d("2026-12-31"));
         assert_eq!(
-            next_due_day(LastWorkday, d("2026-11-19"), today),
+            next_due_day(LastWorkday, d("2026-11-19"), today, None),
             d("2026-11-30")
         );
         assert_eq!(
-            next_due_day(LastWorkday, d("2026-11-30"), d("2026-11-30")),
+            next_due_day(LastWorkday, d("2026-11-30"), d("2026-11-30"), None),
             d("2026-12-31")
         );
     }
@@ -833,5 +862,29 @@ mod tests {
         assert!(waiting_nudges(&[w.clone()], t("2026-11-19T15:00:00Z"), 0).is_empty());
         w.done_at = Some(t("2026-11-18T00:00:00Z"));
         assert!(waiting_nudges(&[w], t("2026-11-19T15:00:00Z"), 3).is_empty());
+    }
+
+    #[test]
+    fn a_monthly_task_on_the_31st_comes_back_on_the_31st_after_a_short_month() {
+        let mut rent = task(
+            "Rent",
+            Some(Due::Date {
+                date: d("2026-01-31"),
+            }),
+            "2026-01-01T00:00:00Z",
+        );
+        rent.repeat = Some(TaskRepeat::Monthly);
+        let mut dates = vec![];
+        let mut now = t("2026-01-31T15:00:00Z");
+        for i in 0..3 {
+            let next = next_copy(&rent, format!("n{i}"), NY, now).unwrap();
+            let Some(Due::Date { date }) = next.due else {
+                panic!()
+            };
+            dates.push(date);
+            now = date.and_hms_opt(15, 0, 0).unwrap().and_utc();
+            rent = next;
+        }
+        assert_eq!(dates, [d("2026-02-28"), d("2026-03-31"), d("2026-04-30")]);
     }
 }

@@ -15,12 +15,16 @@ test("Do Not Disturb walks through the two shortcuts, then can be tried and turn
   await expect(group).toContainText("One-time setup in the Shortcuts app");
   await expect(group.getByRole("switch", { name: "Do Not Disturb in meetings" })).toBeDisabled();
   await expect(group.getByLabel("Done")).toHaveCount(1);
+  await expect(group).toContainText("Optional: Firstlight Focus Status");
   await group.getByRole("button", { name: "Open Shortcuts" }).click();
   expect(await page.evaluate(() => (window as unknown as { __shortcutsOpened?: number }).__shortcutsOpened)).toBe(1);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await openNotifications(page, "?dnd");
   await expect(group).toContainText("Set up: both shortcuts found.");
+  await expect(group).toContainText("Without the third shortcut");
+  await openNotifications(page, "?dnd&dndstatus");
+  await expect(group).not.toContainText("Without the third shortcut");
   await group.getByRole("button", { name: "Try: turn on" }).click();
   await expect(page.getByText("Do Not Disturb is on").first()).toBeVisible();
   await group.getByRole("switch", { name: "Do Not Disturb in meetings" }).click();

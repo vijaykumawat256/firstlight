@@ -648,6 +648,8 @@ pub fn run() {
             );
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
+            // Do Not Disturb left on by a run that ended in the middle of a meeting is turned off.
+            dnd::init(&dir);
 
             // An installation from before the rename (the app was called Daybrief) keeps its data: the database
             // and its secrets are moved under the current names, checked, and only then removed from the old
@@ -801,6 +803,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Firstlight")
         .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                dnd::on_exit();
+            }
             // Clicking the Dock icon brings the window back (it only ever hides when closed).
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {

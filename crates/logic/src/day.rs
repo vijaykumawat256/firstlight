@@ -68,6 +68,16 @@ pub struct TimeOff {
 pub const MAX_TIME_OFF: usize = 30;
 
 impl DaySettings {
+    /// Forgets stretches of time off that ended before `today` (done on every save).
+    pub fn drop_past_time_off(&mut self, today: NaiveDate) {
+        self.time_off.retain(|t| t.to >= today);
+    }
+
+    /// Whether task reminders may show now: turned on, no focus time or timer running, not a day off.
+    pub fn task_reminders_now(&self, focusing: bool, today: NaiveDate) -> bool {
+        self.task_reminders && !focusing && self.off_on(today).is_none()
+    }
+
     /// The stretch of time off that covers `day`, if any.
     pub fn off_on(&self, day: NaiveDate) -> Option<&TimeOff> {
         self.time_off.iter().find(|t| t.from <= day && day <= t.to)
@@ -138,7 +148,11 @@ impl DaySettings {
         self.time_off.sort_by_key(|t| (t.from, t.to));
         self.time_off
             .dedup_by(|a, b| a.from == b.from && a.to == b.to);
-        self.time_off.truncate(MAX_TIME_OFF);
+        // Over the limit: keep the latest stretches (the ones still to come), never drop future days off.
+        if self.time_off.len() > MAX_TIME_OFF {
+            let extra = self.time_off.len() - MAX_TIME_OFF;
+            self.time_off.drain(..extra);
+        }
     }
 }
 
@@ -1180,6 +1194,31 @@ mod tests {
         assert_eq!(ds.time_off.len(), 2);
         assert_eq!(ds.time_off[0].from, d("2026-11-27"));
         assert_eq!(ds.time_off[1].label, "Winter break");
+        assert!(ds.task_reminders_now(false, d("2026-12-01")));
+        assert!(
+            !ds.task_reminders_now(true, d("2026-12-01")),
+            "they wait during focus time"
+        );
+        assert!(
+            !ds.task_reminders_now(false, d("2026-12-26")),
+            "they wait on a day off"
+        );
+        let mut later = ds.clone();
+        later.drop_past_time_off(d("2026-11-28"));
+        assert_eq!(later.time_off.len(), 1);
+        later.time_off = (0..40)
+            .map(|i| TimeOff {
+                from: d("2027-01-01") + Duration::days(i * 2),
+                to: d("2027-01-01") + Duration::days(i * 2),
+                label: String::new(),
+            })
+            .collect();
+        later.sanitize();
+        assert_eq!(later.time_off.len(), MAX_TIME_OFF);
+        assert_eq!(
+            later.time_off.last().unwrap().from,
+            d("2027-01-01") + Duration::days(78)
+        );
         assert_eq!(ds.waiting_nudge_days, 30);
         assert!(ds.off_on(d("2026-12-28")).is_some());
         assert!(ds.off_on(d("2026-12-23")).is_none());

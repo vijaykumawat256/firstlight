@@ -6,6 +6,7 @@
 
 use crate::briefing::{BriefingSettings, day_bounds, is_shown};
 use crate::model::{Event, When};
+use crate::review::covered;
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use chrono_tz::Tz;
 use serde::Serialize;
@@ -71,23 +72,6 @@ pub fn project_of(title: &str) -> Option<String> {
 
 /// A stretch of time, start to end.
 type Span = (DateTime<Utc>, DateTime<Utc>);
-
-fn covered(mut spans: Vec<Span>) -> i64 {
-    spans.sort();
-    let mut total = 0;
-    let mut cur: Option<(DateTime<Utc>, DateTime<Utc>)> = None;
-    for (s, e) in spans {
-        match cur {
-            Some((cs, ce)) if s <= ce => cur = Some((cs, ce.max(e))),
-            Some((cs, ce)) => {
-                total += (ce - cs).num_minutes();
-                cur = Some((s, e));
-            }
-            None => cur = Some((s, e)),
-        }
-    }
-    total + cur.map_or(0, |(s, e)| (e - s).num_minutes())
-}
 
 fn totals(map: HashMap<String, (i64, usize)>, limit: usize) -> Vec<Total> {
     let mut v: Vec<Total> = map

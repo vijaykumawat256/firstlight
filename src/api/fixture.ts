@@ -1074,7 +1074,7 @@ export const fixtureBackend: Backend = {
   async dndStatus() {
     // ?dnd: on a Mac with both shortcuts made; ?dndhalf: only the first; ?windows: not offered.
     const mac = !params.has("windows");
-    return { available: mac, on_found: mac && (params.has("dnd") || params.has("dndhalf")), off_found: mac && params.has("dnd"), on_name: "Firstlight Focus On", off_name: "Firstlight Focus Off" } satisfies DndStatus;
+    return { available: mac, on_found: mac && (params.has("dnd") || params.has("dndhalf")), off_found: mac && params.has("dnd"), status_found: mac && params.has("dndstatus"), on_name: "Firstlight Focus On", off_name: "Firstlight Focus Off", status_name: "Firstlight Focus Status" } satisfies DndStatus;
   },
   async tryDnd(on) {
     if (!params.has("dnd")) throw new Error(`Couldn't run the “Firstlight Focus ${on ? "On" : "Off"}” shortcut. Check it exists in the Shortcuts app.`);
@@ -1103,6 +1103,8 @@ export const fixtureBackend: Backend = {
     return { off_today: within(today), next: off.find((t) => t.to >= today) ?? null, clashes, holidays } satisfies TimeOffStatus;
   },
   async getFocusTimer() {
+    const w = window as unknown as { __timerAsks?: number };
+    w.__timerAsks = (w.__timerAsks ?? 0) + 1;
     expireTimer();
     return focusTimer ? structuredClone(focusTimer) : null;
   },

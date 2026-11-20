@@ -7,6 +7,7 @@
 
 use crate::briefing::{BriefingSettings, day_bounds, is_shown};
 use crate::model::{Event, When};
+use crate::review::covered;
 use crate::tasks::{Due, Task};
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc, Weekday};
 use chrono_tz::Tz;
@@ -86,6 +87,23 @@ fn meetings(
     out
 }
 
+/// How many meetings (timed, shown, not focus time) start in `[from, to)`: every one, repeats included.
+fn meeting_count(
+    events: &[Event],
+    focus: &HashSet<String>,
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+    bs: &BriefingSettings,
+) -> usize {
+    let mut seen = HashSet::new();
+    events
+        .iter()
+        .filter(|e| is_shown(e, bs) && !focus.contains(&e.id))
+        .filter(|e| matches!(e.when, When::Timed { start, .. } if start >= from && start < to))
+        .filter(|e| seen.insert(e.id.clone()))
+        .count()
+}
+
 fn open_due(tasks: &[Task], tz: Tz, from: NaiveDate, to: NaiveDate) -> Vec<String> {
     let mut list: Vec<&Task> = tasks
         .iter()
@@ -145,24 +163,6 @@ fn hours(minutes: i64) -> String {
     }
 }
 
-/// Minutes covered by these spans, overlaps counted once.
-fn covered(mut spans: Vec<(DateTime<Utc>, DateTime<Utc>)>) -> i64 {
-    spans.sort();
-    let mut total = 0;
-    let mut cur: Option<(DateTime<Utc>, DateTime<Utc>)> = None;
-    for (s, e) in spans {
-        match cur {
-            Some((cs, ce)) if s <= ce => cur = Some((cs, ce.max(e))),
-            Some((cs, ce)) => {
-                total += (ce - cs).num_minutes();
-                cur = Some((s, e));
-            }
-            None => cur = Some((s, e)),
-        }
-    }
-    total + cur.map_or(0, |(s, e)| (e - s).num_minutes())
-}
-
 /// Writes the update. `focus` holds the ids of focus-time events (left out of meetings).
 pub fn build(
     kind: ReportKind,
@@ -212,7 +212,7 @@ pub fn build(
             let (w_from, _) = day_bounds(monday, tz);
             let (n_from, _) = day_bounds(next_monday, tz);
             let (n_to, _) = day_bounds(next_monday + Duration::days(7), tz);
-            let held = meetings(events, focus, w_from, now, bs);
+            let held = meeting_count(events, focus, w_from, now, bs);
             let spans: Vec<_> = events
                 .iter()
                 .filter(|e| is_shown(e, bs) && !focus.contains(&e.id))
@@ -225,25 +225,17 @@ pub fn build(
                 .collect();
             let meeting_line = format!(
                 "{} {} this week, {} in all",
-                held.len(),
-                if held.len() == 1 {
-                    "meeting"
-                } else {
-                    "meetings"
-                },
+                held,
+                if held == 1 { "meeting" } else { "meetings" },
                 hours(covered(spans))
             );
             let mut next = open_due(tasks, tz, next_monday, next_monday + Duration::days(6));
-            let coming = meetings(events, focus, n_from, n_to, bs);
-            if !coming.is_empty() {
+            let coming = meeting_count(events, focus, n_from, n_to, bs);
+            if coming > 0 {
                 next.push(format!(
                     "{} {} in the calendar",
-                    coming.len(),
-                    if coming.len() == 1 {
-                        "meeting"
-                    } else {
-                        "meetings"
-                    }
+                    coming,
+                    if coming == 1 { "meeting" } else { "meetings" }
                 ));
             }
             let last = today.min(monday + Duration::days(4)).max(monday);
@@ -469,5 +461,49 @@ mod tests {
         );
         assert_eq!(s.lines.len(), 9);
         assert_eq!(s.lines[8], "and 4 more");
+    }
+
+    #[test]
+    fn repeated_meetings_are_each_counted_in_the_weekly_update() {
+        let now = t("2026-11-20T21:00:00Z");
+        let events = vec![
+            meeting(
+                "s1",
+                "Standup",
+                "2026-11-16T14:00:00Z",
+                "2026-11-16T14:15:00Z",
+            ),
+            meeting(
+                "s2",
+                "Standup",
+                "2026-11-17T14:00:00Z",
+                "2026-11-17T14:15:00Z",
+            ),
+            meeting(
+                "s3",
+                "Standup",
+                "2026-11-18T14:00:00Z",
+                "2026-11-18T14:15:00Z",
+            ),
+            meeting(
+                "r",
+                "Review",
+                "2026-11-19T15:00:00Z",
+                "2026-11-19T16:00:00Z",
+            ),
+        ];
+        let r = build(
+            ReportKind::Weekly,
+            &events,
+            &HashSet::new(),
+            &[],
+            now,
+            NY,
+            &BriefingSettings::default(),
+        );
+        assert_eq!(
+            r.sections[1].lines,
+            ["4 meetings this week, 1 h 45 min in all"]
+        );
     }
 }

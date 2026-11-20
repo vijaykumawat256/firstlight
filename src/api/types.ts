@@ -202,8 +202,11 @@ export interface DndStatus {
   available: boolean;
   on_found: boolean;
   off_found: boolean;
+  /** The optional third shortcut that tells whether a Focus is already on. */
+  status_found: boolean;
   on_name: string;
   off_name: string;
+  status_name: string;
 }
 
 /** A running focus timer on a task. */

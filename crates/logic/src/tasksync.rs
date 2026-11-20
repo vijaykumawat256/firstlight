@@ -151,6 +151,11 @@ pub fn apply_remote(t: &mut Task, r: &RemoteTask, tz: Tz, now: DateTime<Utc>) {
         (Some(local), Some(day)) if local.day(tz) == day => Some(local),
         (_, Some(day)) => Some(Due::Date { date: day }),
     };
+    // A repeat needs a day: if the service dropped the day, the task stops repeating instead of silently never
+    // coming back.
+    if t.due.is_none() {
+        t.repeat = None;
+    }
     t.done_at = match (t.done_at, r.done) {
         (_, false) => None,
         (Some(d), true) => Some(d),

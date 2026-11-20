@@ -333,3 +333,51 @@ fn microsoft_uses_the_default_list_and_follows_its_own_next_links_only() {
     assert_eq!(all[1].notes, None); // HTML notes are not brought in
     assert_eq!(all[1].completed_at, Some(t("2026-11-17T09:00:00Z")));
 }
+
+#[test]
+fn a_repeating_task_ticked_off_on_the_phone_comes_back_here() {
+    let s = store();
+    let svc = Fake::default();
+    let now = t("2026-11-18T12:00:00Z");
+    let weekly = todo::add(
+        &s,
+        &TaskInput {
+            repeat: Some(crate::tasks::TaskRepeat::Weekly),
+            ..input("Weekly report")
+        },
+        NY,
+        now,
+    )
+    .unwrap();
+    sync_account(&s, &svc, "g", true, NY, now).unwrap();
+    let remote_id = todo::get(&s, &weekly.id).unwrap().link.unwrap().remote_id;
+    svc.put(
+        &remote_id,
+        &TaskFields {
+            title: "Weekly report".into(),
+            notes: None,
+            due: Some("2026-11-20".parse().unwrap()),
+            done: true,
+        },
+        t("2026-11-18T13:00:00Z"),
+    );
+    sync_account(&s, &svc, "g", true, NY, t("2026-11-18T14:00:00Z")).unwrap();
+    let all = todo::all(&s).unwrap();
+    let open: Vec<_> = all.iter().filter(|t| t.done_at.is_none()).collect();
+    assert_eq!(open.len(), 1, "the next copy is made here");
+    assert_eq!(open[0].title, "Weekly report");
+    assert_eq!(
+        open[0].due.map(|d| d.day(NY)),
+        Some("2026-11-27".parse().unwrap())
+    );
+    // A second sync does not make another (and sends the new one there once).
+    sync_account(&s, &svc, "g", true, NY, t("2026-11-18T15:00:00Z")).unwrap();
+    assert_eq!(
+        todo::all(&s)
+            .unwrap()
+            .iter()
+            .filter(|t| t.done_at.is_none())
+            .count(),
+        1
+    );
+}

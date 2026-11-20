@@ -49,9 +49,10 @@ pub(crate) fn credit(store: &firstlight_core::store::Store, t: &FocusTimer, now:
     }
 }
 
+/// The running timer. One that has run out is not shown any more (the notifier counts it on its next tick).
 #[tauri::command]
 pub async fn get_focus_timer() -> CmdResult<Option<FocusTimer>> {
-    Ok(current())
+    Ok(current().filter(|t| t.ends_at > Utc::now()))
 }
 
 /// Starts a timer on a task (replacing one that runs, whose time so far is counted).

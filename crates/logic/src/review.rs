@@ -28,7 +28,7 @@ pub struct WeekReview {
 }
 
 /// Minutes covered by these spans, overlaps counted once.
-fn covered(mut spans: Vec<(DateTime<Utc>, DateTime<Utc>)>) -> i64 {
+pub fn covered(mut spans: Vec<(DateTime<Utc>, DateTime<Utc>)>) -> i64 {
     spans.sort();
     let mut total = 0;
     let mut cur: Option<(DateTime<Utc>, DateTime<Utc>)> = None;

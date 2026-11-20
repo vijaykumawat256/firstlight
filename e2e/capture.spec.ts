@@ -35,6 +35,9 @@ test("the capture box adds a task, or an event with Tab, and closes", async ({ p
   await expect(page.getByRole("radio", { name: "Event" })).toHaveCount(0);
   await box.press("Escape");
   await expect.poll(() => page.evaluate(() => (window as unknown as { __captureHidden?: number }).__captureHidden ?? 0)).toBe(3);
+  // Clicking into another app hides it too.
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __captureHidden?: number }).__captureHidden ?? 0)).toBe(4);
 });
 
 test("the capture shortcut is chosen in Settings, General", async ({ page }) => {

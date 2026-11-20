@@ -29,9 +29,13 @@ export function CapturePanel() {
     let off: (() => void) | undefined;
     let cancelled = false;
     void api.onCaptureShown(reset).then((u) => (cancelled ? u() : (off = u)));
+    // Clicking into another app hides the box, so it never floats over everything (or a screen share).
+    const away = () => void api.hideCapture();
+    window.addEventListener("blur", away);
     return () => {
       cancelled = true;
       off?.();
+      window.removeEventListener("blur", away);
     };
   }, []);
   const now = new Date();

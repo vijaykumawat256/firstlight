@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Timer } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type Task } from "@/api";
 import { Button, Dialog, Segmented, useToasts } from "@/design";
 
@@ -28,9 +28,15 @@ export function FocusTimerBar() {
     return () => clearInterval(id);
   }, [t]);
   const left = t ? Date.parse(t.ends_at) - now : 0;
-  // When it runs out, ask again (the app counts the minutes and suggests a break).
+  // When it runs out, ask once about the timer and the tasks (the app counts the minutes and suggests a break).
+  const endedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (t && left <= 0) void qc.invalidateQueries();
+    if (!t || left > 0 || endedFor.current === t.started) return;
+    endedFor.current = t.started;
+    void qc.invalidateQueries({ queryKey: TIMER_KEY });
+    void qc.invalidateQueries({ queryKey: ["tasks"] });
+    // The minutes land on the task when the app's next check runs (within half a minute).
+    setTimeout(() => void qc.invalidateQueries({ queryKey: ["tasks"] }), 35_000);
   }, [t, left, qc]);
   const stop = useMutation({
     mutationFn: () => api.stopFocusTimer(),
@@ -50,7 +56,7 @@ export function FocusTimerBar() {
           <span className="font-mono tabular-nums" aria-hidden>
             {mmss(left)}
           </span>
-          <span className="sr-only">{Math.ceil(left / 60_000)} minutes</span> left · reminders wait until it ends
+          <span className="sr-only">{Math.ceil(left / 60_000)} minutes</span> left · task reminders wait until it ends
         </p>
       </div>
       <Button size="sm" variant="secondary" disabled={stop.isPending} onClick={() => stop.mutate()}>
@@ -75,7 +81,7 @@ export function StartTimer({ task, onClose }: { task: Task; onClose: () => void 
     onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
   });
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Focus timer" description={`On “${task.title}”. Firstlight's own reminders wait until it ends (meeting heads-ups still come), then it suggests a break.`}>
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Focus timer" description={`On “${task.title}”. Summaries and task reminders wait until it ends (reminders about meetings still come), then it suggests a break.`}>
       <div className="flex flex-col gap-4 pb-2">
         <Segmented
           label="How long"

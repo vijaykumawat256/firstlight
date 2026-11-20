@@ -437,8 +437,17 @@ pub fn sync_account(
                 let Some(mut t) = by_id(&task_id) else {
                     continue;
                 };
+                let was_open = t.done_at.is_none();
                 apply_remote(&mut t, &r, tz, now);
                 t.link = Some(link(&r.id, &r.stamp));
+                // Ticked off on the phone: a repeating task makes its next copy here, as if ticked here.
+                if was_open
+                    && t.done_at.is_some()
+                    && let Some(next) = crate::tasks::next_copy(&t, crate::model::new_id(), tz, now)
+                {
+                    t.next_made = Some(next.id.clone());
+                    todo::put(store, &next)?;
+                }
                 todo::put(store, &t)?;
                 done.changed_here += 1;
             }

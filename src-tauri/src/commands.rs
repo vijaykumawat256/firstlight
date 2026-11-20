@@ -1613,6 +1613,9 @@ fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdR
     s.email.send_accounts = stored.email.send_accounts;
     s.tasks = stored.tasks;
     s.sanitize();
+    // Days off that are over are forgotten, so the list never fills up with old ones.
+    s.day
+        .drop_past_time_off(Utc::now().with_timezone(&crate::local_tz()).date_naive());
     // Try the shortcut first: if the system refuses it, nothing is saved and the user is told why.
     crate::apply_dock(app, s.general.show_in_dock);
     crate::apply_shortcut(

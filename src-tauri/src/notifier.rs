@@ -152,6 +152,26 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                             .into_iter()
                             .filter(|e| !firstlight_core::local::has_own_reminder(&own, e))
                             .collect();
+                        // A focus timer that has run out: count its minutes and suggest a break.
+                        if let Some(t) = crate::timer::take_finished(now) {
+                            crate::timer::credit(&store, &t, now);
+                            let _ = app.emit("timer-changed", ());
+                            let _ = app.emit("tasks-changed", ());
+                            let body = if ns.hide_titles {
+                                format!("{} minutes done. Take a short break.", t.minutes)
+                            } else {
+                                format!("{} minutes on “{}”. Take a short break.", t.minutes, t.title)
+                            };
+                            show(&app, "Time's up", &body, false);
+                            log::info!("focus timer finished");
+                        }
+                        // A focus timer counts as focus time too.
+                        let focusing = crate::timer::current().is_some()
+                            || firstlight_core::local::focus_until(&store, now)
+                                .ok()
+                                .flatten()
+                                .is_some();
+                        let off_today = settings.day.off_on(today).is_some();
                         for r in
                             firstlight_core::local::due_reminders(&store, now).unwrap_or_default()
                         {
@@ -173,8 +193,10 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                             );
                             log::info!("own reminder shown");
                         }
-                        // Tasks with a time, once that time comes (still within the hour if the app was asleep).
-                        if settings.day.task_reminders {
+                        // Tasks with a time, once that time comes (still within the hour if the app was asleep). They
+                        // wait during focus time or a focus timer and on a day off (not marked shown, so they come
+                        // after, within that hour).
+                        if settings.day.task_reminders_now(focusing, today) {
                             let tasks = firstlight_core::todo::all(&store).unwrap_or_default();
                             for r in firstlight_core::tasks::due_reminders(&tasks, now) {
                                 if sent.contains(&r.id) {
@@ -202,25 +224,6 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                         // During focus time the summaries and snoozed repeats wait (they are not marked as
                         // shown, so they come once it ends); heads-ups and reminders still come, so a meeting is
                         // never missed.
-                        // A focus timer that has run out: count its minutes and suggest a break.
-                        if let Some(t) = crate::timer::take_finished(now) {
-                            crate::timer::credit(&store, &t, now);
-                            let _ = app.emit("timer-changed", ());
-                            let _ = app.emit("tasks-changed", ());
-                            let body = if ns.hide_titles {
-                                format!("{} minutes done. Take a short break.", t.minutes)
-                            } else {
-                                format!("{} minutes on “{}”. Take a short break.", t.minutes, t.title)
-                            };
-                            show(&app, "Time's up", &body, false);
-                            log::info!("focus timer finished");
-                        }
-                        // A focus timer counts as focus time too.
-                        let focusing = crate::timer::current().is_some()
-                            || firstlight_core::local::focus_until(&store, now)
-                                .ok()
-                                .flatten()
-                                .is_some();
                         // Do Not Disturb follows meetings, focus blocks and the focus timer (Mac, when turned on).
                         crate::dnd::follow(
                             settings.day.dnd_meetings,
@@ -297,7 +300,6 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                         );
                         // On a day off only what is about a meeting you have still comes; the rest is not marked
                         // shown, so a nudge waits for the next working day.
-                        let off_today = settings.day.off_on(now.with_timezone(&tz).date_naive()).is_some();
                         for n in due(&events, now, tz, &ns, &bs, &rules, &sent)
                             .into_iter()
                             .chain(day)

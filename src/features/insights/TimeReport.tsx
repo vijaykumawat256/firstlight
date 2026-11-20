@@ -106,7 +106,7 @@ export function TimeReportSheet({ onClose }: { onClose: () => void }) {
             {r.by_day.length <= 31 && (
               <div role="img" aria-label={`Meeting time per day: ${r.by_day.filter(([, m]) => m > 0).map(([d, m]) => `${formatDate(new Date(`${d}T00:00:00`))} ${hours(m)}`).join(", ") || "none"}`} className="flex h-20 items-end gap-0.5">
                 {r.by_day.map(([d, m]) => (
-                  <div key={d} className="flex-1 rounded-t-[3px] bg-accent-fill" style={{ height: `${m === 0 ? 2 : Math.max(6, (m / maxDay) * 100)}%`, opacity: m === 0 ? 0.25 : 1 }} />
+                  <div key={d} className="flex-1 rounded-t-control bg-accent-fill" style={{ height: `${m === 0 ? 2 : Math.max(6, (m / maxDay) * 100)}%`, opacity: m === 0 ? 0.25 : 1 }} />
                 ))}
               </div>
             )}

@@ -159,4 +159,8 @@ test("a focus timer runs on a task, counts its minutes when stopped or finished,
   await page.clock.fastForward("16:00");
   await expect(bar).toHaveCount(0);
   await expect(page.getByText("25 min spent")).toBeVisible();
+  // Once it has ended the app is asked once, not every second.
+  const asks = await page.evaluate(() => (window as unknown as { __timerAsks: number }).__timerAsks);
+  await page.clock.fastForward("00:10");
+  expect(await page.evaluate(() => (window as unknown as { __timerAsks: number }).__timerAsks)).toBeLessThanOrEqual(asks + 1);
 });

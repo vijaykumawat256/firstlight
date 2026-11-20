@@ -27,7 +27,7 @@ export function ThemePicker({ value, onChange }: { value: ThemeChoice; onChange:
             {t.mode ? (
               <Swatch theme={t.id} mode={t.mode} />
             ) : (
-              <span className="grid grid-cols-2 overflow-hidden rounded-[8px]">
+              <span className="grid grid-cols-2 overflow-hidden rounded-control">
                 <Swatch theme="light" mode="light" half />
                 <Swatch theme="dark" mode="dark" half />
               </span>
@@ -43,8 +43,8 @@ export function ThemePicker({ value, onChange }: { value: ThemeChoice; onChange:
 /** A small picture of a theme: its background, a card with two lines of text, and its accent. */
 function Swatch({ theme, mode, half }: { theme: string; mode: "light" | "dark"; half?: boolean }) {
   return (
-    <span aria-hidden className={clsx(`theme-${mode} theme-${theme}`, "flex h-14 flex-col justify-end gap-1 bg-bg p-1.5", !half && "rounded-[8px]")}>
-      <span className="flex items-center gap-1 rounded-[5px] bg-surface px-1.5 py-1 shadow-card">
+    <span aria-hidden className={clsx(`theme-${mode} theme-${theme}`, "flex h-14 flex-col justify-end gap-1 bg-bg p-1.5", !half && "rounded-control")}>
+      <span className="flex items-center gap-1 rounded-control bg-surface px-1.5 py-1 shadow-card">
         <span className="size-2 shrink-0 rounded-full bg-accent-fill" />
         <span className="text-caption leading-none font-semibold text-fg">Aa</span>
         {!half && <span className="truncate text-caption leading-none text-fg-2">9:30</span>}
