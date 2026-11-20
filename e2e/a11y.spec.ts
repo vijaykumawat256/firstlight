@@ -1,14 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
 async function scan(page: Page, label: string) {
-  // Let CSS transitions (hover fades, screen changes) finish, or axe samples a half-faded colour.
-  // Not waitForFunction: it polls on timers/rAF, which tests with a faked clock never advance.
-  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))).then(() => undefined));
+  await settle(page);
   const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
   const summary = results.violations.map((v) => `${v.id} (${v.impact}): ${v.help}\n   ${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join("\n   ")}`);
   expect(summary, `${label}: accessibility violations`).toEqual([]);
