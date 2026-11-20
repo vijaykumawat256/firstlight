@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-clear-auto-reply"
+description = "Enables the clear_auto_reply command without any pre-configured scope."
+commands.allow = ["clear_auto_reply"]
+
+[[permission]]
+identifier = "deny-clear-auto-reply"
+description = "Denies the clear_auto_reply command without any pre-configured scope."
+commands.deny = ["clear_auto_reply"]

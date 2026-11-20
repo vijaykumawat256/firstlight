@@ -198,7 +198,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true, open_every_time: false },
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, week_preview: true, time_24h: false, hide_titles: false },
   appearance: { theme: "system", accent: "system", ambient: params.has("ambient"), font: "system", text_size: "default", extra_zones: params.has("zones") ? ["Europe/London", "Asia/Kolkata"] : [] },
-  email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, send_messages: false, send_accounts: [], important_senders: [], days_back: 3 },
+  email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, send_messages: false, send_accounts: [], autoreply_accounts: [], important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null, plan_consented: null },
   privacy: { crash_reports: false },
   day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true, travel_maps: false, travel_from: "", waiting_nudge_days: 3, dnd_meetings: false, time_off: [] },
@@ -1008,6 +1008,27 @@ export const fixtureBackend: Backend = {
     if (params.has("sendfail")) throw new Error("Couldn't reach the mail service. Nothing was sent.");
     const w = window as unknown as { __messages?: Array<{ senderId: string; to: string; subject: string; body: string }> };
     (w.__messages ??= []).push({ senderId, to, subject, body });
+  },
+  async enableAccountAutoreply(accountId) {
+    if (params.has("oauthfail")) throw new Error("Sign-in was cancelled.");
+    settings = { ...settings, email: { ...settings.email, autoreply_accounts: [...new Set([...settings.email.autoreply_accounts, accountId])] } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async disableAccountAutoreply(accountId) {
+    settings = { ...settings, email: { ...settings.email, autoreply_accounts: settings.email.autoreply_accounts.filter((a) => a !== accountId) } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async setAutoReply(accountId, from, to, text) {
+    if (!settings.email.autoreply_accounts.includes(accountId)) throw new Error("Allow Firstlight to set that account's automatic reply first.");
+    if (params.has("replyfail")) throw new Error("Couldn't reach the mail service. Nothing was changed.");
+    const w = window as unknown as { __autoReplies?: { accountId: string; from: string; to: string; text: string | null }[] };
+    (w.__autoReplies ??= []).push({ accountId, from, to, text });
+  },
+  async clearAutoReply(accountId) {
+    const w = window as unknown as { __autoReplies?: { accountId: string; from: string; to: string; text: string | null }[] };
+    (w.__autoReplies ??= []).push({ accountId, from: "", to: "", text: null });
   },
   async enableAccountSend(accountId) {
     if (params.has("oauthfail")) throw new Error("Sign-in was cancelled.");

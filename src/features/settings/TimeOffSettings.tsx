@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { api, errorMessage, type TimeOff } from "@/api";
 import { Button, IconButton, TextField, useToasts } from "@/design";
 import { formatDate, formatTime } from "@/features/briefing/format";
@@ -131,19 +131,7 @@ export function TimeOffSettings() {
         </Group>
       )}
 
-      {st?.next && (
-        <Group title="Out-of-office reply">
-          <li className="flex flex-col gap-2 px-4 py-3">
-            <p className="text-body text-fg select-text">{outOfOffice(st.next)}</p>
-            <div className="flex justify-end">
-              <Button size="sm" variant="secondary" onClick={() => copy(outOfOffice(st.next!))}>
-                Copy reply
-              </Button>
-            </div>
-            <p className="text-footnote text-fg-2">Paste it into your email's automatic reply setting.</p>
-          </li>
-        </Group>
-      )}
+      {st?.next && <OutOfOffice next={st.next} copy={copy} />}
 
       <Group title="Public holidays coming up" footer={st && st.holidays.length === 0 ? "Add your country's holidays in Accounts & calendars to see them here." : undefined}>
         {st && st.holidays.length === 0 && <li className="px-4 py-3 text-body text-fg-2">None found in the next three months.</li>}
@@ -163,5 +151,77 @@ export function TimeOffSettings() {
         })}
       </Group>
     </div>
+  );
+}
+
+/**
+ * The out-of-office reply for the next time off: shown in full (and editable), copied, or set as the automatic reply
+ * of a Google or Microsoft account. Each account needs its own permission; the reply runs from the first day off to
+ * the day you are back, and the service switches it off by itself.
+ */
+function OutOfOffice({ next, copy }: { next: TimeOff; copy: (text: string) => void }) {
+  const push = useToasts((s) => s.push);
+  const qc = useQueryClient();
+  const textId = useId();
+  const { settings: s } = useSettings();
+  const accounts = useQuery({ queryKey: ["accounts"], queryFn: () => api.listAccounts(), staleTime: 60_000 });
+  const [edited, setEdited] = useState<string | null>(null);
+  const text = edited ?? outOfOffice(next);
+  const mail = (accounts.data ?? []).filter((a) => a.provider === "google" || a.provider === "microsoft");
+  const allowed = s?.email.autoreply_accounts ?? [];
+  const allow = useMutation({
+    mutationFn: (id: string) => api.enableAccountAutoreply(id),
+    onSuccess: (saved) => qc.setQueryData(["settings"], saved),
+    onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
+  });
+  const set = useMutation({
+    mutationFn: (id: string) => api.setAutoReply(id, next.from, next.to, text),
+    onSuccess: (_, id) => push({ title: "Automatic reply set", description: `${mail.find((a) => a.id === id)?.email ?? "Your account"}, ${offText(next)}` }),
+    onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
+  });
+  const clear = useMutation({
+    mutationFn: (id: string) => api.clearAutoReply(id),
+    onSuccess: () => push({ title: "Automatic reply turned off" }),
+    onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
+  });
+  return (
+    <Group title="Out-of-office reply">
+      <li className="flex flex-col gap-2 px-4 py-3">
+        <label htmlFor={textId} className="text-footnote font-medium text-fg-2">
+          For {offText(next)}
+        </label>
+        <textarea id={textId} rows={4} maxLength={2000} value={text} onChange={(e) => setEdited(e.target.value)} className="select-text rounded-card bg-fill px-3 py-2 text-body text-fg" />
+        <div className="flex justify-end">
+          <Button size="sm" variant="secondary" disabled={!text.trim()} onClick={() => copy(text)}>
+            Copy reply
+          </Button>
+        </div>
+      </li>
+      {mail.length === 0 ? (
+        <li className="px-4 py-3 text-footnote text-fg-2">Paste it into your email's automatic reply setting. With a Google or Microsoft account connected, Firstlight can set it for you.</li>
+      ) : (
+        mail.map((a) => {
+          const ok = allowed.includes(a.id);
+          return (
+            <SettingRow key={a.id} title={a.email ?? a.display_name} description={ok ? `Turns on at the start of ${day(next.from)} and off when you're back.` : "Needs your permission once, in the browser."}>
+              {ok ? (
+                <div className="flex gap-1">
+                  <Button size="sm" variant="plain" disabled={clear.isPending} onClick={() => clear.mutate(a.id)}>
+                    Turn off
+                  </Button>
+                  <Button size="sm" variant="secondary" disabled={set.isPending || !text.trim()} onClick={() => set.mutate(a.id)} aria-label={`Set reply in ${a.email ?? a.display_name}`}>
+                    Set reply
+                  </Button>
+                </div>
+              ) : (
+                <Button size="sm" variant="plain" disabled={allow.isPending} onClick={() => allow.mutate(a.id)} aria-label={`Allow ${a.email ?? a.display_name} to take the reply`}>
+                  Allow
+                </Button>
+              )}
+            </SettingRow>
+          );
+        })
+      )}
+    </Group>
   );
 }

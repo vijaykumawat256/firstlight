@@ -277,6 +277,10 @@ pub struct EmailSettings {
     /// Google/Microsoft accounts that granted the separate permission to send (`gmail.send` / `Mail.Send`). Changed
     /// only by `enable_account_send` / `disable_account_send`; never by a save or a settings file.
     pub send_accounts: Vec<String>,
+    /// Google/Microsoft accounts that granted the separate permission to set the automatic out-of-office reply
+    /// (`gmail.settings.basic` / `MailboxSettings.ReadWrite`). Changed only by `enable_account_autoreply` /
+    /// `disable_account_autoreply`; never by a save or a settings file.
+    pub autoreply_accounts: Vec<String>,
     /// Addresses, `@domain`s, domains or names whose mail always shows.
     pub important_senders: Vec<String>,
     pub days_back: i64,
@@ -292,6 +296,7 @@ impl Default for EmailSettings {
             send_invitations: false,
             send_messages: false,
             send_accounts: vec![],
+            autoreply_accounts: vec![],
             important_senders: vec![],
             days_back: 3,
         }
@@ -891,6 +896,7 @@ impl AppSettings {
         imported.email.send_invitations = false;
         imported.email.send_messages = false;
         imported.email.send_accounts.clear();
+        imported.email.autoreply_accounts.clear();
         imported.tasks.sync_accounts.clear();
         imported.ai.consented = None;
         imported.ai.consented_host = None;

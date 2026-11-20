@@ -102,6 +102,11 @@ export interface Backend {
   sendMessage(senderId: string, to: string, subject: string, body: string): Promise<void>;
   /** Asks the account for its separate permission to send mail (in the browser). */
   enableAccountSend(accountId: string): Promise<AppSettings>;
+  /** The automatic out-of-office reply in Gmail or Outlook (its own permission per account). */
+  enableAccountAutoreply(accountId: string): Promise<AppSettings>;
+  disableAccountAutoreply(accountId: string): Promise<AppSettings>;
+  setAutoReply(accountId: string, from: string, to: string, text: string): Promise<void>;
+  clearAutoReply(accountId: string): Promise<void>;
   disableAccountSend(accountId: string): Promise<AppSettings>;
   /** Asks the account for its task permission (in the browser), then keeps your tasks in step with Google Tasks or Microsoft To Do. */
   enableTaskSync(accountId: string): Promise<AppSettings>;

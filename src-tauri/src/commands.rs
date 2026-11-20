@@ -359,6 +359,7 @@ pub async fn remove_account(state: State<'_, AppState>, id: String) -> CmdResult
     let mut s = store.load_settings();
     s.tasks.sync_accounts.retain(|a| a != &id);
     s.email.send_accounts.retain(|a| a != &id);
+    s.email.autoreply_accounts.retain(|a| a != &id);
     store.save_settings(&s).map_err(internal("saving settings"))
 }
 
@@ -1611,6 +1612,7 @@ fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdR
     s.email.imap = stored.email.imap;
     // Which accounts may send, or keep tasks in step, is recorded only when that permission is granted.
     s.email.send_accounts = stored.email.send_accounts;
+    s.email.autoreply_accounts = stored.email.autoreply_accounts;
     s.tasks = stored.tasks;
     s.sanitize();
     // Days off that are over are forgotten, so the list never fills up with old ones.

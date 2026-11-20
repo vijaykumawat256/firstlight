@@ -787,9 +787,11 @@ fn sending_is_never_switched_on_by_a_settings_file() {
     let mut s = AppSettings::default();
     s.email.send_messages = true;
     s.email.send_accounts = vec!["acct".into()];
+    s.email.autoreply_accounts = vec!["acct".into()];
     let back = AppSettings::import(&s.export()).unwrap();
     assert!(!back.email.send_messages);
     assert!(back.email.send_accounts.is_empty());
+    assert!(back.email.autoreply_accounts.is_empty());
 }
 
 #[test]

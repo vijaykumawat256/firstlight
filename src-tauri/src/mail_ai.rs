@@ -1163,6 +1163,12 @@ pub(crate) fn scopes_held(settings: &AppSettings, account: &Account) -> Vec<&'st
     if has(&settings.email.send_accounts) {
         out.push(send);
     }
+    if has(&settings.email.autoreply_accounts) {
+        out.push(match account.provider {
+            ProviderKind::Google => firstlight_core::mail::autoreply::GMAIL_SETTINGS_SCOPE,
+            _ => firstlight_core::mail::autoreply::GRAPH_MAILBOX_SCOPE,
+        });
+    }
     out.extend(crate::task_sync::scopes_held(settings, account));
     out
 }
@@ -1421,4 +1427,183 @@ pub async fn disable_account_send(
     save_settings(&app, &state, |s| {
         s.email.send_accounts.retain(|a| a != &account_id)
     })
+}
+
+// ---- Automatic out-of-office reply (Time off) ------------------------------------------
+
+/// Asks the account (in the browser) for the separate permission to set its automatic reply.
+#[tauri::command]
+pub async fn enable_account_autoreply(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    account_id: String,
+) -> CmdResult<AppSettings> {
+    use firstlight_core::mail::autoreply::{GMAIL_SETTINGS_SCOPE, GRAPH_MAILBOX_SCOPE};
+    let account = lock_store(&state)?
+        .get_account(&account_id)
+        .map_err(internal("loading the account"))?
+        .ok_or("That account no longer exists.")?;
+    let scope =
+        match account.provider {
+            ProviderKind::Google => GMAIL_SETTINGS_SCOPE,
+            ProviderKind::Microsoft => GRAPH_MAILBOX_SCOPE,
+            _ => return Err(
+                "Only Google and Microsoft accounts have an automatic reply Firstlight can set."
+                    .into(),
+            ),
+        };
+    upgrade_grant(&app, &state, &account, scope).await?;
+    save_settings(&app, &state, |s| {
+        if !s.email.autoreply_accounts.contains(&account.id) {
+            s.email.autoreply_accounts.push(account.id.clone());
+        }
+    })
+}
+
+/// Stops offering the automatic reply for that account. (The permission stays granted until removed there.)
+#[tauri::command]
+pub async fn disable_account_autoreply(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    account_id: String,
+) -> CmdResult<AppSettings> {
+    save_settings(&app, &state, |s| {
+        s.email.autoreply_accounts.retain(|a| a != &account_id)
+    })
+}
+
+/// Sets the account's automatic reply for days off `from`..=`to` (`YYYY-MM-DD`, local): on at the start of the first
+/// day, off at the start of the day after the last. `text` is what the page showed; it is sent as it is.
+#[tauri::command]
+pub async fn set_auto_reply(
+    state: State<'_, AppState>,
+    account_id: String,
+    from: String,
+    to: String,
+    text: String,
+) -> CmdResult<()> {
+    let (google, account, tokens, http) = autoreply_account(&state, &account_id)?;
+    let tz = crate::local_tz();
+    let day = |s: &str| {
+        chrono::NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d")
+            .map_err(|_| "Choose valid days.".to_string())
+    };
+    let (from, to) = (day(&from)?, day(&to)?);
+    if to < from {
+        return Err("The last day off is before the first.".into());
+    }
+    let (start, _) = firstlight_core::briefing::day_bounds(from, tz);
+    let (_, end) = firstlight_core::briefing::day_bounds(to, tz);
+    let now = Utc::now();
+    if end <= now {
+        return Err("Those days are already over.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        use firstlight_core::mail::{autoreply, send};
+        let reply = autoreply::AutoReply {
+            from: start.max(now),
+            to: end,
+            subject: "Out of office",
+            text: &text,
+        };
+        if google {
+            autoreply::set_gmail(
+                http.as_ref(),
+                &tokens,
+                &account.id,
+                &reply,
+                send::GMAIL_API,
+                now,
+            )
+        } else {
+            autoreply::set_graph(
+                http.as_ref(),
+                &tokens,
+                &account.id,
+                &reply,
+                send::GRAPH_API,
+                now,
+            )
+        }
+    })
+    .await
+    .map_err(|_| "Setting the reply was interrupted.".to_string())?
+    .map_err(explain_autoreply)
+}
+
+/// Turns the account's automatic reply off now.
+#[tauri::command]
+pub async fn clear_auto_reply(state: State<'_, AppState>, account_id: String) -> CmdResult<()> {
+    let (google, account, tokens, http) = autoreply_account(&state, &account_id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        use firstlight_core::mail::{autoreply, send};
+        let base = if google {
+            send::GMAIL_API
+        } else {
+            send::GRAPH_API
+        };
+        autoreply::clear(
+            http.as_ref(),
+            &tokens,
+            &account.id,
+            google,
+            base,
+            Utc::now(),
+        )
+    })
+    .await
+    .map_err(|_| "Turning the reply off was interrupted.".to_string())?
+    .map_err(explain_autoreply)
+}
+
+type AutoReplyAccount = (
+    bool,
+    Account,
+    TokenManager,
+    std::sync::Arc<dyn firstlight_core::http::HttpClient>,
+);
+
+fn autoreply_account(state: &AppState, account_id: &str) -> CmdResult<AutoReplyAccount> {
+    let settings = lock_store(state)?.load_settings();
+    if !settings
+        .email
+        .autoreply_accounts
+        .iter()
+        .any(|a| a == account_id)
+    {
+        return Err("Allow Firstlight to set that account's automatic reply first.".into());
+    }
+    let account = lock_store(state)?
+        .get_account(account_id)
+        .map_err(internal("loading the account"))?
+        .ok_or("That account no longer exists.")?;
+    let cfg = match account.provider {
+        ProviderKind::Google => state.deps.oauth.google.clone(),
+        ProviderKind::Microsoft => state.deps.oauth.microsoft.clone(),
+        _ => None,
+    }
+    .ok_or("That account has no automatic reply Firstlight can set.")?;
+    let http = state.deps.http.clone();
+    let tokens = TokenManager {
+        http: http.clone(),
+        secrets: state.deps.secrets.clone(),
+        cfg,
+    };
+    Ok((
+        account.provider == ProviderKind::Google,
+        account,
+        tokens,
+        http,
+    ))
+}
+
+fn explain_autoreply(e: Error) -> String {
+    match e {
+        Error::Invalid(m) => m.to_string(),
+        Error::AuthRevoked => "The mail service didn't accept the saved sign-in. Allow the automatic reply again in Time off.".into(),
+        Error::PermissionNeeded => "That account doesn't allow its automatic reply to be set (your organisation may block it).".into(),
+        Error::Offline => "Couldn't reach the mail service. Nothing was changed.".into(),
+        Error::Provider(m) => format!("The mail service didn't take it ({m})."),
+        _ => "The automatic reply couldn't be set.".into(),
+    }
 }

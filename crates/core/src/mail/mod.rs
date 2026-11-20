@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 pub mod applemail;
+pub mod autoreply;
 pub mod gmail;
 pub mod imap;
 pub mod microsoft;

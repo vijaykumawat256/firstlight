@@ -70,3 +70,22 @@ test("in the week before time off, the briefing shows the meetings that fall in 
   await page.getByRole("button", { name: /^Remove time off/ }).click();
   await expect(page.getByText("No time off planned.")).toBeVisible();
 });
+
+test("the out-of-office reply is set in a Google account after allowing it once, and can be turned off", async ({ page }) => {
+  await page.clock.install({ time: at(8, 0) });
+  await openTimeOff(page, "?withgoogle");
+  await page.getByLabel("First day off").fill(ymdIn(3));
+  await page.getByLabel("Last day off").fill(ymdIn(5));
+  await page.getByRole("button", { name: "Add time off" }).click();
+  const group = page.getByRole("region", { name: "Out-of-office reply" });
+  await expect(group.getByRole("textbox")).toHaveValue(/I'm out of the office from/);
+  await group.getByRole("textbox").fill("Away this week. Back Monday.");
+  await group.getByRole("button", { name: /^Allow .* to take the reply$/ }).click();
+  await group.getByRole("button", { name: /^Set reply in / }).click();
+  await expect(page.getByText("Automatic reply set").first()).toBeVisible();
+  const calls = await page.evaluate(() => (window as unknown as { __autoReplies: { from: string; to: string; text: string | null }[] }).__autoReplies);
+  expect(calls.at(-1)).toMatchObject({ from: ymdIn(3), to: ymdIn(5), text: "Away this week. Back Monday." });
+  await group.getByRole("button", { name: "Turn off" }).click();
+  await expect(page.getByText("Automatic reply turned off").first()).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});
