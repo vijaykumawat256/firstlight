@@ -26,6 +26,8 @@ export interface Backend {
   skipOccurrence(id: string): Promise<void>;
   /** The macOS accent colour as a palette name, or null (default blue, graphite, other systems). */
   getSystemAccent(): Promise<string | null>;
+  /** Light or dark for the window itself (title bar, see-through background); null follows the system. */
+  setWindowTheme(mode: "light" | "dark" | null): Promise<void>;
   /** Mailboxes "Send now" can use. Empty unless the user turned sending on. */
   inviteSenders(): Promise<InviteSender[]>;
   /** The exact message that would be sent. */

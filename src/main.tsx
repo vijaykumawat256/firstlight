@@ -3,7 +3,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { isTauri } from "./api";
-import { applyTheme, useTheme } from "./design";
+import { FONTS, applyTheme, useTheme } from "./design";
 
 if (isTauri) document.documentElement.setAttribute("data-shell", "tauri");
 // Only macOS gets the see-through window (vibrancy); Windows gets an ordinary solid one.
@@ -14,7 +14,7 @@ applyTheme(useTheme.getState().choice);
 try {
   const font = localStorage.getItem("firstlight.font");
   const size = localStorage.getItem("firstlight.textSize");
-  if (font && ["rounded", "serif", "mono"].includes(font)) document.documentElement.setAttribute("data-font", font);
+  if (font && font !== "system" && FONTS.some((f) => f.id === font)) document.documentElement.setAttribute("data-font", font);
   if (size && ["small", "large", "larger"].includes(size)) document.documentElement.setAttribute("data-text-size", size);
 } catch {
   /* storage unavailable: settings apply them a moment later */

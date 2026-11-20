@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, CalendarDays, ChevronLeft, Info, LockOpen, Mail, Palette, Settings2, ShieldCheck, Sparkles, Sunrise, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { api, errorMessage, type DefaultView, type FontStyle, type TextSize, type ThemeChoice, type TimeFormat, type WeekStart } from "@/api";
+import { api, errorMessage, type DefaultView, type TextSize, type TimeFormat, type WeekStart } from "@/api";
 import { useNav, type View } from "@/app/nav";
 import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
+import { FontPicker, ThemePicker } from "./LookPickers";
 import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
 import { AiGroup, EmailGroup, SendingGroup, TaskSyncGroup } from "./EmailAiSettings";
 import { COMMON_ZONES, zoneLabel } from "@/features/calendar/zones";
@@ -245,32 +246,11 @@ export function SettingsScreen() {
               ))}
             </Group>
             <Group title="Look">
-              <SettingRow title="Theme" description="Auto follows your computer's light or dark setting. Warm is light on paper tones; Black is dark on true black." stack>
-                <Segmented
-                  label="Theme"
-                  value={s.appearance.theme}
-                  onValueChange={(v) => update((d) => void (d.appearance.theme = v as ThemeChoice))}
-                  options={[
-                    { value: "system", label: "Auto" },
-                    { value: "light", label: "Light" },
-                    { value: "dark", label: "Dark" },
-                    { value: "warm", label: "Warm" },
-                    { value: "black", label: "Black" },
-                  ]}
-                />
+              <SettingRow title="Theme" description="Auto follows your computer's light or dark setting. The theme colours every screen, window and popup." stack>
+                <ThemePicker value={s.appearance.theme} onChange={(v) => update((d) => void (d.appearance.theme = v))} />
               </SettingRow>
-              <SettingRow title="Font" description="Uses fonts already on your computer.">
-                <Select
-                  label="Font"
-                  value={s.appearance.font}
-                  onValueChange={(v) => update((d) => void (d.appearance.font = v as FontStyle))}
-                  options={[
-                    { value: "system", label: "System" },
-                    { value: "rounded", label: "Rounded" },
-                    { value: "serif", label: "Serif" },
-                    { value: "mono", label: "Monospace" },
-                  ]}
-                />
+              <SettingRow title="Font" description="Uses fonts already on your computer; where one is missing, the closest one is used." stack>
+                <FontPicker value={s.appearance.font} onChange={(v) => update((d) => void (d.appearance.font = v))} />
               </SettingRow>
               <SettingRow title="Text size" stack>
                 <Segmented

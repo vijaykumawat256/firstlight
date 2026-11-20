@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useEffect, type ReactNode } from "react";
 import { api } from "@/api";
-import { applyTheme } from "@/design";
+import { applyTheme, themeMode } from "@/design";
 import { CALENDAR_COLOURS } from "@/design/colours";
 import { setTimeFormat } from "@/features/briefing/format";
 import { setWeekStart } from "@/features/calendar/layout";
@@ -65,6 +65,8 @@ export function SettingsApplier({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!theme) return;
     applyTheme(theme);
+    // The window's own frame follows too, so the title bar is never light around a dark theme (or the reverse).
+    void api.setWindowTheme(themeMode(theme)).catch(() => undefined);
     try {
       localStorage.setItem(THEME_CACHE, theme);
     } catch {

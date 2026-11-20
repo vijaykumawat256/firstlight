@@ -113,17 +113,25 @@ test("declined events can be shown", async ({ page }) => {
 
 test("theme and accent apply at once", async ({ page }) => {
   await openSection(page, "Appearance");
-  await page.getByRole("radio", { name: "Dark" }).click();
+  const themes = page.getByRole("radiogroup", { name: "Theme" });
+  await themes.getByRole("radio", { name: "Dark" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.getByRole("radio", { name: "Light" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-mode", "dark");
+  await themes.getByRole("radio", { name: "Light" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await page.getByRole("radio", { name: "Warm" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "warm");
-  await page.getByRole("radio", { name: "Black" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
+  await themes.getByRole("radio", { name: "Mint" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(230, 242, 236)");
+  await themes.getByRole("radio", { name: "Black" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "black");
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+  // The window's own frame goes dark too.
+  expect(await page.evaluate(() => (window as unknown as { __windowTheme?: string | null }).__windowTheme)).toBe("dark");
   await page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: "Auto" }).click();
   await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.+/);
+  await expect(page.locator("html")).not.toHaveAttribute("data-mode", /.+/);
+  expect(await page.evaluate(() => (window as unknown as { __windowTheme?: string | null }).__windowTheme)).toBeNull();
 
   await page.getByRole("radio", { name: "purple" }).click();
   await expect(page.getByRole("radio", { name: "purple" })).toHaveAttribute("aria-checked", "true");
@@ -372,8 +380,8 @@ test("font and text size apply at once, are kept, and Normal puts them back", as
   await page.getByRole("radio", { name: "Small" }).click();
   await expect.poll(size).toBeLessThan(normal);
 
-  await page.getByRole("combobox", { name: "Font" }).click();
-  await page.getByRole("option", { name: "Serif" }).click();
+  const fonts = page.getByRole("radiogroup", { name: "Font" });
+  await fonts.getByRole("radio", { name: /Serif/ }).click();
   await expect(page.locator("html")).toHaveAttribute("data-font", "serif");
   await expect.poll(() => page.locator("body").evaluate((el) => getComputedStyle(el).fontFamily)).toContain("serif");
 
@@ -382,11 +390,10 @@ test("font and text size apply at once, are kept, and Normal puts them back", as
   await page.getByRole("button", { name: "Settings" }).click();
   await section(page, "Appearance");
   await expect(page.getByRole("radio", { name: "Small" })).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByRole("combobox", { name: "Font" })).toContainText("Serif");
+  await expect(page.getByRole("radiogroup", { name: "Font" }).getByRole("radio", { name: /Serif/ })).toHaveAttribute("aria-checked", "true");
 
   await page.getByRole("radio", { name: "Normal" }).click();
-  await page.getByRole("combobox", { name: "Font" }).click();
-  await page.getByRole("option", { name: "System" }).click();
+  await page.getByRole("radiogroup", { name: "Font" }).getByRole("radio", { name: /System/ }).click();
   await expect(page.locator("html")).not.toHaveAttribute("data-text-size", /.+/);
   await expect(page.locator("html")).not.toHaveAttribute("data-font", /.+/);
   await expect.poll(size).toBeCloseTo(normal, 0);

@@ -4,10 +4,11 @@
    Design tokens. Every colour, size, radius, shadow and duration the UI uses
    is defined here. Components never use raw hex values or pixel sizes.
    Light is the default; dark follows the system unless the user overrides it
-   (html[data-theme="light" | "dark" | "warm" | "black"]; no attribute = follow the system).
+   (html[data-theme=<name>] plus html[data-mode="light" | "dark"]; no attribute = follow the system).
    ------------------------------------------------------------------------ */
 
-:root {
+:root,
+.theme-light {
   color-scheme: light;
 
   --bg: #f5f5f7;
@@ -47,6 +48,7 @@
   --cal-brown: #a2845e;
 }
 
+/* Dark, when the theme follows the system and the system is dark. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
@@ -83,8 +85,10 @@
   }
 }
 
-:root[data-theme="dark"],
-:root[data-theme="black"] {
+/* Dark, chosen: the Dark theme and the base of every dark theme (html[data-mode="dark"]; Settings previews use the
+   .theme-dark class, so each preview card is drawn with that theme's own colours). */
+:root[data-mode="dark"],
+.theme-dark {
   color-scheme: dark;
   --bg: #1c1c1e;
   --surface: #2c2c2e;
@@ -95,8 +99,8 @@
   --fg-2: #c2c2c7;
   --fg-3: #a8a8ad;
   --separator: rgb(255 255 255 / 0.1);
-  --accent: #64aaff;
-  --accent-fill: #0a6bd6;
+  --accent: #64aaff; /* lighter than the fill: it has to read as text on dark surfaces */
+  --accent-fill: #0a6bd6; /* darker: it has to carry white text */
   --accent-soft: rgb(100 170 255 / 0.12);
   --danger: #ff9a92;
   --danger-soft: rgb(255 154 146 / 0.1);
@@ -118,18 +122,11 @@
   --cal-brown: #ac8e68;
 }
 
-/* Black: the dark theme on true black (easier on OLED screens and in a dark room). Text colours are unchanged, and
-   every one of them is lighter against black than against the dark theme's grey. */
-:root[data-theme="black"] {
-  --bg: #000000;
-  --surface: #121214;
-  --surface-raised: #1f1f22;
-  --separator: rgb(255 255 255 / 0.12);
-}
-
-/* Warm: the light theme on paper tones. Text is darker than the light theme's to keep 4.5:1 on cream. */
-:root[data-theme="warm"] {
-  color-scheme: light;
+/* Themes: each changes only what differs from its base (light or dark). Every text colour is checked against every
+   surface it is drawn on (axe, in e2e: the Settings previews draw each theme, and each is scanned applied). */
+/* Warm: paper tones. Text darker than Light's to keep 4.5:1 on cream. */
+:root[data-theme="warm"],
+.theme-warm {
   --bg: #f3ede3;
   --surface: #fcf9f3;
   --surface-raised: #fffdf8;
@@ -146,11 +143,221 @@
   --warning: #7f3a00;
 }
 
-/* Font (Settings, Appearance). Only fonts already on the computer: nothing is downloaded. Each list falls back to
-   the normal system font where the style is missing (rounded exists on macOS only). */
-:root[data-font="rounded"] { --font-sans: ui-rounded, "SF Pro Rounded", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
-:root[data-font="serif"] { --font-sans: ui-serif, "New York", "Iowan Old Style", Georgia, Cambria, "Times New Roman", serif; }
-:root[data-font="mono"] { --font-sans: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, monospace; }
+/* Mint: soft green. */
+:root[data-theme="mint"],
+.theme-mint {
+  --bg: #e6f2ec;
+  --surface: #f6fbf8;
+  --surface-raised: #ffffff;
+  --fill: rgb(10 70 45 / 0.06);
+  --fill-strong: rgb(10 70 45 / 0.1);
+  --fg: #13261c;
+  --fg-2: #3b5146;
+  --fg-3: #465b50;
+  --separator: rgb(10 70 45 / 0.1);
+  --accent: #0a6b4c;
+  --accent-fill: #0a6b4c;
+  --accent-soft: rgb(10 107 76 / 0.1);
+  --danger: #b00018;
+  --warning: #7f3a00;
+}
+
+/* Sky: pale blue. */
+:root[data-theme="sky"],
+.theme-sky {
+  --bg: #e5eff8;
+  --surface: #f5f9fd;
+  --surface-raised: #ffffff;
+  --fill: rgb(10 50 90 / 0.06);
+  --fill-strong: rgb(10 50 90 / 0.1);
+  --fg: #0f1e2d;
+  --fg-2: #394a5b;
+  --fg-3: #445667;
+  --separator: rgb(10 50 90 / 0.1);
+  --accent: #0b5ca0;
+  --accent-fill: #0b5ca0;
+  --accent-soft: rgb(11 92 160 / 0.1);
+  --danger: #b00018;
+  --warning: #7f3a00;
+}
+
+/* Lavender: soft purple. */
+:root[data-theme="lavender"],
+.theme-lavender {
+  --bg: #eee9f8;
+  --surface: #faf8fd;
+  --surface-raised: #ffffff;
+  --fill: rgb(60 30 110 / 0.06);
+  --fill-strong: rgb(60 30 110 / 0.1);
+  --fg: #211933;
+  --fg-2: #4a4160;
+  --fg-3: #554b6a;
+  --separator: rgb(60 30 110 / 0.1);
+  --accent: #6639b0;
+  --accent-fill: #6639b0;
+  --accent-soft: rgb(102 57 176 / 0.1);
+  --danger: #b00018;
+  --warning: #7f3a00;
+}
+
+/* Rose: blush pink. */
+:root[data-theme="rose"],
+.theme-rose {
+  --bg: #f8e8ec;
+  --surface: #fdf7f8;
+  --surface-raised: #ffffff;
+  --fill: rgb(110 20 50 / 0.06);
+  --fill-strong: rgb(110 20 50 / 0.1);
+  --fg: #2d191f;
+  --fg-2: #584249;
+  --fg-3: #634c53;
+  --separator: rgb(110 20 50 / 0.1);
+  --accent: #a81d4b;
+  --accent-fill: #a81d4b;
+  --accent-soft: rgb(168 29 75 / 0.1);
+  --danger: #a30016;
+  --warning: #7f3a00;
+}
+
+/* Black: true black for OLED screens and dark rooms; text as Dark (lighter against black). */
+:root[data-theme="black"],
+.theme-black {
+  --bg: #000000;
+  --surface: #121214;
+  --surface-raised: #1f1f22;
+  --separator: rgb(255 255 255 / 0.12);
+}
+
+/* Midnight: deep navy. */
+:root[data-theme="midnight"],
+.theme-midnight {
+  --bg: #0c1322;
+  --surface: #152038;
+  --surface-raised: #1e2b48;
+  --fill: rgb(160 190 255 / 0.08);
+  --fill-strong: rgb(160 190 255 / 0.14);
+  --fg: #eef2fa;
+  --fg-2: #bcc6da;
+  --fg-3: #a6b1c7;
+  --separator: rgb(160 190 255 / 0.12);
+  --accent: #80b6ff;
+  --accent-fill: #2459bd;
+  --accent-soft: rgb(128 182 255 / 0.14);
+}
+
+/* Forest: deep green. */
+:root[data-theme="forest"],
+.theme-forest {
+  --bg: #0e1813;
+  --surface: #17261d;
+  --surface-raised: #203328;
+  --fill: rgb(170 230 195 / 0.08);
+  --fill-strong: rgb(170 230 195 / 0.14);
+  --fg: #edf5ef;
+  --fg-2: #bacdc1;
+  --fg-3: #a3b8ab;
+  --separator: rgb(170 230 195 / 0.12);
+  --accent: #72d4a3;
+  --accent-fill: #1c714c;
+  --accent-soft: rgb(114 212 163 / 0.14);
+}
+
+/* Grape: deep purple. */
+:root[data-theme="grape"],
+.theme-grape {
+  --bg: #181122;
+  --surface: #241932;
+  --surface-raised: #302241;
+  --fill: rgb(210 180 255 / 0.08);
+  --fill-strong: rgb(210 180 255 / 0.14);
+  --fg: #f4eefa;
+  --fg-2: #cbbfdb;
+  --fg-3: #b6a8c8;
+  --separator: rgb(210 180 255 / 0.12);
+  --accent: #caa6ff;
+  --accent-fill: #7240c2;
+  --accent-soft: rgb(202 166 255 / 0.14);
+}
+
+/* Mocha: warm dark brown. */
+:root[data-theme="mocha"],
+.theme-mocha {
+  --bg: #1b1512;
+  --surface: #281f1a;
+  --surface-raised: #342922;
+  --fill: rgb(255 220 190 / 0.08);
+  --fill-strong: rgb(255 220 190 / 0.14);
+  --fg: #f6efe9;
+  --fg-2: #d2c4b8;
+  --fg-3: #bcad9f;
+  --separator: rgb(255 220 190 / 0.12);
+  --accent: #f2b57c;
+  --accent-fill: #9c5419;
+  --accent-soft: rgb(242 181 124 / 0.14);
+}
+
+/* Slate: cool blue-grey, lighter than Dark. */
+:root[data-theme="slate"],
+.theme-slate {
+  --bg: #2b313c;
+  --surface: #373e4c;
+  --surface-raised: #424a5a;
+  --fill: rgb(220 230 245 / 0.08);
+  --fill-strong: rgb(220 230 245 / 0.14);
+  --fg: #eef1f6;
+  --fg-2: #d3d9e3;
+  --fg-3: #c2c9d5;
+  --separator: rgb(220 230 245 / 0.12);
+  --accent: #b2deea;
+  --accent-fill: #2f6680;
+  --accent-soft: rgb(178 222 234 / 0.12);
+  --danger: #ffaaa3;
+  --warning: #ffc061;
+}
+
+/* Font (Settings, Appearance). Only fonts already on the computer: nothing is downloaded. Each list ends in a font
+   Windows has, then the generic family, so every choice looks right on both systems. */
+:root {
+  --font-rounded: ui-rounded, "SF Pro Rounded", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-serif: ui-serif, "New York", "Iowan Old Style", Georgia, Cambria, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, monospace;
+  --font-avenir: "Avenir Next", Avenir, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-helvetica: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-futura: Futura, "Century Gothic", "Trebuchet MS", sans-serif;
+  --font-optima: Optima, Candara, "Segoe UI", sans-serif;
+  --font-georgia: Georgia, "Times New Roman", serif;
+  --font-palatino: Palatino, "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-baskerville: Baskerville, "Baskerville Old Face", "Libre Baskerville", Georgia, serif;
+  --font-verdana: Verdana, Geneva, Tahoma, sans-serif;
+  --font-trebuchet: "Trebuchet MS", "Lucida Grande", Tahoma, sans-serif;
+  --font-typewriter: "American Typewriter", "Courier New", Courier, monospace;
+}
+:root[data-font="rounded"] { --font-sans: var(--font-rounded); }
+.font-pick-rounded { font-family: var(--font-rounded); }
+:root[data-font="serif"] { --font-sans: var(--font-serif); }
+.font-pick-serif { font-family: var(--font-serif); }
+:root[data-font="mono"] { --font-sans: var(--font-mono); }
+.font-pick-mono { font-family: var(--font-mono); }
+:root[data-font="avenir"] { --font-sans: var(--font-avenir); }
+.font-pick-avenir { font-family: var(--font-avenir); }
+:root[data-font="helvetica"] { --font-sans: var(--font-helvetica); }
+.font-pick-helvetica { font-family: var(--font-helvetica); }
+:root[data-font="futura"] { --font-sans: var(--font-futura); }
+.font-pick-futura { font-family: var(--font-futura); }
+:root[data-font="optima"] { --font-sans: var(--font-optima); }
+.font-pick-optima { font-family: var(--font-optima); }
+:root[data-font="georgia"] { --font-sans: var(--font-georgia); }
+.font-pick-georgia { font-family: var(--font-georgia); }
+:root[data-font="palatino"] { --font-sans: var(--font-palatino); }
+.font-pick-palatino { font-family: var(--font-palatino); }
+:root[data-font="baskerville"] { --font-sans: var(--font-baskerville); }
+.font-pick-baskerville { font-family: var(--font-baskerville); }
+:root[data-font="verdana"] { --font-sans: var(--font-verdana); }
+.font-pick-verdana { font-family: var(--font-verdana); }
+:root[data-font="trebuchet"] { --font-sans: var(--font-trebuchet); }
+.font-pick-trebuchet { font-family: var(--font-trebuchet); }
+:root[data-font="typewriter"] { --font-sans: var(--font-typewriter); }
+.font-pick-typewriter { font-family: var(--font-typewriter); }
 
 /* Text size (Settings, Appearance): every text size below is multiplied by this. */
 :root { --text-scale: 1; }
@@ -248,8 +455,7 @@
     --accent-fill: color-mix(in srgb, var(--accent-base) 50%, black);
   }
 }
-:root[data-theme="dark"][data-accent],
-:root[data-theme="black"][data-accent] {
+:root[data-mode="dark"][data-accent] {
   --accent: color-mix(in srgb, var(--accent-base) 55%, white);
   --accent-fill: color-mix(in srgb, var(--accent-base) 50%, black);
 }

@@ -299,8 +299,8 @@ export interface ImapMailbox {
 export type DefaultView = "briefing" | "day" | "week" | "month";
 export type WeekStart = "auto" | "monday" | "sunday" | "saturday";
 export type TimeFormat = "auto" | "h12" | "h24";
-export type ThemeChoice = "system" | "light" | "dark" | "warm" | "black";
-export type FontStyle = "system" | "rounded" | "serif" | "mono";
+export type ThemeChoice = "system" | "light" | "warm" | "mint" | "sky" | "lavender" | "rose" | "dark" | "black" | "midnight" | "forest" | "grape" | "mocha" | "slate";
+export type FontStyle = "system" | "rounded" | "serif" | "mono" | "avenir" | "helvetica" | "futura" | "optima" | "georgia" | "palatino" | "baskerville" | "verdana" | "trebuchet" | "typewriter";
 export type TextSize = "small" | "default" | "large" | "larger";
 
 export interface AppSettings {

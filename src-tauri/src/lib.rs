@@ -766,7 +766,8 @@ mod capability_tests {
     #[test]
     fn the_up_next_panel_can_only_read_and_dismiss() {
         let p = permissions(include_str!("../capabilities/upnext.json"));
-        assert!(p.len() <= 9, "keep this list short: {p:?}");
+        // 10 since the panel's frame follows the theme (`core:window:allow-set-theme`: light or dark, nothing else).
+        assert!(p.len() <= 10, "keep this list short: {p:?}");
         for forbidden in [
             "erase",
             "set-settings",
@@ -894,6 +895,7 @@ mod capability_tests {
                     "core:event:allow-listen"
                         | "core:event:allow-unlisten"
                         | "core:window:allow-start-dragging"
+                        | "core:window:allow-set-theme"
                         | "opener:allow-open-url"
                 )),
             "unexpected permission: {p:?}"

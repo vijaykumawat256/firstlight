@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
 import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus } from "./types";
@@ -50,6 +51,7 @@ export const tauriBackend: Backend = {
   exportOwnEvents: () => invoke("export_own_events"),
   skipOccurrence: (id) => invoke("skip_event_occurrence", { id }),
   getSystemAccent: () => invoke("get_system_accent"),
+  setWindowTheme: (mode) => getCurrentWindow().setTheme(mode),
   inviteSenders: () => invoke("invite_senders"),
   invitePreview: (id, mailboxId, kind) => invoke("invite_preview", { id, mailboxId, kind }),
   sendInviteMail: (id, recipients, mailboxId, kind) => invoke("send_invite_mail", { id, recipients, mailboxId, kind }),

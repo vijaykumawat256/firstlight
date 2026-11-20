@@ -19,7 +19,7 @@ describe("the up-next window's permissions match what its code does", () => {
   const caps = JSON.parse(read("src-tauri/capabilities/upnext.json")) as { permissions: Array<string | { identifier: string }> };
   const granted = new Set(caps.permissions.map((p) => (typeof p === "string" ? p : p.identifier)));
   // Calls that go through events or the opener plugin rather than a command.
-  const viaPlugin: Record<string, string> = { onUpNextShown: "core:event:allow-listen", onSettingsChanged: "core:event:allow-listen", onUnlock: "core:event:allow-listen", openUrl: "opener:allow-open-url" };
+  const viaPlugin: Record<string, string> = { onUpNextShown: "core:event:allow-listen", onSettingsChanged: "core:event:allow-listen", onUnlock: "core:event:allow-listen", openUrl: "opener:allow-open-url", setWindowTheme: "core:window:allow-set-theme" };
 
   it("only calls things it is allowed to", () => {
     const map = commandOf();

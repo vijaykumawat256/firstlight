@@ -126,6 +126,8 @@ test("planning with AI needs its own agreement, shows what is sent, and falls ba
   const consent = page.getByRole("dialog", { name: "Plan with AI?" });
   await expect(consent.getByLabel("What would be sent")).toContainText("Review Sam's slides");
   expect(await page.evaluate(() => (window as unknown as { __planAsked?: number }).__planAsked ?? 0)).toBe(0);
+  // Let the dialog finish fading in, or axe measures half-faded colours.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))).then(() => undefined));
   expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
   await consent.getByRole("button", { name: "Agree and ask AI" }).click();
   const dialog = page.getByRole("dialog", { name: "Plan my day" });

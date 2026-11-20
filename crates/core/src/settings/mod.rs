@@ -63,8 +63,17 @@ pub enum Theme {
     Dark,
     /// Light, on paper tones.
     Warm,
+    Mint,
+    Sky,
+    Lavender,
+    Rose,
     /// Dark, on true black.
     Black,
+    Midnight,
+    Forest,
+    Grape,
+    Mocha,
+    Slate,
 }
 
 /// The typeface for the whole app. Only fonts already on the computer; a style the system lacks falls back to the
@@ -77,6 +86,16 @@ pub enum FontStyle {
     Rounded,
     Serif,
     Mono,
+    Avenir,
+    Helvetica,
+    Futura,
+    Optima,
+    Georgia,
+    Palatino,
+    Baskerville,
+    Verdana,
+    Trebuchet,
+    Typewriter,
 }
 
 /// How big text is, relative to the normal size.

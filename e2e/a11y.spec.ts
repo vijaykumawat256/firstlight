@@ -199,14 +199,14 @@ for (const scheme of ["light", "dark"] as const) {
 }
 
 // Warm and Black set their own colours: scan the main screens in each, with the default and every custom accent.
-for (const theme of ["Warm", "Black"] as const) {
+for (const theme of ["Warm", "Mint", "Sky", "Lavender", "Rose", "Black", "Midnight", "Forest", "Grape", "Mocha", "Slate"] as const) {
   test(`${theme} theme keeps everything readable`, async ({ page }) => {
     test.setTimeout(120_000);
     await page.clock.install({ time: at(9, 30) });
     await page.goto("/?mailon&aion&tasks");
     await page.getByRole("button", { name: "Settings" }).click();
     await section(page, "Appearance");
-    await page.getByRole("radio", { name: theme }).click();
+    await page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: theme }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme.toLowerCase());
     await scan(page, `${theme}: appearance settings`);
     for (const accent of ["red", "orange", "green", "teal", "indigo", "purple", "pink", "Default"]) {
@@ -235,9 +235,9 @@ test("the largest text size and every font stay readable and fit the narrow wind
   await page.getByRole("button", { name: "Settings" }).click();
   await section(page, "Appearance");
   await page.getByRole("radio", { name: "Larger" }).click();
-  for (const font of ["Rounded", "Serif", "Monospace"]) {
-    await page.getByRole("combobox", { name: "Font" }).click();
-    await page.getByRole("option", { name: font }).click();
+  for (const font of ["Rounded", "Serif", "Monospace", "Avenir", "Futura", "Baskerville", "Verdana", "Typewriter"]) {
+    await page.getByRole("radiogroup", { name: "Font" }).getByRole("radio", { name: font }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-font", /.+/);
     await scan(page, `larger text, ${font}`);
   }
   await toList(page);

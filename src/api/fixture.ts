@@ -604,6 +604,9 @@ export const fixtureBackend: Backend = {
   async getSystemAccent() {
     return params.get("sysaccent");
   },
+  async setWindowTheme(mode) {
+    (window as unknown as { __windowTheme?: string | null }).__windowTheme = mode;
+  },
   async getOwnEvent(id) {
     const rec = findRecord(id);
     return rec ? { id: rec.id, input: structuredClone(rec.input), saved_to: rec.destination ?? null } : null;
