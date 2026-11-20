@@ -85,3 +85,39 @@ pub fn time_report(
         &events, &calendars, &focus, from, to, now, tz, bs,
     ))
 }
+
+/// What the time-off page and the briefing need: today off?, the next stretch, meetings on days off, holidays.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TimeOffStatus {
+    pub off_today: Option<crate::day::TimeOff>,
+    /// The next stretch that has not ended (today's included).
+    pub next: Option<crate::day::TimeOff>,
+    pub clashes: Vec<crate::timeoff::Clash>,
+    pub holidays: Vec<crate::timeoff::Holiday>,
+}
+
+pub fn time_off_status(
+    store: &Store,
+    now: DateTime<Utc>,
+    tz: Tz,
+    bs: &BriefingSettings,
+    ds: &crate::day::DaySettings,
+) -> Result<TimeOffStatus> {
+    let today = now.with_timezone(&tz).date_naive();
+    let events = crate::dedupe::dedupe(store.events_between(
+        now - Duration::days(1),
+        now + Duration::days(crate::timeoff::LOOK_AHEAD_DAYS),
+    )?);
+    let holiday_calendars = store
+        .list_calendars()?
+        .into_iter()
+        .filter(crate::timeoff::is_holiday_calendar)
+        .map(|c| c.id)
+        .collect();
+    Ok(TimeOffStatus {
+        off_today: ds.off_on(today).cloned(),
+        next: ds.time_off.iter().find(|t| t.to >= today).cloned(),
+        clashes: crate::timeoff::clashes(&events, &ds.time_off, now, tz, bs),
+        holidays: crate::timeoff::holidays(&events, &holiday_calendars, today, 8),
+    })
+}

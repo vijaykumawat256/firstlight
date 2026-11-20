@@ -17,7 +17,7 @@ import { FindATime } from "@/features/events/FindATime";
 import { useSearch } from "@/features/search/store";
 import { InboxSection } from "./InboxSection";
 import { TasksSection } from "@/features/tasks/TasksSection";
-import { LunchCard, TravelCard, WeekReviewCard, WrapUpCard } from "@/features/tasks/DayCards";
+import { LunchCard, TimeOffCard, TravelCard, WeekReviewCard, WrapUpCard } from "@/features/tasks/DayCards";
 import { FollowUpCard } from "@/features/meetings/FollowUpCard";
 import { summarise } from "./summary";
 
@@ -143,6 +143,7 @@ export function BriefingScreen() {
           />
         ) : dayIsEmpty ? (
           <div className="flex flex-col gap-6">
+            <TimeOffCard />
             <WrapUpCard />
             <ClearWeek colourOf={colourOf} onOpen={setDetail} />
             <TasksSection />
@@ -150,6 +151,7 @@ export function BriefingScreen() {
         ) : (
           <div className="flex flex-col gap-6">
             {b.next ? <UpNextCard next={b.next} now={now} colourOf={colourOf} onJoin={join} onOpen={setDetail} /> : <ClearDay />}
+            <TimeOffCard />
             <FollowUpCard />
             <WrapUpCard />
             {sections.attention && <AttentionSection b={b} />}

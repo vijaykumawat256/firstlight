@@ -28,6 +28,7 @@
     "allow-disable-task-sync",
     "allow-sync-tasks-now",
     "allow-get-week-review",
+    "allow-get-time-off-status",
     "allow-stop-focus-timer",
     "allow-start-focus-timer",
     "allow-get-focus-timer",

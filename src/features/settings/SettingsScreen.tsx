@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, CalendarDays, ChevronLeft, Info, LockOpen, Mail, Palette, Settings2, ShieldCheck, Sparkles, Sunrise, type LucideIcon } from "lucide-react";
+import { Bell, CalendarDays, ChevronLeft, Info, LockOpen, Mail, Palette, Palmtree, Settings2, ShieldCheck, Sparkles, Sunrise, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type DefaultView, type TextSize, type TimeFormat, type WeekStart } from "@/api";
 import { useNav, type View } from "@/app/nav";
 import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
 import { FontPicker, ThemePicker } from "./LookPickers";
+import { TimeOffSettings } from "./TimeOffSettings";
 import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
 import { AiGroup, EmailGroup, SendingGroup, TaskSyncGroup } from "./EmailAiSettings";
 import { COMMON_ZONES, zoneLabel } from "@/features/calendar/zones";
@@ -13,7 +14,7 @@ import { useSettings } from "./useSettings";
 
 const ACCENTS = ["system", ...CALENDAR_COLOURS.filter((c) => !["blue", "yellow", "brown"].includes(c))];
 
-type Section = "general" | "appearance" | "briefing" | "appears" | "notifications" | "email" | "ai" | "privacy";
+type Section = "general" | "appearance" | "briefing" | "appears" | "notifications" | "timeoff" | "email" | "ai" | "privacy";
 interface HomeItem {
   title: string;
   description: string;
@@ -34,6 +35,7 @@ const HOME: HomeItem[][] = [
     { section: "briefing", title: "Briefing", description: "What the briefing shows and your working hours", icon: Sunrise },
     { section: "appears", title: "When it appears", description: "Unlock rules, days and quiet hours", icon: LockOpen },
     { section: "notifications", title: "Notifications", description: "Meeting heads-ups and daily summaries", icon: Bell },
+    { section: "timeoff", title: "Time off", description: "Days off, holidays and an out-of-office reply", icon: Palmtree },
   ],
   [
     { view: "accounts", title: "Accounts & calendars", description: "Connect accounts, choose calendars and colours", icon: CalendarDays },
@@ -526,6 +528,7 @@ export function SettingsScreen() {
           </div>
         )}
         {section === "ai" && <AiGroup />}
+        {section === "timeoff" && <TimeOffSettings />}
         {section === "privacy" && (
           <div className="flex flex-col gap-7">
             <Group title="Backup">

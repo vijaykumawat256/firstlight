@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, StatusReport, TimeReport, FocusTimer, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, StatusReport, TimeReport, FocusTimer, TimeOffStatus, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -1070,6 +1070,23 @@ export const fixtureBackend: Backend = {
       tasks_done: tasks.filter((t) => t.done_at && Date.parse(t.done_at) >= monday.getTime()).length,
       busiest: null,
     } satisfies WeekReview;
+  },
+  async getTimeOffStatus() {
+    // A small stand-in for crates/logic/src/timeoff.rs.
+    const today = ymd(new Date());
+    const off = settings.day.time_off;
+    const within = (d: string) => off.find((t) => t.from <= d && d <= t.to) ?? null;
+    const ids = visibleCalendarIds();
+    const clashes = fixtureEvents(new Date())
+      .concat(fixtureEvents(new Date(Date.now() + 7 * 86_400_000)))
+      .filter((e) => ids.has(e.calendar_id) && e.status !== "cancelled" && e.my_response !== "declined" && e.when.kind === "timed" && Date.parse(e.when.start) >= Date.now())
+      .map((e) => (e.when.kind === "timed" ? { e, day: ymd(new Date(e.when.start)) } : null))
+      .filter((x): x is NonNullable<typeof x> => !!x && !!within(x.day))
+      .map(({ e }) => ({ event_id: e.id, title: e.title, start: e.when.kind === "timed" ? e.when.start : "", organizer: e.attendees.find((a) => a.organizer)?.email ?? null, off: within(e.when.kind === "timed" ? ymd(new Date(e.when.start)) : "")! }))
+      .filter((c, i, all) => all.findIndex((x) => x.event_id === c.event_id) === i);
+    const next = new Date(Date.now() + 9 * 86_400_000);
+    const holidays = params.has("holidays") ? [{ date: ymd(next), name: "Founders' Day" }] : [];
+    return { off_today: within(today), next: off.find((t) => t.to >= today) ?? null, clashes, holidays } satisfies TimeOffStatus;
   },
   async getFocusTimer() {
     expireTimer();

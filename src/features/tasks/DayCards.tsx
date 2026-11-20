@@ -2,13 +2,21 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { StatusReportDialog } from "@/features/insights/StatusReport";
 import { TimeReportSheet } from "@/features/insights/TimeReport";
-import { BarChart3, Car, Moon, UtensilsCrossed } from "lucide-react";
+import { BarChart3, Car, Moon, Palmtree, UtensilsCrossed } from "lucide-react";
+import { useNav } from "@/app/nav";
+import { useSettings } from "@/features/settings/useSettings";
 import { api, errorMessage } from "@/api";
 import { Button, Card, useToasts } from "@/design";
 import { formatDate, formatTime } from "@/features/briefing/format";
 import { useTaskChanged, useTaskLists } from "./shared";
 
 const pad = (n: number) => String(n).padStart(2, "0");
+/** The local date `days` from today, YYYY-MM-DD. */
+const ymdIn = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 const tomorrowYmd = () => {
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -183,6 +191,51 @@ export function WeekReviewCard() {
       </Card>
       {writing && <StatusReportDialog initial="weekly" onClose={() => setWriting(false)} />}
       {timeReport && <TimeReportSheet onClose={() => setTimeReport(false)} />}
+    </section>
+  );
+}
+
+/** On a day off, say so; in the week before time off, show how many meetings fall in it and where to sort them out. */
+export function TimeOffCard() {
+  const offDays = useSettings().settings?.day.time_off;
+  const status = useQuery({ queryKey: ["time-off", offDays], queryFn: () => api.getTimeOffStatus(), staleTime: 5 * 60_000, enabled: !!offDays && offDays.length > 0 });
+  const go = useNav((s) => s.go);
+  const setSection = useNav((s) => s.setSettingsSection);
+  const st = status.data;
+  if (!st || !offDays?.length) return null;
+  const open = () => {
+    go("settings");
+    setSection("timeoff");
+  };
+  if (st.off_today) {
+    return (
+      <section aria-label="Time off">
+        <Card className="flex items-start gap-3">
+          <Palmtree className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-headline font-semibold text-fg">You're off today</h2>
+            <p className="text-body text-fg-2">{st.off_today.label ? `${st.off_today.label}. ` : ""}Only meeting heads-ups will come. Enjoy it.</p>
+          </div>
+        </Card>
+      </section>
+    );
+  }
+  const next = st.next;
+  if (!next) return null;
+  if (next.from > ymdIn(7)) return null;
+  const inIt = st.clashes.filter((c) => c.off.from === next.from).length;
+  return (
+    <section aria-label="Time off">
+      <Card className="flex items-start gap-3">
+        <Palmtree className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-headline font-semibold text-fg">Time off from {formatDate(new Date(`${next.from}T00:00:00`))}</h2>
+          <p className="text-body text-fg-2">{inIt === 0 ? "No meetings while you're away." : inIt === 1 ? "1 meeting falls while you're away." : `${inIt} meetings fall while you're away.`}</p>
+          <Button className="mt-2" size="sm" variant="secondary" onClick={open}>
+            {inIt > 0 ? "Sort them out" : "Out-of-office reply"}
+          </Button>
+        </div>
+      </Card>
     </section>
   );
 }

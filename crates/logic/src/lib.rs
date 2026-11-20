@@ -20,6 +20,7 @@ pub mod report;
 pub mod review;
 pub mod tasks;
 pub mod tasksync;
+pub mod timeoff;
 pub mod timereport;
 pub mod tz;
 pub mod weekahead;

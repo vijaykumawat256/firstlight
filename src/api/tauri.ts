@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, StatusReport, TimeReport, FocusTimer } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, StatusReport, TimeReport, FocusTimer, TimeOffStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -30,6 +30,7 @@ export const tauriBackend: Backend = {
   getWeekReview: () => invoke<WeekReview>("get_week_review"),
   getStatusReport: (kind) => invoke<StatusReport>("get_status_report", { kind }),
   getFocusTimer: () => invoke<FocusTimer | null>("get_focus_timer"),
+  getTimeOffStatus: () => invoke<TimeOffStatus>("get_time_off_status"),
   startFocusTimer: (taskId, minutes) => invoke<FocusTimer>("start_focus_timer", { taskId, minutes }),
   stopFocusTimer: () => invoke<number>("stop_focus_timer"),
   getTimeReport: (from, to) => invoke<TimeReport>("get_time_report", { from, to }),

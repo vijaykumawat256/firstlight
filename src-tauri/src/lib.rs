@@ -472,6 +472,7 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            tasks_cmd::get_time_off_status,
             timer::stop_focus_timer,
             timer::start_focus_timer,
             timer::get_focus_timer,

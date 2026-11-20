@@ -48,6 +48,7 @@ fn main() {
             "disable_task_sync",
             "sync_tasks_now",
             "get_week_review",
+            "get_time_off_status",
             "stop_focus_timer",
             "start_focus_timer",
             "get_focus_timer",

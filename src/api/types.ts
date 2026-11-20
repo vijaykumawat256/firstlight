@@ -189,6 +189,14 @@ export interface WeekReview {
   busiest: [string, number] | null;
 }
 
+/** Days off and what touches them (crates/logic/src/timeoff.rs). */
+export interface TimeOffStatus {
+  off_today: TimeOff | null;
+  next: TimeOff | null;
+  clashes: { event_id: string; title: string; start: string; organizer: string | null; off: TimeOff }[];
+  holidays: { date: string; name: string }[];
+}
+
 /** A running focus timer on a task. */
 export interface FocusTimer {
   task_id: string;

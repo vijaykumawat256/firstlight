@@ -282,3 +282,20 @@ pub async fn export_time_report(
     let _ = app.opener().reveal_item_in_dir(&path);
     Ok(path.display().to_string())
 }
+
+/// Days off: whether today is one, the next stretch, meetings that fall on them, and public holidays coming up.
+#[tauri::command]
+pub async fn get_time_off_status(
+    state: State<'_, AppState>,
+) -> CmdResult<firstlight_core::meeting_flow::TimeOffStatus> {
+    let store = lock_store(&state)?;
+    let settings = store.load_settings();
+    firstlight_core::meeting_flow::time_off_status(
+        &store,
+        Utc::now(),
+        crate::local_tz(),
+        &settings.briefing,
+        &settings.day,
+    )
+    .map_err(internal("checking your time off"))
+}
