@@ -387,6 +387,7 @@ export interface AppSettings {
     write_to_calendar_app: boolean;
     writable_accounts: string[];
     join_shortcut: string | null;
+    capture_shortcut: string | null;
     tray_next_meeting: boolean;
     check_for_updates: boolean;
     update_channel: "stable" | "beta";

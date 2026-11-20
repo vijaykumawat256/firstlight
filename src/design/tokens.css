@@ -511,7 +511,8 @@ body {
 }
 
 /* The compact up-next panel floats in its own transparent window: only its card is painted. */
-:root[data-view="upnext"] body {
+:root[data-view="upnext"] body,
+:root[data-view="capture"] body {
   background: transparent;
 }
 

@@ -1619,6 +1619,7 @@ fn apply_and_save(app: &AppHandle, state: &AppState, mut s: AppSettings) -> CmdR
         app,
         s.general.global_shortcut.as_deref(),
         s.general.join_shortcut.as_deref(),
+        s.general.capture_shortcut.as_deref(),
     )?;
     lock_store(state)?
         .save_settings(&s)
@@ -1690,7 +1691,7 @@ pub async fn erase_all_data(app: AppHandle, state: State<'_, AppState>) -> CmdRe
         report.credentials
     );
     let _ = app.autolaunch().disable();
-    let _ = crate::apply_shortcut(&app, None, None);
+    let _ = crate::apply_shortcut(&app, None, None, None);
     let _ = app.emit("settings-changed", ());
     let _ = app.emit(
         "sync-finished",
@@ -1776,4 +1777,11 @@ mod accent_tests {
             assert_eq!(accent_name(none), None, "{none}");
         }
     }
+}
+
+/// Hides the quick capture box (Escape, or after something was added).
+#[tauri::command]
+pub async fn hide_capture(app: AppHandle) -> CmdResult<()> {
+    crate::hide_capture(&app);
+    Ok(())
 }

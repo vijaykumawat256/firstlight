@@ -1,3 +1,4 @@
+import { CapturePanel } from "@/features/capture/CapturePanel";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Suspense, lazy, useEffect, useState } from "react";
 import { api } from "@/api";
@@ -89,7 +90,7 @@ export default function App() {
       <TooltipProvider>
         <ToastHost>
           <SettingsApplier>
-            {hash === "#/upnext" ? <UpNextPanel /> : import.meta.env.DEV && hash === "#/gallery" ? <Suspense fallback={<ScreenSkeleton />}><Gallery /></Suspense> : <Shell />}
+            {hash === "#/upnext" ? <UpNextPanel /> : hash === "#/capture" ? <CapturePanel /> : import.meta.env.DEV && hash === "#/gallery" ? <Suspense fallback={<ScreenSkeleton />}><Gallery /></Suspense> : <Shell />}
           </SettingsApplier>
         </ToastHost>
       </TooltipProvider>

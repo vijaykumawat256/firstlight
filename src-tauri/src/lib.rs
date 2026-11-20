@@ -136,6 +136,7 @@ pub(crate) fn apply_shortcut(
     app: &AppHandle,
     show: Option<&str>,
     join: Option<&str>,
+    capture: Option<&str>,
 ) -> Result<(), String> {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
     let gs = app.global_shortcut();
@@ -158,7 +159,61 @@ pub(crate) fn apply_shortcut(
         })
         .map_err(|_| taken())?;
     }
+    if let Some(s) = capture {
+        gs.on_shortcut(s, |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                show_capture(app);
+            }
+        })
+        .map_err(|_| taken())?;
+    }
     Ok(())
+}
+
+const CAPTURE_WINDOW: &str = "capture";
+
+/// Shows the quick capture box in the middle of the screen, over whatever app is in front, creating it the first time.
+pub(crate) fn show_capture(app: &AppHandle) {
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+    if let Some(win) = app.get_webview_window(CAPTURE_WINDOW) {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.hide();
+            return;
+        }
+        let _ = win.center();
+        let _ = win.show();
+        let _ = win.set_focus();
+        let _ = win.emit("capture-shown", ());
+        return;
+    }
+    let built = WebviewWindowBuilder::new(
+        app,
+        CAPTURE_WINDOW,
+        WebviewUrl::App("index.html#/capture".into()),
+    )
+    .title("Quick capture")
+    .inner_size(520.0, 176.0)
+    .resizable(false)
+    .decorations(false)
+    .transparent(cfg!(target_os = "macos"))
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .center()
+    .focused(true)
+    .shadow(true)
+    .build();
+    match built {
+        Ok(win) => {
+            let _ = win.set_focus();
+        }
+        Err(e) => log::error!("could not create the capture box: {e}"),
+    }
+}
+
+pub(crate) fn hide_capture(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window(CAPTURE_WINDOW) {
+        let _ = win.hide();
+    }
 }
 
 /// Opens the video link of the meeting that is starting soon or already running, or says there is none.
@@ -472,6 +527,7 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            commands::hide_capture,
             tasks_cmd::get_time_off_status,
             timer::stop_focus_timer,
             timer::start_focus_timer,
@@ -678,6 +734,7 @@ pub fn run() {
                 app.handle(),
                 startup_settings.general.global_shortcut.as_deref(),
                 startup_settings.general.join_shortcut.as_deref(),
+                startup_settings.general.capture_shortcut.as_deref(),
             ) {
                 log::warn!("saved shortcut not registered: {e}");
             }
@@ -881,6 +938,32 @@ mod capability_tests {
         // The dev server is only trusted in debug builds, and only on the exact port.
         assert_eq!(ok("http://localhost:1420/"), cfg!(debug_assertions));
         assert!(!ok("http://localhost:9999/"));
+    }
+
+    /// The capture box adds a task or an event and hides itself; it can never read your calendar, change settings,
+    /// erase anything or touch accounts.
+    #[test]
+    fn the_capture_box_can_only_add_and_hide() {
+        let caps: Value =
+            serde_json::from_str(include_str!("../capabilities/capture.json")).unwrap();
+        assert_eq!(caps["windows"], serde_json::json!(["capture"]));
+        let p = permissions(include_str!("../capabilities/capture.json"));
+        let allowed = [
+            "core:event:allow-listen",
+            "core:event:allow-unlisten",
+            "core:window:allow-set-theme",
+            "allow-get-settings",
+            "allow-get-system-accent",
+            "allow-add-task",
+            "allow-create-event",
+            "allow-hide-capture",
+        ];
+        for x in &p {
+            assert!(
+                allowed.contains(&x.as_str()),
+                "capture box must not have {x}"
+            );
+        }
     }
 
     #[test]

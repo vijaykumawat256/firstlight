@@ -41,3 +41,21 @@ describe("the up-next window's permissions match what its code does", () => {
     for (const p of granted) expect(p).not.toMatch(/erase|set-settings|add-|remove|rename|import|enable|oauth|autostart/);
   });
 });
+
+describe("the capture box's permissions match what its code does", () => {
+  const caps = JSON.parse(read("src-tauri/capabilities/capture.json")) as { permissions: Array<string | { identifier: string }> };
+  const granted = new Set(caps.permissions.map((p) => (typeof p === "string" ? p : p.identifier)));
+  const viaPlugin: Record<string, string> = { onSettingsChanged: "core:event:allow-listen", onUnlock: "core:event:allow-listen", onCaptureShown: "core:event:allow-listen", setWindowTheme: "core:window:allow-set-theme" };
+
+  it("only calls things it is allowed to", () => {
+    const map = commandOf();
+    const used = new Set(["src/features/capture/CapturePanel.tsx", "src/features/settings/SettingsApplier.tsx"].flatMap((f) => apiCalls(read(f))));
+    const missing: string[] = [];
+    for (const method of used) {
+      const need = viaPlugin[method] ?? (map[method] ? `allow-${map[method].replace(/_/g, "-")}` : undefined);
+      if (!need) missing.push(`${method}: cannot tell which permission it needs`);
+      else if (!granted.has(need)) missing.push(`${method} needs ${need}`);
+    }
+    expect(missing).toEqual([]);
+  });
+});

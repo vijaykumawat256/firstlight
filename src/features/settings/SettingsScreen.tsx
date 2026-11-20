@@ -192,6 +192,9 @@ export function SettingsScreen() {
               <SettingRow title="Show or hide the briefing" description="A shortcut that works from any app.">
                 <ShortcutRecorder value={s.general.global_shortcut} onChange={(v) => update((d) => void (d.general.global_shortcut = v))} />
               </SettingRow>
+              <SettingRow title="Quick capture" description="Opens a small box over any app: type a task or an event and press Return.">
+                <ShortcutRecorder label="Quick capture shortcut" value={s.general.capture_shortcut} onChange={(v) => update((d) => void (d.general.capture_shortcut = v))} />
+              </SettingRow>
               <SettingRow title="Join the next meeting" description="Opens the video link of the meeting that is starting soon or running.">
                 <ShortcutRecorder label="Join shortcut" value={s.general.join_shortcut} onChange={(v) => update((d) => void (d.general.join_shortcut = v))} />
               </SettingRow>

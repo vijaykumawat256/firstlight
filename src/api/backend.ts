@@ -147,6 +147,9 @@ export interface Backend {
   openBriefing(): Promise<void>;
   /** Fires each time the small panel is shown, so it can reload. */
   onUpNextShown(callback: () => void): Promise<() => void>;
+  /** The quick capture box: hide it, and hear when the shortcut shows it again. */
+  hideCapture(): Promise<void>;
+  onCaptureShown(callback: () => void): Promise<() => void>;
   listAccounts(): Promise<AccountView[]>;
   /** Connects a calendar by link. Rejects with a plain-language message if it can't be read. */
   addIcsAccount(name: string, url: string): Promise<AccountView>;

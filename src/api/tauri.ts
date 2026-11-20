@@ -49,6 +49,8 @@ export const tauriBackend: Backend = {
   dismissUpNext: () => invoke<void>("dismiss_up_next"),
   openBriefing: () => invoke<void>("open_briefing"),
   onUpNextShown: async (callback) => listen("up-next-shown", () => callback()),
+  hideCapture: () => invoke<void>("hide_capture"),
+  onCaptureShown: async (callback) => listen("capture-shown", () => callback()),
   getMailDigest: (force) => invoke<MailResult>("get_mail_digest", { force }),
   enableAppleMail: () => invoke<AppSettings>("enable_apple_mail"),
   enableAccountMail: (accountId) => invoke<AppSettings>("enable_account_mail", { accountId }),

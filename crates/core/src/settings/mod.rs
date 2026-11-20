@@ -179,6 +179,8 @@ pub struct GeneralSettings {
     pub show_in_dock: bool,
     /// A global shortcut that opens the video link of the meeting that is starting or running.
     pub join_shortcut: Option<String>,
+    /// Opens the quick capture box over any app (type a task or an event). Off until chosen.
+    pub capture_shortcut: Option<String>,
     /// Show the next meeting next to the menu-bar icon. Off by default: titles in a menu bar are visible to
     /// anyone looking at the screen, including in a screen share.
     pub tray_next_meeting: bool,
@@ -199,6 +201,7 @@ impl Default for GeneralSettings {
             write_to_calendar_app: false,
             writable_accounts: Vec::new(),
             join_shortcut: None,
+            capture_shortcut: None,
             tray_next_meeting: false,
             check_for_updates: true,
             update_channel: UpdateChannel::Stable,
@@ -670,6 +673,17 @@ impl AppSettings {
             // Not valid, or the same key as the other shortcut: one key cannot do two things.
             self.general.join_shortcut = None;
         }
+        if self
+            .general
+            .capture_shortcut
+            .as_deref()
+            .is_some_and(|s| !valid_shortcut(s))
+            || (self.general.capture_shortcut.is_some()
+                && (self.general.capture_shortcut == self.general.global_shortcut
+                    || self.general.capture_shortcut == self.general.join_shortcut))
+        {
+            self.general.capture_shortcut = None;
+        }
 
         let mut seen = std::collections::HashSet::new();
         self.general
@@ -815,6 +829,16 @@ impl AppSettings {
             && self.general.join_shortcut == self.general.global_shortcut
         {
             return Err("Choose a different key for each shortcut.".into());
+        }
+        if let Some(c) = self.general.capture_shortcut.as_deref() {
+            if !valid_shortcut(c) {
+                return Err("That shortcut isn't valid. Use at least one modifier key (such as Cmd or Ctrl) plus a letter, number or function key.".into());
+            }
+            if Some(c) == self.general.global_shortcut.as_deref()
+                || Some(c) == self.general.join_shortcut.as_deref()
+            {
+                return Err("Choose a different key for each shortcut.".into());
+            }
         }
         if self.briefing.work_end_hour <= self.briefing.work_start_hour {
             return Err("Working hours must end after they start.".into());

@@ -9,6 +9,7 @@ if (isTauri) document.documentElement.setAttribute("data-shell", "tauri");
 // Only macOS gets the see-through window (vibrancy); Windows gets an ordinary solid one.
 if (isTauri && /Windows/i.test(navigator.userAgent)) document.documentElement.setAttribute("data-platform", "windows");
 if (window.location.hash === "#/upnext") document.documentElement.setAttribute("data-view", "upnext");
+if (window.location.hash === "#/capture") document.documentElement.setAttribute("data-view", "capture");
 applyTheme(useTheme.getState().choice);
 // Font and text size from the last run, so the first paint does not change size when settings arrive.
 try {
