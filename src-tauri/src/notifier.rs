@@ -12,7 +12,7 @@ use firstlight_core::secrets::Redacted;
 use firstlight_core::store::Store;
 use std::path::PathBuf;
 use std::time::Duration as StdDuration;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 const TICK: StdDuration = StdDuration::from_secs(30);
@@ -202,10 +202,25 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                         // During focus time the summaries and snoozed repeats wait (they are not marked as
                         // shown, so they come once it ends); heads-ups and reminders still come, so a meeting is
                         // never missed.
-                        let focusing = firstlight_core::local::focus_until(&store, now)
-                            .ok()
-                            .flatten()
-                            .is_some();
+                        // A focus timer that has run out: count its minutes and suggest a break.
+                        if let Some(t) = crate::timer::take_finished(now) {
+                            crate::timer::credit(&store, &t, now);
+                            let _ = app.emit("timer-changed", ());
+                            let _ = app.emit("tasks-changed", ());
+                            let body = if ns.hide_titles {
+                                format!("{} minutes done. Take a short break.", t.minutes)
+                            } else {
+                                format!("{} minutes on “{}”. Take a short break.", t.minutes, t.title)
+                            };
+                            show(&app, "Time's up", &body, false);
+                            log::info!("focus timer finished");
+                        }
+                        // A focus timer counts as focus time too.
+                        let focusing = crate::timer::current().is_some()
+                            || firstlight_core::local::focus_until(&store, now)
+                                .ok()
+                                .flatten()
+                                .is_some();
                         // Snoozed ones whose ten minutes are up (shown again with the same words).
                         let again = if focusing {
                             vec![]

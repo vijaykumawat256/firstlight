@@ -5,6 +5,7 @@ import { Button, ListGroup, SectionHeader } from "@/design";
 import { AddTaskField, TaskRow, useTaskLists } from "./shared";
 import { PlanTask, TaskForm } from "./TaskDialogs";
 import { PlanDay } from "./PlanDay";
+import { FocusTimerBar, StartTimer } from "./FocusTimer";
 
 const SHOWN = 6;
 
@@ -17,6 +18,7 @@ export function TasksSection() {
   const [editing, setEditing] = useState<TaskView | null>(null);
   const [planning, setPlanning] = useState<TaskView | null>(null);
   const [planDay, setPlanDay] = useState(false);
+  const [timing, setTiming] = useState<TaskView | null>(null);
   const l = lists.data;
   if (!l) return null;
   const today = l.today;
@@ -25,10 +27,13 @@ export function TasksSection() {
   return (
     <section aria-label="Tasks">
       <SectionHeader title="Tasks" trailing={trailing} />
+      <div className="mb-2 empty:hidden">
+        <FocusTimerBar />
+      </div>
       {today.length > 0 && (
         <ListGroup className="mb-2">
           {today.slice(0, SHOWN).map((t) => (
-            <TaskRow key={t.id} task={t} onEdit={setEditing} onPlan={setPlanning} fresh={t.id === fresh} />
+            <TaskRow key={t.id} task={t} onEdit={setEditing} onPlan={setPlanning} onTimer={setTiming} fresh={t.id === fresh} />
           ))}
         </ListGroup>
       )}
@@ -61,6 +66,7 @@ export function TasksSection() {
       {editing && <TaskForm task={editing} onClose={() => setEditing(null)} />}
       {planning && <PlanTask task={planning} onClose={() => setPlanning(null)} />}
       {planDay && <PlanDay onClose={() => setPlanDay(false)} />}
+      {timing && <StartTimer task={timing} onClose={() => setTiming(null)} />}
     </section>
   );
 }

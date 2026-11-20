@@ -131,3 +131,32 @@ test("a task typed without a day goes on today's list, and every add says where 
   await expect(page.getByRole("radio", { name: "Someday" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByRole("list", { name: "someday tasks" }).getByText("Learn Spanish")).toBeVisible();
 });
+
+test("a focus timer runs on a task, counts its minutes when stopped or finished, and shows them", async ({ page }) => {
+  await page.clock.install({ time: at(9, 30) });
+  await openTasks(page);
+  await page.getByRole("button", { name: "Start a focus timer on Review Sam's slides" }).click();
+  const dialog = page.getByRole("dialog", { name: "Focus timer" });
+  await expect(dialog.getByRole("radio", { name: "25 min" })).toHaveAttribute("aria-checked", "true");
+  await dialog.getByRole("button", { name: "Start" }).click();
+  const bar = page.getByRole("region", { name: "Focus timer" });
+  await expect(bar).toContainText("Review Sam's slides");
+  await expect(bar).toContainText(/2[45]:\d\d/);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  await page.clock.fastForward("10:00");
+  await expect(bar).toContainText(/1[45]:\d\d/);
+  await bar.getByRole("button", { name: "Stop" }).click();
+  await expect(page.getByText("10 min counted on the task").first()).toBeVisible();
+  await expect(bar).toHaveCount(0);
+  await expect(page.getByText("10 min spent")).toBeVisible();
+
+  // Left to run out, the full length is counted and the bar goes.
+  await page.getByRole("button", { name: "Start a focus timer on Review Sam's slides" }).click();
+  await page.getByRole("dialog", { name: "Focus timer" }).getByRole("radio", { name: "15 min" }).click();
+  await page.getByRole("dialog", { name: "Focus timer" }).getByRole("button", { name: "Start" }).click();
+  await expect(bar).toBeVisible();
+  await page.clock.fastForward("16:00");
+  await expect(bar).toHaveCount(0);
+  await expect(page.getByText("25 min spent")).toBeVisible();
+});

@@ -9,6 +9,7 @@ import { useSettings } from "@/features/settings/useSettings";
 import { AddTaskField, TaskRow, useTaskLists, whereTask, type TaskTab } from "./shared";
 import { MonthEndDialog, NudgeDialog, PlanTask, TaskForm } from "./TaskDialogs";
 import { PlanDay } from "./PlanDay";
+import { FocusTimerBar, StartTimer } from "./FocusTimer";
 import { StatusReportDialog } from "@/features/insights/StatusReport";
 import { TimeReportSheet } from "@/features/insights/TimeReport";
 
@@ -30,6 +31,7 @@ export function TasksScreen() {
   const [editing, setEditing] = useState<TaskView | null>(null);
   const [planning, setPlanning] = useState<TaskView | null>(null);
   const [nudging, setNudging] = useState<TaskView | null>(null);
+  const [timing, setTiming] = useState<TaskView | null>(null);
   const [planDay, setPlanDay] = useState(false);
   const [monthEnd, setMonthEnd] = useState(false);
   const [writing, setWriting] = useState(false);
@@ -77,6 +79,7 @@ export function TasksScreen() {
               </Button>
             )}
           </header>
+          <FocusTimerBar />
           <div className="flex flex-col gap-1">
             <AddTaskField
               autoFocus
@@ -121,7 +124,7 @@ export function TasksScreen() {
           ) : (
             <ListGroup aria-label={`${tab} tasks`}>
               {shown.map((t) => (
-                <TaskRow key={t.id} task={t} onEdit={setEditing} onPlan={setPlanning} onNudge={setNudging} fresh={t.id === fresh} />
+                <TaskRow key={t.id} task={t} onEdit={setEditing} onPlan={setPlanning} onNudge={setNudging} onTimer={setTiming} fresh={t.id === fresh} />
               ))}
             </ListGroup>
           )}
@@ -130,6 +133,7 @@ export function TasksScreen() {
       {editing && <TaskForm task={editing} onClose={() => setEditing(null)} />}
       {planning && <PlanTask task={planning} onClose={() => setPlanning(null)} />}
       {nudging && <NudgeDialog task={nudging} onClose={() => setNudging(null)} />}
+      {timing && <StartTimer task={timing} onClose={() => setTiming(null)} />}
       {planDay && <PlanDay onClose={() => setPlanDay(false)} />}
       {writing && <StatusReportDialog onClose={() => setWriting(false)} />}
       {timeReport && <TimeReportSheet onClose={() => setTimeReport(false)} />}

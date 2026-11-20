@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -112,6 +112,10 @@ export interface Backend {
   /** This week so far next to the same days last week. */
   getWeekReview(): Promise<WeekReview>;
   getStatusReport(kind: "daily" | "weekly"): Promise<StatusReport>;
+  getFocusTimer(): Promise<FocusTimer | null>;
+  startFocusTimer(taskId: string, minutes: number): Promise<FocusTimer>;
+  /** Stops it; returns the minutes counted on the task. */
+  stopFocusTimer(): Promise<number>;
   getTimeReport(from: string, to: string): Promise<TimeReport>;
   /** Saves the time report as a CSV in Downloads; returns where. */
   exportTimeReport(from: string, to: string): Promise<string>;

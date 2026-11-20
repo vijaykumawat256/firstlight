@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stop-focus-timer"
+description = "Enables the stop_focus_timer command without any pre-configured scope."
+commands.allow = ["stop_focus_timer"]
+
+[[permission]]
+identifier = "deny-stop-focus-timer"
+description = "Denies the stop_focus_timer command without any pre-configured scope."
+commands.deny = ["stop_focus_timer"]

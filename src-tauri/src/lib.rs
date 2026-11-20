@@ -17,6 +17,7 @@ mod providers;
 mod scheduler;
 mod task_sync;
 mod tasks_cmd;
+mod timer;
 mod unlock;
 mod updates;
 
@@ -471,6 +472,9 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            timer::stop_focus_timer,
+            timer::start_focus_timer,
+            timer::get_focus_timer,
             tasks_cmd::export_time_report,
             tasks_cmd::get_time_report,
             tasks_cmd::get_status_report,

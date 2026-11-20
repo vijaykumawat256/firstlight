@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, CalendarClock, Mail, Pencil } from "lucide-react";
+import { BellRing, CalendarClock, Mail, Pencil, Timer } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type Task, type TaskInput, type TaskView } from "@/api";
 import { IconButton, TextField, useToasts } from "@/design";
@@ -87,7 +87,7 @@ function meta(t: TaskView): string {
 }
 
 /** One task: tick it off, set time aside for it, or open it to change it. */
-export function TaskRow({ task, onEdit, onPlan, onNudge, fresh }: { task: TaskView; onEdit: (t: TaskView) => void; onPlan?: (t: TaskView) => void; onNudge?: (t: TaskView) => void; fresh?: boolean }) {
+export function TaskRow({ task, onEdit, onPlan, onNudge, onTimer, fresh }: { task: TaskView; onEdit: (t: TaskView) => void; onPlan?: (t: TaskView) => void; onNudge?: (t: TaskView) => void; onTimer?: (t: TaskView) => void; fresh?: boolean }) {
   const row = useRef<HTMLLIElement>(null);
   useEffect(() => {
     if (fresh) row.current?.scrollIntoView({ block: "nearest" });
@@ -126,6 +126,11 @@ export function TaskRow({ task, onEdit, onPlan, onNudge, fresh }: { task: TaskVi
       {onNudge && task.waiting_on && !done && (
         <IconButton label={`Nudge ${task.waiting_on} about ${task.title}`} onClick={() => onNudge(task)}>
           <BellRing className="size-4" />
+        </IconButton>
+      )}
+      {onTimer && !done && !task.waiting_on && (
+        <IconButton label={`Start a focus timer on ${task.title}`} onClick={() => onTimer(task)}>
+          <Timer className="size-4" />
         </IconButton>
       )}
       {onPlan && !done && !task.waiting_on && (

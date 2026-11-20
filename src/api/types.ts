@@ -189,6 +189,15 @@ export interface WeekReview {
   busiest: [string, number] | null;
 }
 
+/** A running focus timer on a task. */
+export interface FocusTimer {
+  task_id: string;
+  title: string;
+  started: string;
+  ends_at: string;
+  minutes: number;
+}
+
 /** A standup or weekly update (crates/logic/src/report.rs). */
 export interface StatusReport {
   subject: string;

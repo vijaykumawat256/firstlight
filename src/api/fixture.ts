@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, StatusReport, TimeReport, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, StatusReport, TimeReport, FocusTimer, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -407,6 +407,21 @@ function taskLists(): TaskLists {
   out.done.sort((a, b) => (b.done_at ?? "").localeCompare(a.done_at ?? ""));
   out.waiting.sort((a, b) => (a.waiting_since ?? a.created_at).localeCompare(b.waiting_since ?? b.created_at));
   return out;
+}
+/** The focus timer (stand-in for src-tauri/src/timer.rs). */
+let focusTimer: FocusTimer | null = null;
+function creditTimer(t: FocusTimer, now: number): number {
+  const m = Math.min(t.minutes, Math.max(0, Math.floor((Math.min(now, Date.parse(t.ends_at)) - Date.parse(t.started)) / 60_000)));
+  const task = tasks.find((x) => x.id === t.task_id);
+  if (task && m > 0) task.spent_minutes += m;
+  return m;
+}
+/** A timer that ran out is counted (the real app does this in its notifier, whatever the page asks first). */
+function expireTimer() {
+  if (focusTimer && Date.parse(focusTimer.ends_at) <= Date.now()) {
+    creditTimer(focusTimer, Date.now());
+    focusTimer = null;
+  }
 }
 function findTask(id: string): Task {
   const t = tasks.find((x) => x.id === id);
@@ -920,6 +935,7 @@ export const fixtureBackend: Backend = {
     (w.__drafts ??= []).push({ to, subject, body });
   },
   async listTasks() {
+    expireTimer();
     return taskLists();
   },
   async addTask(input) {
@@ -1054,6 +1070,25 @@ export const fixtureBackend: Backend = {
       tasks_done: tasks.filter((t) => t.done_at && Date.parse(t.done_at) >= monday.getTime()).length,
       busiest: null,
     } satisfies WeekReview;
+  },
+  async getFocusTimer() {
+    expireTimer();
+    return focusTimer ? structuredClone(focusTimer) : null;
+  },
+  async startFocusTimer(taskId, minutes) {
+    if (minutes < 5 || minutes > 120) throw new Error("A focus timer runs 5 minutes to 2 hours.");
+    const t = findTask(taskId);
+    if (t.done_at) throw new Error("That task is already done.");
+    if (focusTimer) creditTimer(focusTimer, Date.now());
+    const now = Date.now();
+    focusTimer = { task_id: t.id, title: t.title, started: new Date(now).toISOString(), ends_at: new Date(now + minutes * 60_000).toISOString(), minutes };
+    return structuredClone(focusTimer);
+  },
+  async stopFocusTimer() {
+    if (!focusTimer) return 0;
+    const m = creditTimer(focusTimer, Date.now());
+    focusTimer = null;
+    return m;
   },
   async getStatusReport(kind) {
     // A small stand-in for crates/logic/src/report.rs.
