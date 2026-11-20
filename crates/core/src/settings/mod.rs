@@ -150,6 +150,10 @@ pub struct TaskSyncSettings {
     /// Accounts that granted the separate task permission, in order (the first takes tasks made here). Changed only
     /// by `enable_task_sync` / `disable_task_sync`; never by a save or a settings file.
     pub sync_accounts: Vec<String>,
+    /// The synced folder (iCloud Drive, OneDrive, Dropbox…) your computers share tasks, notes and events through. This
+    /// computer only: changed only by `enable_folder_sync` / `disable_folder_sync`; never by a save or a settings
+    /// file (import clears it). The key is in the keychain, never here.
+    pub folder_sync: Option<String>,
 }
 
 /// Choices about what Firstlight does on its own and what it keeps.
@@ -898,6 +902,7 @@ impl AppSettings {
         imported.email.send_accounts.clear();
         imported.email.autoreply_accounts.clear();
         imported.tasks.sync_accounts.clear();
+        imported.tasks.folder_sync = None;
         imported.ai.consented = None;
         imported.ai.consented_host = None;
         imported.ai.plan_consented = None;

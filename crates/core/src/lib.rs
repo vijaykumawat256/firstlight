@@ -9,6 +9,7 @@ pub mod crash;
 pub mod erase;
 #[cfg(test)]
 mod fixture_briefing;
+pub mod folder_sync;
 #[cfg(test)]
 mod fuzz;
 pub mod http;
@@ -30,7 +31,7 @@ pub mod updates;
 
 pub use firstlight_logic::{Error, Result};
 pub use firstlight_logic::{
-    ask, briefing, conflict, contain, day, dayplan, dedupe, error, followup, ics, join, model,
-    notes, prep, report, review, tasks, tasksync, timeoff, timereport, tz, weekahead, xml,
+    ask, briefing, conflict, contain, day, dayplan, dedupe, error, foldersync, followup, ics, join,
+    model, notes, prep, report, review, tasks, tasksync, timeoff, timereport, tz, weekahead, xml,
 };
 pub use sync::SyncReport;

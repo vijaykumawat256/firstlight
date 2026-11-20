@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, CalendarDays, ChevronLeft, Info, LockOpen, Mail, Palette, Palmtree, Settings2, ShieldCheck, Sparkles, Sunrise, type LucideIcon } from "lucide-react";
+import { Bell, CalendarDays, ChevronLeft, Info, Laptop, LockOpen, Mail, Palette, Palmtree, Settings2, ShieldCheck, Sparkles, Sunrise, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type DefaultView, type TextSize, type TimeFormat, type WeekStart } from "@/api";
 import { useNav, type View } from "@/app/nav";
 import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
 import { FontPicker, ThemePicker } from "./LookPickers";
 import { TimeOffSettings } from "./TimeOffSettings";
+import { FolderSyncSettings } from "./FolderSyncSettings";
 import { DndGroup } from "./DndGroup";
 import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
 import { AiGroup, EmailGroup, SendingGroup, TaskSyncGroup } from "./EmailAiSettings";
@@ -15,7 +16,7 @@ import { useSettings } from "./useSettings";
 
 const ACCENTS = ["system", ...CALENDAR_COLOURS.filter((c) => !["blue", "yellow", "brown"].includes(c))];
 
-type Section = "general" | "appearance" | "briefing" | "appears" | "notifications" | "timeoff" | "email" | "ai" | "privacy";
+type Section = "general" | "appearance" | "briefing" | "appears" | "notifications" | "timeoff" | "computers" | "email" | "ai" | "privacy";
 interface HomeItem {
   title: string;
   description: string;
@@ -40,6 +41,7 @@ const HOME: HomeItem[][] = [
   ],
   [
     { view: "accounts", title: "Accounts & calendars", description: "Connect accounts, choose calendars and colours", icon: CalendarDays },
+    { section: "computers", title: "Your computers", description: "Share tasks, notes and events between your Mac and PC", icon: Laptop },
     { section: "email", title: "Email", description: "Unread mail and invitations in the briefing", icon: Mail },
     { section: "ai", title: "AI summaries", description: "An optional smarter summary of your day", icon: Sparkles },
   ],
@@ -534,6 +536,7 @@ export function SettingsScreen() {
         )}
         {section === "ai" && <AiGroup />}
         {section === "timeoff" && <TimeOffSettings />}
+        {section === "computers" && <FolderSyncSettings />}
         {section === "privacy" && (
           <div className="flex flex-col gap-7">
             <Group title="Backup">

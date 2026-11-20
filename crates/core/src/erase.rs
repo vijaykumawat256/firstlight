@@ -28,6 +28,8 @@ pub fn erase_everything(store: &Store, secrets: &dyn SecretStore) -> Result<Eras
         secrets.delete(&crate::mail::imap::secret_key(&m.id))?;
         credentials += 1;
     }
+    // The key for sharing through a synced folder (the files in that folder stay; without the key they are noise).
+    secrets.delete(crate::folder_sync::KEY_SECRET)?;
     store.erase_all()?;
     Ok(EraseReport {
         accounts: accounts.len(),

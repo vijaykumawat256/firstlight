@@ -201,7 +201,8 @@ for (const scheme of ["light", "dark"] as const) {
 // Warm and Black set their own colours: scan the main screens in each, with the default and every custom accent.
 for (const theme of ["Warm", "Mint", "Sky", "Lavender", "Rose", "Black", "Midnight", "Forest", "Grape", "Mocha", "Slate"] as const) {
   test(`${theme} theme keeps everything readable`, async ({ page }) => {
-    test.setTimeout(120_000);
+    // Nine scans each; under a full parallel run on a slow machine two minutes was not always enough.
+    test.setTimeout(240_000);
     await page.clock.install({ time: at(9, 30) });
     await page.goto("/?mailon&aion&tasks");
     await page.getByRole("button", { name: "Settings" }).click();

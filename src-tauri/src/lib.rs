@@ -7,6 +7,7 @@ mod crash_reports;
 mod dnd;
 #[cfg(not(windows))]
 mod eventkit;
+mod folder_sync_cmd;
 mod fullscreen;
 mod keychain;
 mod mail_ai;
@@ -529,6 +530,11 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            folder_sync_cmd::sync_folder_now,
+            folder_sync_cmd::folder_sync_code,
+            folder_sync_cmd::disable_folder_sync,
+            folder_sync_cmd::enable_folder_sync,
+            folder_sync_cmd::folder_sync_choices,
             task_sync::reminders_status,
             task_sync::enable_reminders_sync,
             mail_ai::clear_auto_reply,

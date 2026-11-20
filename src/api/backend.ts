@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -112,6 +112,12 @@ export interface Backend {
   enableTaskSync(accountId: string): Promise<AppSettings>;
   /** Apple Reminders (Mac): asks for access the first time. Stopped with disableTaskSync("apple-reminders"). */
   enableRemindersSync(): Promise<AppSettings>;
+  /** Sharing between your own computers through a synced folder. */
+  folderSyncChoices(): Promise<{ label: string; path: string }[]>;
+  enableFolderSync(folder: string, code: string | null): Promise<{ settings: AppSettings; code: string; report: FolderSyncReport }>;
+  disableFolderSync(): Promise<AppSettings>;
+  folderSyncCode(): Promise<string | null>;
+  syncFolderNow(): Promise<FolderSyncReport>;
   /** [offered here, access already granted] */
   remindersStatus(): Promise<[boolean, boolean]>;
   /** Stops it; the tasks stay here as ordinary tasks. */

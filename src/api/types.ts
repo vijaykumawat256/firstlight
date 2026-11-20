@@ -209,6 +209,13 @@ export interface DndStatus {
   status_name: string;
 }
 
+/** One round of sharing through a synced folder. */
+export interface FolderSyncReport {
+  applied: number;
+  peers: { name: string; written_at: string }[];
+  unreadable: number;
+}
+
 /** A running focus timer on a task. */
 export interface FocusTimer {
   task_id: string;
@@ -426,7 +433,7 @@ export interface AppSettings {
 
   templates: EventTemplate[];
   /** Accounts your tasks are kept in step with (the first takes tasks made here). */
-  tasks: { sync_accounts: string[] };
+  tasks: { sync_accounts: string[]; folder_sync: string | null };
 }
 
 export type AiProvider = "anthropic" | "local" | "openai" | "xai" | "gemini" | "mistral" | "groq" | "openrouter" | "custom";

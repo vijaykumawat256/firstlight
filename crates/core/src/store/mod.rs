@@ -592,6 +592,24 @@ impl Store {
         Ok(())
     }
 
+    /// Every meeting note: key, text, when it was last changed.
+    pub fn all_meeting_notes(&self) -> Result<Vec<(String, String, DateTime<Utc>)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT key, text, updated_at FROM meeting_notes")?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)?,
+            ))
+        })?;
+        Ok(rows
+            .filter_map(|r| r.ok())
+            .map(|(k, t, at)| (k, t, DateTime::from_timestamp(at, 0).unwrap_or_default()))
+            .collect())
+    }
+
     pub fn remove_calendar(&self, id: &str) -> Result<()> {
         self.conn
             .execute("DELETE FROM calendars WHERE id = ?1", [id])?;

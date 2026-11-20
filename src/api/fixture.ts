@@ -203,7 +203,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   privacy: { crash_reports: false },
   day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true, travel_maps: false, travel_from: "", waiting_nudge_days: 3, dnd_meetings: false, time_off: [] },
   templates: [],
-  tasks: { sync_accounts: [] },
+  tasks: { sync_accounts: [], folder_sync: null },
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
 if (["week", "day", "month"].includes(params.get("defaultview") ?? "")) settings.general.default_view = params.get("defaultview") as "day" | "week" | "month";
@@ -326,6 +326,8 @@ function expandOwn(id: string, input: EventInput, calendar?: string): CalEvent[]
   return out;
 }
 
+/** The sync code for sharing through a folder (stand-in for the keychain). */
+let folderCode: string | null = null;
 /** Fields a new task starts with (crates/logic/src/tasks.rs `Task` defaults). */
 const TASK_EXTRAS = { repeat: null, next_made: null, waiting_on: null, waiting_since: null, mail: null, spent_minutes: 0 } satisfies Partial<Task>;
 /** The to-do list: a small browser-only stand-in for crates/logic/src/tasks.rs and crates/core/src/todo.rs. */
@@ -1043,7 +1045,7 @@ export const fixtureBackend: Backend = {
   },
   async enableTaskSync(accountId) {
     if (params.has("oauthfail")) throw new Error("Sign-in was cancelled.");
-    settings = { ...settings, tasks: { sync_accounts: [...new Set([...settings.tasks.sync_accounts, accountId])] } };
+    settings = { ...settings, tasks: { ...settings.tasks, sync_accounts: [...new Set([...settings.tasks.sync_accounts, accountId])] } };
     // The phone's list arrives, and tasks here go to the first account.
     const now = new Date().toISOString();
     if (!tasks.some((t) => t.title === "Pick up dry cleaning"))
@@ -1052,10 +1054,47 @@ export const fixtureBackend: Backend = {
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
   },
+  async folderSyncChoices() {
+    if (params.has("windows")) return [{ label: "OneDrive", path: "C:\\Users\\you\\OneDrive" }];
+    return [
+      { label: "iCloud Drive", path: "/Users/you/Library/Mobile Documents/com~apple~CloudDocs" },
+      { label: "Dropbox", path: "/Users/you/Dropbox" },
+    ];
+  },
+  async enableFolderSync(folder, code) {
+    if (!folder.trim().startsWith("/") && !/^[A-Z]:\\/i.test(folder.trim())) throw new Error("Choose a folder (its full path).");
+    // ?peerfolder: the folder already holds another computer's file; joining needs its code.
+    if (params.has("peerfolder") && !code) throw new Error("That folder already has Firstlight data from another computer. Type the sync code shown on that computer.");
+    if (code && !/^FL1-/i.test(code.trim())) throw new Error("That sync code isn't right. Copy it again from the other computer.");
+    settings = { ...settings, tasks: { ...settings.tasks, folder_sync: folder.trim() } };
+    folderCode = code?.trim().toUpperCase() || folderCode || "FL1-ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-QR";
+    const report = await this.syncFolderNow();
+    settingsListeners.forEach((l) => l());
+    return { settings: structuredClone(settings), code: folderCode, report };
+  },
+  async disableFolderSync() {
+    settings = { ...settings, tasks: { ...settings.tasks, folder_sync: null } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async folderSyncCode() {
+    return folderCode;
+  },
+  async syncFolderNow() {
+    if (!settings.tasks.folder_sync) throw new Error("Sharing between computers is off.");
+    if (!params.has("peerfolder")) return { applied: 0, peers: [], unreadable: 0 };
+    let applied = 0;
+    if (!tasks.some((t) => t.title === "Prepare the slides")) {
+      const now = new Date().toISOString();
+      tasks.push({ ...TASK_EXTRAS, id: `task-peer-${Date.now()}`, title: "Prepare the slides", notes: null, due: { kind: "date", date: ymd(new Date()) }, minutes: null, done_at: null, created_at: now, updated_at: now, from_meeting: null, planned_event: null, link: null });
+      applied = 1;
+    }
+    return { applied, peers: [{ name: "Work PC", written_at: new Date(Date.now() - 5 * 60_000).toISOString() }], unreadable: 0 };
+  },
   async enableRemindersSync() {
     if (params.has("windows")) throw new Error("Reminders is on Macs only.");
     if (params.has("remindersdenied")) throw new Error("Firstlight isn't allowed to use Reminders. Allow it in System Settings, Privacy & Security, Reminders.");
-    settings = { ...settings, tasks: { sync_accounts: [...new Set([...settings.tasks.sync_accounts, "apple-reminders"])] } };
+    settings = { ...settings, tasks: { ...settings.tasks, sync_accounts: [...new Set([...settings.tasks.sync_accounts, "apple-reminders"])] } };
     const now = new Date().toISOString();
     // A reminder from the iPhone arrives, and tasks here go to Reminders when it is the first list.
     if (!tasks.some((t) => t.title === "Buy stamps")) tasks.push({ ...TASK_EXTRAS, id: `task-rem-${Date.now()}`, title: "Buy stamps", notes: null, due: null, minutes: null, done_at: null, created_at: now, updated_at: now, from_meeting: null, planned_event: null, link: { account_id: "apple-reminders", list_id: "default", remote_id: "x1", remote_updated: "1" } });
@@ -1066,7 +1105,7 @@ export const fixtureBackend: Backend = {
     return [!params.has("windows"), false] as [boolean, boolean];
   },
   async disableTaskSync(accountId) {
-    settings = { ...settings, tasks: { sync_accounts: settings.tasks.sync_accounts.filter((a) => a !== accountId) } };
+    settings = { ...settings, tasks: { ...settings.tasks, sync_accounts: settings.tasks.sync_accounts.filter((a) => a !== accountId) } };
     tasks = tasks.map((t) => (t.link?.account_id === accountId ? { ...t, link: null } : t));
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);

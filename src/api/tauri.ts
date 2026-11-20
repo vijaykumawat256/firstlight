@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -30,6 +30,11 @@ export const tauriBackend: Backend = {
   disableAccountSend: (accountId) => invoke<AppSettings>("disable_account_send", { accountId }),
   enableTaskSync: (accountId) => invoke<AppSettings>("enable_task_sync", { accountId }),
   enableRemindersSync: () => invoke<AppSettings>("enable_reminders_sync"),
+  folderSyncChoices: () => invoke<{ label: string; path: string }[]>("folder_sync_choices"),
+  enableFolderSync: (folder, code) => invoke<{ settings: AppSettings; code: string; report: FolderSyncReport }>("enable_folder_sync", { folder, code }),
+  disableFolderSync: () => invoke<AppSettings>("disable_folder_sync"),
+  folderSyncCode: () => invoke<string | null>("folder_sync_code"),
+  syncFolderNow: () => invoke<FolderSyncReport>("sync_folder_now"),
   remindersStatus: () => invoke<[boolean, boolean]>("reminders_status"),
   disableTaskSync: (accountId) => invoke<AppSettings>("disable_task_sync", { accountId }),
   syncTasksNow: () => invoke<{ problems: [string, string][] }>("sync_tasks_now"),

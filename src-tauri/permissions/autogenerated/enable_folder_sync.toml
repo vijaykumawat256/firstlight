@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-enable-folder-sync"
+description = "Enables the enable_folder_sync command without any pre-configured scope."
+commands.allow = ["enable_folder_sync"]
+
+[[permission]]
+identifier = "deny-enable-folder-sync"
+description = "Denies the enable_folder_sync command without any pre-configured scope."
+commands.deny = ["enable_folder_sync"]

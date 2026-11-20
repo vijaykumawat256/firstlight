@@ -86,6 +86,15 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted, deps: Deps) -> Syn
                     if changed == Some(true) {
                         let _ = app.emit("tasks-changed", ());
                     }
+                    // Then your other computers' changes, through the shared folder (when that is on).
+                    let shared = firstlight_core::contain::contained(|| {
+                        crate::folder_sync_cmd::run(&mut store, &deps)
+                    });
+                    if shared == Some(true) {
+                        let _ = app.emit("tasks-changed", ());
+                        let _ = app.emit("events-changed", ());
+                        let _ = app.emit("settings-changed", ());
+                    }
                 }
             }
         })

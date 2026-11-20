@@ -22,6 +22,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 thiserror = "2.0.21"
+chacha20poly1305 = "0.10.1"
 
 [dev-dependencies]
 uuid = { version = "1.29.2", features = ["v4"] }
