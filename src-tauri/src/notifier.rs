@@ -221,6 +221,11 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                                 .ok()
                                 .flatten()
                                 .is_some();
+                        // Do Not Disturb follows meetings, focus blocks and the focus timer (Mac, when turned on).
+                        crate::dnd::follow(
+                            settings.day.dnd_meetings,
+                            focusing || firstlight_core::day::in_meeting_now(&events, now, &bs),
+                        );
                         // Snoozed ones whose ten minutes are up (shown again with the same words).
                         let again = if focusing {
                             vec![]

@@ -4,6 +4,7 @@
 
 mod commands;
 mod crash_reports;
+mod dnd;
 #[cfg(not(windows))]
 mod eventkit;
 mod fullscreen;
@@ -527,6 +528,9 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            dnd::open_shortcuts_app,
+            dnd::try_dnd,
+            dnd::dnd_status,
             commands::hide_capture,
             tasks_cmd::get_time_off_status,
             timer::stop_focus_timer,

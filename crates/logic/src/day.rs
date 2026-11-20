@@ -142,6 +142,14 @@ impl DaySettings {
     }
 }
 
+/// Whether a meeting you are in (timed, shown: not cancelled or declined) is running at `now`.
+pub fn in_meeting_now(events: &[Event], now: DateTime<Utc>, bs: &BriefingSettings) -> bool {
+    events
+        .iter()
+        .filter(|e| is_shown(e, bs))
+        .any(|e| matches!(e.when, When::Timed { start, end, .. } if start <= now && now < end))
+}
+
 /// Nudges for tasks waiting on someone, due on weekdays inside working hours (so they never arrive at night), one per
 /// round of `waiting_nudge_days`.
 pub fn waiting_due(
@@ -1180,5 +1188,33 @@ mod tests {
                 && !Kind::Morning.on_time_off()
                 && !Kind::Waiting.on_time_off()
         );
+    }
+
+    #[test]
+    fn a_running_meeting_counts_but_a_declined_or_all_day_one_does_not() {
+        let now: DateTime<Utc> = "2026-11-19T15:30:00Z".parse().unwrap();
+        let bs = BriefingSettings::default();
+        let mut e = ev("a", "Sync", "2026-11-19T15:00:00Z", "2026-11-19T16:00:00Z");
+        assert!(in_meeting_now(std::slice::from_ref(&e), now, &bs));
+        assert!(!in_meeting_now(
+            std::slice::from_ref(&e),
+            "2026-11-19T16:00:00Z".parse().unwrap(),
+            &bs
+        ));
+        e.my_response = crate::model::Response::Declined;
+        assert!(!in_meeting_now(&[e], now, &bs));
+        let all_day = Event {
+            when: When::AllDay {
+                start: "2026-11-19".parse().unwrap(),
+                end: "2026-11-20".parse().unwrap(),
+            },
+            ..ev(
+                "b",
+                "Offsite",
+                "2026-11-19T15:00:00Z",
+                "2026-11-19T16:00:00Z",
+            )
+        };
+        assert!(!in_meeting_now(&[all_day], now, &bs));
     }
 }

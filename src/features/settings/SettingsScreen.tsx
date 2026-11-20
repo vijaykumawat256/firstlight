@@ -6,6 +6,7 @@ import { useNav, type View } from "@/app/nav";
 import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleton, Switch, calendarColour, useToasts } from "@/design";
 import { FontPicker, ThemePicker } from "./LookPickers";
 import { TimeOffSettings } from "./TimeOffSettings";
+import { DndGroup } from "./DndGroup";
 import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
 import { AiGroup, EmailGroup, SendingGroup, TaskSyncGroup } from "./EmailAiSettings";
 import { COMMON_ZONES, zoneLabel } from "@/features/calendar/zones";
@@ -452,6 +453,7 @@ export function SettingsScreen() {
                 />
               </SettingRow>
             </Group>
+            <DndGroup />
             <Group title="Your day" footer="These follow your days and quiet hours, and wait while focus time runs.">
               <SettingRow title="Wrap up your day" description="At the end of the day: tasks done and left, and how tomorrow starts. The briefing then offers to move what is left to tomorrow.">
                 <Switch label="Wrap up your day" checked={s.day.wrap_up} onCheckedChange={(v) => update((d) => void (d.day.wrap_up = v))} />

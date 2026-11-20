@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer, TimeOffStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -114,6 +114,9 @@ export interface Backend {
   getStatusReport(kind: "daily" | "weekly"): Promise<StatusReport>;
   getFocusTimer(): Promise<FocusTimer | null>;
   getTimeOffStatus(): Promise<TimeOffStatus>;
+  dndStatus(): Promise<DndStatus>;
+  tryDnd(on: boolean): Promise<void>;
+  openShortcutsApp(): Promise<void>;
   startFocusTimer(taskId: string, minutes: number): Promise<FocusTimer>;
   /** Stops it; returns the minutes counted on the task. */
   stopFocusTimer(): Promise<number>;

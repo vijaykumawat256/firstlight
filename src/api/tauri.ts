@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, StatusReport, TimeReport, FocusTimer, TimeOffStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -31,6 +31,9 @@ export const tauriBackend: Backend = {
   getStatusReport: (kind) => invoke<StatusReport>("get_status_report", { kind }),
   getFocusTimer: () => invoke<FocusTimer | null>("get_focus_timer"),
   getTimeOffStatus: () => invoke<TimeOffStatus>("get_time_off_status"),
+  dndStatus: () => invoke<DndStatus>("dnd_status"),
+  tryDnd: (on) => invoke<void>("try_dnd", { on }),
+  openShortcutsApp: () => invoke<void>("open_shortcuts_app"),
   startFocusTimer: (taskId, minutes) => invoke<FocusTimer>("start_focus_timer", { taskId, minutes }),
   stopFocusTimer: () => invoke<number>("stop_focus_timer"),
   getTimeReport: (from, to) => invoke<TimeReport>("get_time_report", { from, to }),

@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, StatusReport, TimeReport, FocusTimer, TimeOffStatus, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -1070,6 +1070,20 @@ export const fixtureBackend: Backend = {
       tasks_done: tasks.filter((t) => t.done_at && Date.parse(t.done_at) >= monday.getTime()).length,
       busiest: null,
     } satisfies WeekReview;
+  },
+  async dndStatus() {
+    // ?dnd: on a Mac with both shortcuts made; ?dndhalf: only the first; ?windows: not offered.
+    const mac = !params.has("windows");
+    return { available: mac, on_found: mac && (params.has("dnd") || params.has("dndhalf")), off_found: mac && params.has("dnd"), on_name: "Firstlight Focus On", off_name: "Firstlight Focus Off" } satisfies DndStatus;
+  },
+  async tryDnd(on) {
+    if (!params.has("dnd")) throw new Error(`Couldn't run the “Firstlight Focus ${on ? "On" : "Off"}” shortcut. Check it exists in the Shortcuts app.`);
+    const w = window as unknown as { __dnd?: boolean[] };
+    (w.__dnd ??= []).push(on);
+  },
+  async openShortcutsApp() {
+    const w = window as unknown as { __shortcutsOpened?: number };
+    w.__shortcutsOpened = (w.__shortcutsOpened ?? 0) + 1;
   },
   async getTimeOffStatus() {
     // A small stand-in for crates/logic/src/timeoff.rs.

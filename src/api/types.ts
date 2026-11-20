@@ -197,6 +197,15 @@ export interface TimeOffStatus {
   holidays: { date: string; name: string }[];
 }
 
+/** Do Not Disturb during meetings (Mac): whether it is offered and which of the two shortcuts exist. */
+export interface DndStatus {
+  available: boolean;
+  on_found: boolean;
+  off_found: boolean;
+  on_name: string;
+  off_name: string;
+}
+
 /** A running focus timer on a task. */
 export interface FocusTimer {
   task_id: string;
