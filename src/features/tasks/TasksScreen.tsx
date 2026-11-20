@@ -7,15 +7,16 @@ import { api, errorMessage } from "@/api";
 import { Button, EmptyState, ListGroup, Segmented, Skeleton, useToasts } from "@/design";
 import { useSettings } from "@/features/settings/useSettings";
 import { AddTaskField, TaskRow, useTaskLists } from "./shared";
-import { PlanTask, TaskForm } from "./TaskDialogs";
+import { MonthEndDialog, NudgeDialog, PlanTask, TaskForm } from "./TaskDialogs";
 import { PlanDay } from "./PlanDay";
 
-type Tab = "today" | "upcoming" | "someday" | "done";
+type Tab = "today" | "upcoming" | "someday" | "waiting" | "done";
 
 const EMPTY: Record<Tab, string> = {
   today: "Nothing to do today.",
   upcoming: "Nothing due after today.",
   someday: "No tasks without a day.",
+  waiting: "Not waiting on anyone. Set “Waiting on” in a task when someone else has the next step.",
   done: "Nothing done in the last 30 days.",
 };
 
@@ -26,7 +27,9 @@ export function TasksScreen() {
   const [tab, setTab] = useState<Tab>("today");
   const [editing, setEditing] = useState<TaskView | null>(null);
   const [planning, setPlanning] = useState<TaskView | null>(null);
+  const [nudging, setNudging] = useState<TaskView | null>(null);
   const [planDay, setPlanDay] = useState(false);
+  const [monthEnd, setMonthEnd] = useState(false);
   const push = useToasts((s) => s.push);
   const qc = useQueryClient();
   const syncing = (useSettings().settings?.tasks.sync_accounts.length ?? 0) > 0;
@@ -65,7 +68,10 @@ export function TasksScreen() {
           </header>
           <div className="flex flex-col gap-1">
             <AddTaskField autoFocus />
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button variant="plain" size="sm" onClick={() => setMonthEnd(true)}>
+                Month-end
+              </Button>
               <Button variant="secondary" size="sm" onClick={() => setPlanDay(true)}>
                 Plan my day
               </Button>
@@ -73,12 +79,14 @@ export function TasksScreen() {
           </div>
           <Segmented
             label="Which tasks"
+            fill
             value={tab}
             onValueChange={(v) => setTab(v as Tab)}
             options={[
               { value: "today", label: `Today${count("today") ? ` ${count("today")}` : ""}` },
               { value: "upcoming", label: "Upcoming" },
               { value: "someday", label: "Someday" },
+              { value: "waiting", label: `Waiting${count("waiting") ? ` ${count("waiting")}` : ""}` },
               { value: "done", label: "Done" },
             ]}
           />
@@ -89,7 +97,7 @@ export function TasksScreen() {
           ) : (
             <ListGroup aria-label={`${tab} tasks`}>
               {shown.map((t) => (
-                <TaskRow key={t.id} task={t} onEdit={setEditing} onPlan={setPlanning} />
+                <TaskRow key={t.id} task={t} onEdit={setEditing} onPlan={setPlanning} onNudge={setNudging} />
               ))}
             </ListGroup>
           )}
@@ -97,7 +105,11 @@ export function TasksScreen() {
       </main>
       {editing && <TaskForm task={editing} onClose={() => setEditing(null)} />}
       {planning && <PlanTask task={planning} onClose={() => setPlanning(null)} />}
+      {nudging && <NudgeDialog task={nudging} onClose={() => setNudging(null)} />}
       {planDay && <PlanDay onClose={() => setPlanDay(false)} />}
+      {monthEnd && l && (
+        <MonthEndDialog existing={[...l.today, ...l.upcoming].filter((t) => t.repeat === "last_workday").map((t) => t.title)} onClose={() => setMonthEnd(false)} />
+      )}
     </div>
   );
 }

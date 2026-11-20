@@ -52,7 +52,8 @@ pub async fn set_task_done(
     done: bool,
 ) -> CmdResult<Task> {
     let store = lock_store(&state)?;
-    let t = todo::set_done(&store, &id, done, Utc::now()).map_err(user_input_error)?;
+    let t = todo::set_done(&store, &id, done, crate::local_tz(), Utc::now())
+        .map_err(user_input_error)?;
     changed(&app);
     Ok(t)
 }

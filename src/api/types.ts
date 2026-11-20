@@ -86,6 +86,29 @@ export interface Task {
   planned_event: string | null;
   /** Set when it is kept in sync with Google Tasks or Microsoft To Do. */
   link: { account_id: string; list_id: string; remote_id: string; remote_updated: string | null } | null;
+  repeat: TaskRepeat | null;
+  next_made: string | null;
+  /** Someone you are waiting on for it, and since when. */
+  waiting_on: string | null;
+  waiting_since: string | null;
+  /** The email it was made from. */
+  mail: MailRef | null;
+  /** Minutes spent on it with the focus timer. */
+  spent_minutes: number;
+}
+
+/** Days off, both days included (YYYY-MM-DD). */
+export interface TimeOff {
+  from: string;
+  to: string;
+  label: string;
+}
+
+export type TaskRepeat = "daily" | "weekdays" | "weekly" | "monthly" | "last_workday";
+export interface MailRef {
+  subject: string;
+  from: string;
+  open: OpenTarget;
 }
 
 export interface TaskView extends Task {
@@ -97,6 +120,8 @@ export interface TaskLists {
   today: TaskView[];
   upcoming: TaskView[];
   someday: TaskView[];
+  /** Waiting on someone, longest first. */
+  waiting: TaskView[];
   done: TaskView[];
   done_today: number;
 }
@@ -110,6 +135,9 @@ export interface TaskInput {
   due_time: string | null;
   minutes: number | null;
   from_meeting?: string | null;
+  repeat?: TaskRepeat | null;
+  waiting_on?: string | null;
+  mail?: MailRef | null;
 }
 
 /** A ready-made kind of event: usual length, and an agenda that goes into the meeting's private note. */
@@ -337,7 +365,8 @@ export interface AppSettings {
   email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; send_messages: boolean; send_accounts: string[]; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null; plan_consented: AiProvider | null };
   privacy: { crash_reports: boolean };
-  day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean; follow_ups: boolean; travel_minutes: number; weekly_review: boolean; travel_maps: boolean; travel_from: string };
+  day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean; follow_ups: boolean; travel_minutes: number; weekly_review: boolean; travel_maps: boolean; travel_from: string; waiting_nudge_days: number; dnd_meetings: boolean; time_off: TimeOff[] };
+
   templates: EventTemplate[];
   /** Accounts your tasks are kept in step with (the first takes tasks made here). */
   tasks: { sync_accounts: string[] };

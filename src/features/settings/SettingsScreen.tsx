@@ -432,6 +432,20 @@ export function SettingsScreen() {
               <SettingRow title="Task reminders" description="A notification when a task with a time comes due.">
                 <Switch label="Task reminders" checked={s.day.task_reminders} onCheckedChange={(v) => update((d) => void (d.day.task_reminders = v))} />
               </SettingRow>
+              <SettingRow title="Nudge reminders" description="When a task has waited on someone this long, a reminder to nudge them (weekdays, working hours).">
+                <Select
+                  label="Nudge reminders"
+                  value={String(s.day.waiting_nudge_days)}
+                  onValueChange={(v) => update((d) => void (d.day.waiting_nudge_days = Number(v)))}
+                  options={[
+                    { value: "0", label: "Never" },
+                    { value: "2", label: "Every 2 days" },
+                    { value: "3", label: "Every 3 days" },
+                    { value: "5", label: "Every 5 days" },
+                    { value: "7", label: "Every week" },
+                  ]}
+                />
+              </SettingRow>
             </Group>
             <Group title="Your day" footer="These follow your days and quiet hours, and wait while focus time runs.">
               <SettingRow title="Wrap up your day" description="At the end of the day: tasks done and left, and how tomorrow starts. The briefing then offers to move what is left to tomorrow.">

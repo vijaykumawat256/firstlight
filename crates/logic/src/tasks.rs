@@ -6,7 +6,7 @@
 //! grouping into Today / Upcoming / Someday / Done, which reminders are due); storage is in `firstlight-core`.
 
 use crate::{Error, Result};
-use chrono::{DateTime, Duration, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, Duration, Months, NaiveDate, NaiveTime, Utc, Weekday};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 
@@ -53,7 +53,98 @@ pub struct TaskLink {
     pub synced_at: Option<DateTime<Utc>>,
 }
 
+/// How a task comes back once it is done. The next one is made when this one is ticked, due on the next day the
+/// rule gives after both the old due day and today (so a weekly task done late does not come back already late).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskRepeat {
+    Daily,
+    /// Monday to Friday.
+    Weekdays,
+    Weekly,
+    /// Same day of the month (the 31st becomes the month's last day).
+    Monthly,
+    /// The last Monday-to-Friday day of each month (timesheets, expenses).
+    LastWorkday,
+}
+
+impl TaskRepeat {
+    fn step(self, d: NaiveDate) -> NaiveDate {
+        match self {
+            TaskRepeat::Daily => d + Duration::days(1),
+            TaskRepeat::Weekdays => {
+                let mut n = d + Duration::days(1);
+                while matches!(n.weekday(), Weekday::Sat | Weekday::Sun) {
+                    n += Duration::days(1);
+                }
+                n
+            }
+            TaskRepeat::Weekly => d + Duration::days(7),
+            TaskRepeat::Monthly => d
+                .checked_add_months(Months::new(1))
+                .unwrap_or(d + Duration::days(30)),
+            TaskRepeat::LastWorkday => {
+                let this = last_workday(d.year(), d.month());
+                if this > d {
+                    this
+                } else {
+                    let next = d
+                        .checked_add_months(Months::new(1))
+                        .unwrap_or(d + Duration::days(31));
+                    last_workday(next.year(), next.month())
+                }
+            }
+        }
+    }
+}
+
+/// The last Monday-to-Friday day of a month.
+pub fn last_workday(year: i32, month: u32) -> NaiveDate {
+    let first_next = if month == 12 {
+        NaiveDate::from_ymd_opt(year + 1, 1, 1)
+    } else {
+        NaiveDate::from_ymd_opt(year, month + 1, 1)
+    }
+    .unwrap_or(NaiveDate::MAX);
+    let mut d = first_next - Duration::days(1);
+    while matches!(d.weekday(), Weekday::Sat | Weekday::Sun) {
+        d -= Duration::days(1);
+    }
+    d
+}
+
+/// The day the next copy of a repeating task is due: the rule's next day after the old due day, moved on until it is
+/// after `today`.
+pub fn next_due_day(repeat: TaskRepeat, due: NaiveDate, today: NaiveDate) -> NaiveDate {
+    let mut next = repeat.step(due);
+    // At most a few thousand steps (daily for ten years); the guard keeps a broken clock from looping long.
+    for _ in 0..4000 {
+        if next > today {
+            break;
+        }
+        next = repeat.step(next);
+    }
+    next
+}
+
+/// How to open the email a task was made from. Same shape as the mail digest's target; checked again when opened.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MailOpen {
+    Url { url: String },
+    AppleMail { message_id: String },
+    None,
+}
+
+/// The email a task was made from (Inbox, "Make task"). Only what identifies it: never the message text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MailRef {
+    pub subject: String,
+    pub from: String,
+    pub open: MailOpen,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Task {
     pub id: String,
     pub title: String,
@@ -80,10 +171,26 @@ pub struct Task {
     /// deletion has reached the service, so the task cannot come back on the next sync.
     #[serde(default)]
     pub deleted_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub repeat: Option<TaskRepeat>,
+    /// The next copy made when this repeating task was ticked, so ticking it again does not make another.
+    #[serde(default)]
+    pub next_made: Option<String>,
+    /// Someone you are waiting on for this (a name or an address).
+    #[serde(default)]
+    pub waiting_on: Option<String>,
+    /// Since when (set when `waiting_on` is first given or changed); the nudge counts from here.
+    #[serde(default)]
+    pub waiting_since: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub mail: Option<MailRef>,
+    /// Minutes spent on it with the focus timer.
+    #[serde(default)]
+    pub spent_minutes: u32,
 }
 
 /// What the page sends when a task is added or changed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskInput {
     pub title: String,
     #[serde(default)]
@@ -98,6 +205,13 @@ pub struct TaskInput {
     pub minutes: Option<u32>,
     #[serde(default)]
     pub from_meeting: Option<String>,
+    #[serde(default)]
+    pub repeat: Option<TaskRepeat>,
+    #[serde(default)]
+    pub waiting_on: Option<String>,
+    /// Only when adding (Inbox, "Make task"); a change never replaces it.
+    #[serde(default)]
+    pub mail: Option<MailRef>,
 }
 
 fn tidy(s: Option<&str>, max: usize, too_long: &'static str) -> Result<Option<String>> {
@@ -121,6 +235,43 @@ pub struct Checked {
     pub due: Option<Due>,
     pub minutes: Option<u32>,
     pub from_meeting: Option<String>,
+    pub repeat: Option<TaskRepeat>,
+    pub waiting_on: Option<String>,
+    pub mail: Option<MailRef>,
+}
+
+fn one_line(s: Option<&str>, max: usize, too_long: &'static str) -> Result<Option<String>> {
+    Ok(tidy(s, max, too_long)?.map(|m| m.split_whitespace().collect::<Vec<_>>().join(" ")))
+}
+
+fn check_mail(m: &MailRef) -> Result<MailRef> {
+    let bad = Error::Invalid("That email can't be linked to a task.");
+    let subject =
+        one_line(Some(&m.subject), MAX_TITLE, "That subject is too long.")?.unwrap_or_default();
+    let from = one_line(Some(&m.from), 200, "That sender is too long.")?.unwrap_or_default();
+    let open = match &m.open {
+        MailOpen::Url { url }
+            if url.starts_with("https://")
+                && url.len() <= 2000
+                && !url.chars().any(char::is_whitespace) =>
+        {
+            m.open.clone()
+        }
+        MailOpen::AppleMail { message_id }
+            if !message_id.is_empty()
+                && message_id.len() <= 500
+                && !message_id.chars().any(char::is_control) =>
+        {
+            m.open.clone()
+        }
+        MailOpen::None => MailOpen::None,
+        _ => return Err(bad),
+    };
+    Ok(MailRef {
+        subject,
+        from,
+        open,
+    })
 }
 
 /// Checks what was typed. A time needs a day; the time is read in `tz`.
@@ -180,12 +331,20 @@ pub fn check(input: &TaskInput, tz: Tz) -> Result<Checked> {
     {
         return Err(Error::Invalid("A task can take 5 minutes to 12 hours."));
     }
+    if input.repeat.is_some() && due.is_none() {
+        return Err(Error::Invalid("Choose a day for a task that repeats."));
+    }
+    let waiting_on = one_line(input.waiting_on.as_deref(), 100, "That name is too long.")?;
+    let mail = input.mail.as_ref().map(check_mail).transpose()?;
     Ok(Checked {
         title,
         notes,
         due,
         minutes: input.minutes,
         from_meeting,
+        repeat: input.repeat,
+        waiting_on,
+        mail,
     })
 }
 
@@ -207,6 +366,9 @@ pub struct TaskLists {
     pub upcoming: Vec<TaskView>,
     /// Not done, no day given, newest first.
     pub someday: Vec<TaskView>,
+    /// Not done and waiting on someone (whatever the day), longest waiting first. Not in the lists above: it is
+    /// someone else's move.
+    pub waiting: Vec<TaskView>,
     /// Done in the last 30 days, most recent first.
     pub done: Vec<TaskView>,
     /// How many were done today (for the summary line).
@@ -244,6 +406,10 @@ pub fn lists(tasks: &[Task], now: DateTime<Utc>, tz: Tz) -> TaskLists {
             }
             continue;
         }
+        if t.waiting_on.is_some() {
+            out.waiting.push(view(0));
+            continue;
+        }
         match t.due.map(|d| d.day(tz)) {
             None => out.someday.push(view(0)),
             Some(day) if day <= today => out.today.push(view((today - day).num_days())),
@@ -255,7 +421,72 @@ pub fn lists(tasks: &[Task], now: DateTime<Utc>, tz: Tz) -> TaskLists {
     out.someday
         .sort_by_key(|v| std::cmp::Reverse(v.task.created_at));
     out.done.sort_by_key(|v| std::cmp::Reverse(v.task.done_at));
+    out.waiting
+        .sort_by_key(|v| v.task.waiting_since.unwrap_or(v.task.created_at));
     out
+}
+
+/// The next copy of a repeating task that was just done, or `None` if it does not repeat (or has no day, or one was
+/// already made). It keeps the title, notes, length, time of day and rule; it starts unticked, unplanned, with nothing
+/// spent and no link to a service (sync sends it as a new task).
+pub fn next_copy(t: &Task, id: String, tz: Tz, now: DateTime<Utc>) -> Option<Task> {
+    let repeat = t.repeat?;
+    if t.next_made.is_some() {
+        return None;
+    }
+    let today = now.with_timezone(&tz).date_naive();
+    let due = t.due?;
+    let day = next_due_day(repeat, due.day(tz), today);
+    let due = match due {
+        Due::Date { .. } => Due::Date { date: day },
+        Due::At { at } => Due::At {
+            at: crate::tz::local_to_utc(tz, day.and_time(at.with_timezone(&tz).time())),
+        },
+    };
+    Some(Task {
+        id,
+        title: t.title.clone(),
+        notes: t.notes.clone(),
+        due: Some(due),
+        minutes: t.minutes,
+        created_at: now,
+        updated_at: now,
+        from_meeting: t.from_meeting.clone(),
+        repeat: Some(repeat),
+        ..Default::default()
+    })
+}
+
+/// A reminder about a task you have been waiting on someone for: due every `every_days` days of waiting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WaitingNudge {
+    /// Unique per task, start of the wait and round, so each round is shown once.
+    pub id: String,
+    pub title: String,
+    pub who: String,
+    pub days: i64,
+}
+
+pub fn waiting_nudges(tasks: &[Task], now: DateTime<Utc>, every_days: u32) -> Vec<WaitingNudge> {
+    if every_days == 0 {
+        return vec![];
+    }
+    tasks
+        .iter()
+        .filter(|t| t.done_at.is_none() && t.deleted_at.is_none())
+        .filter_map(|t| {
+            let who = t.waiting_on.clone()?;
+            let since = t.waiting_since.unwrap_or(t.created_at);
+            let days = (now - since).num_days();
+            let round = days / i64::from(every_days);
+            (round >= 1).then(|| WaitingNudge {
+                id: format!("waiting:{}:{}:{round}", t.id, since.timestamp()),
+                title: t.title.clone(),
+                who,
+                days,
+            })
+        })
+        .collect()
 }
 
 /// A task reminder that is due: the task has a time, it has come (within the last hour), and it is not done.
@@ -340,6 +571,7 @@ mod tests {
             planned_event: None,
             link: None,
             deleted_at: None,
+            ..Default::default()
         }
     }
 
@@ -357,6 +589,7 @@ mod tests {
             due_time: None,
             minutes: None,
             from_meeting: None,
+            ..Default::default()
         }
     }
 
@@ -487,5 +720,118 @@ mod tests {
                 "plain line"
             ]
         );
+    }
+
+    fn d(s: &str) -> NaiveDate {
+        s.parse().unwrap()
+    }
+
+    #[test]
+    fn repeating_tasks_come_back_on_the_next_day_the_rule_gives_and_never_already_late() {
+        use TaskRepeat::*;
+        let today = d("2026-11-19"); // a Thursday
+        assert_eq!(next_due_day(Daily, d("2026-11-19"), today), d("2026-11-20"));
+        assert_eq!(next_due_day(Daily, d("2026-11-10"), today), d("2026-11-20"));
+        assert_eq!(
+            next_due_day(Weekdays, d("2026-11-20"), d("2026-11-20")),
+            d("2026-11-23")
+        );
+        assert_eq!(
+            next_due_day(Weekly, d("2026-11-19"), today),
+            d("2026-11-26")
+        );
+        assert_eq!(
+            next_due_day(Weekly, d("2026-11-05"), today),
+            d("2026-11-26")
+        );
+        assert_eq!(
+            next_due_day(Monthly, d("2026-01-31"), d("2026-01-31")),
+            d("2026-02-28")
+        );
+        // Last working day: November 2026 ends on a Monday the 30th; January 2027 ends on a Sunday.
+        assert_eq!(last_workday(2026, 11), d("2026-11-30"));
+        assert_eq!(last_workday(2027, 1), d("2027-01-29"));
+        assert_eq!(last_workday(2026, 12), d("2026-12-31"));
+        assert_eq!(
+            next_due_day(LastWorkday, d("2026-11-19"), today),
+            d("2026-11-30")
+        );
+        assert_eq!(
+            next_due_day(LastWorkday, d("2026-11-30"), d("2026-11-30")),
+            d("2026-12-31")
+        );
+    }
+
+    #[test]
+    fn the_next_copy_keeps_the_time_of_day_and_starts_fresh() {
+        let mut done = task(
+            "Timesheet",
+            Some(Due::At {
+                at: t("2026-11-19T15:00:00Z"),
+            }),
+            "2026-11-01T00:00:00Z",
+        );
+        done.repeat = Some(TaskRepeat::Weekly);
+        done.spent_minutes = 50;
+        done.done_at = Some(t("2026-11-19T16:00:00Z"));
+        let next = next_copy(&done, "n1".into(), NY, t("2026-11-19T16:00:00Z")).unwrap();
+        assert_eq!(
+            next.due,
+            Some(Due::At {
+                at: t("2026-11-26T15:00:00Z")
+            })
+        );
+        assert_eq!(
+            (next.done_at, next.spent_minutes, next.repeat),
+            (None, 0, Some(TaskRepeat::Weekly))
+        );
+        assert!(next.link.is_none() && next.planned_event.is_none());
+        done.next_made = Some("n1".into());
+        assert!(next_copy(&done, "n2".into(), NY, t("2026-11-19T16:00:00Z")).is_none());
+        done.repeat = None;
+        done.next_made = None;
+        assert!(next_copy(&done, "n3".into(), NY, t("2026-11-19T16:00:00Z")).is_none());
+    }
+
+    #[test]
+    fn a_repeat_needs_a_day_and_a_bad_mail_link_is_refused() {
+        let mut i = input("Expenses");
+        i.repeat = Some(TaskRepeat::LastWorkday);
+        assert!(check(&i, NY).is_err());
+        i.due_date = Some("2026-11-30".into());
+        assert!(check(&i, NY).is_ok());
+        i.mail = Some(MailRef {
+            subject: "Re:  budget".into(),
+            from: "Priya".into(),
+            open: MailOpen::Url {
+                url: "javascript:alert(1)".into(),
+            },
+        });
+        assert!(check(&i, NY).is_err());
+        i.mail = Some(MailRef {
+            subject: "Re:  budget".into(),
+            from: "Priya".into(),
+            open: MailOpen::Url {
+                url: "https://mail.google.com/mail/u/0/#inbox/abc".into(),
+            },
+        });
+        assert_eq!(check(&i, NY).unwrap().mail.unwrap().subject, "Re: budget");
+    }
+
+    #[test]
+    fn waiting_tasks_have_their_own_list_and_a_nudge_every_few_days() {
+        let mut w = task("Budget numbers", date("2026-11-19"), "2026-11-10T12:00:00Z");
+        w.waiting_on = Some("Priya".into());
+        w.waiting_since = Some(t("2026-11-12T12:00:00Z"));
+        let l = lists(&[w.clone()], t("2026-11-19T15:00:00Z"), NY);
+        assert_eq!((l.waiting.len(), l.today.len()), (1, 0));
+        let n = waiting_nudges(&[w.clone()], t("2026-11-19T15:00:00Z"), 3);
+        assert_eq!(n.len(), 1);
+        assert_eq!((n[0].days, n[0].who.as_str()), (7, "Priya"));
+        assert!(n[0].id.ends_with(":2"));
+        assert!(waiting_nudges(&[w.clone()], t("2026-11-14T15:00:00Z"), 3).is_empty());
+        assert!(waiting_nudges(&[w.clone()], t("2026-11-19T15:00:00Z"), 0).is_empty());
+        w.done_at = Some(t("2026-11-18T00:00:00Z"));
+        assert!(waiting_nudges(&[w], t("2026-11-19T15:00:00Z"), 3).is_empty());
     }
 }

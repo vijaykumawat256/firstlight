@@ -203,6 +203,7 @@ mod tests {
                 synced_at: Some(t(synced)),
             }),
             deleted_at: None,
+            ..Default::default()
         }
     }
 

@@ -68,6 +68,15 @@ pub enum Kind {
     Leave,
     /// Friday's look back at the week (`review`).
     WeekReview,
+    /// A task has waited on someone long enough to nudge them (`day::waiting_due`).
+    Waiting,
+}
+
+impl Kind {
+    /// Whether it still comes on a day off: only what is about a meeting you have that day.
+    pub fn on_time_off(self) -> bool {
+        matches!(self, Kind::Before | Kind::Leave)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

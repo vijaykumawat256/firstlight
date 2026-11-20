@@ -67,7 +67,7 @@ test("connecting the Mail app shows the inbox in the briefing", async ({ page })
   await expect(inbox.getByRole("list", { name: "Invitations" })).toContainText("Invitation from Jordan Lee");
   await expect(inbox.getByRole("list", { name: "Important email" })).toContainText("Priya Shah");
   await expect(inbox).toContainText("and 34 more unread");
-  await inbox.getByRole("button", { name: /Agenda for Tuesday/ }).click(); // opens in the user's own app; must not throw
+  await inbox.getByRole("button", { name: /^(?!Make a task).*Agenda for Tuesday/ }).click(); // opens in the user's own app; must not throw
   await page.screenshot({ path: `${SHOTS}/inbox-light.png`, fullPage: true });
 });
 

@@ -265,14 +265,31 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                             .and_then(|r| {
                                 firstlight_core::review::due(&r, now, tz, &settings.day, &rules, &sent)
                             });
+                        // Tasks waiting on someone long enough to nudge them (weekdays, working hours).
+                        let waiting = firstlight_core::day::waiting_due(
+                            &firstlight_core::todo::all(&store).unwrap_or_default(),
+                            now,
+                            tz,
+                            &settings.day,
+                            &bs,
+                            ns.hide_titles,
+                            &sent,
+                        );
+                        // On a day off only what is about a meeting you have still comes; the rest is not marked
+                        // shown, so a nudge waits for the next working day.
+                        let off_today = settings.day.off_on(now.with_timezone(&tz).date_naive()).is_some();
                         for n in due(&events, now, tz, &ns, &bs, &rules, &sent)
                             .into_iter()
                             .chain(day)
                             .chain(follow)
                             .chain(review)
+                            .chain(waiting)
                         {
                             if focusing && n.kind != firstlight_core::briefing::notify::Kind::Before
                             {
+                                continue;
+                            }
+                            if off_today && !n.kind.on_time_off() {
                                 continue;
                             }
                             // Record first: whatever happens next, we never try this one again.

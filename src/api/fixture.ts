@@ -201,7 +201,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, send_messages: false, send_accounts: [], important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null, plan_consented: null },
   privacy: { crash_reports: false },
-  day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true, travel_maps: false, travel_from: "" },
+  day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true, travel_maps: false, travel_from: "", waiting_nudge_days: 3, dnd_meetings: false, time_off: [] },
   templates: [],
   tasks: { sync_accounts: [] },
 };
@@ -326,17 +326,47 @@ function expandOwn(id: string, input: EventInput, calendar?: string): CalEvent[]
   return out;
 }
 
+/** Fields a new task starts with (crates/logic/src/tasks.rs `Task` defaults). */
+const TASK_EXTRAS = { repeat: null, next_made: null, waiting_on: null, waiting_since: null, mail: null, spent_minutes: 0 } satisfies Partial<Task>;
 /** The to-do list: a small browser-only stand-in for crates/logic/src/tasks.rs and crates/core/src/todo.rs. */
 let tasks: Task[] = [];
 if (params.has("tasks")) {
   const day = (n: number) => ymd(new Date(Date.now() + n * 86_400_000));
-  const base = (title: string, due: Task["due"], extra: Partial<Task> = {}): Task => ({ id: `task-${title.replace(/\W+/g, "-").toLowerCase()}`, title, notes: null, due, minutes: null, done_at: null, created_at: new Date(Date.now() - 86_400_000 * 3).toISOString(), updated_at: new Date().toISOString(), from_meeting: null, planned_event: null, link: null, ...extra });
+  const base = (title: string, due: Task["due"], extra: Partial<Task> = {}): Task => ({ id: `task-${title.replace(/\W+/g, "-").toLowerCase()}`, title, notes: null, due, minutes: null, done_at: null, created_at: new Date(Date.now() - 86_400_000 * 3).toISOString(), updated_at: new Date().toISOString(), from_meeting: null, planned_event: null, link: null, ...TASK_EXTRAS, ...extra });
   tasks = [
     base("Send the budget to Priya", { kind: "date", date: day(-2) }),
     base("Review Sam's slides", { kind: "date", date: day(0) }, { minutes: 30 }),
     base("Book flights", { kind: "date", date: day(3) }),
     base("Read the security report", null),
   ];
+  if (params.has("waiting")) tasks.push(base("Budget numbers", { kind: "date", date: day(0) }, { waiting_on: "priya@example.com", waiting_since: new Date(Date.now() - 4 * 86_400_000).toISOString() }));
+}
+/** Next due day of a repeating task (stand-in for `tasks::next_due_day`). */
+function nextDueDay(repeat: NonNullable<Task["repeat"]>, due: string, today: string): string {
+  const d = new Date(`${due}T12:00:00`);
+  const lastWorkday = (y: number, m: number) => {
+    const x = new Date(y, m + 1, 0, 12);
+    while (x.getDay() === 0 || x.getDay() === 6) x.setDate(x.getDate() - 1);
+    return x;
+  };
+  const step = () => {
+    if (repeat === "daily") d.setDate(d.getDate() + 1);
+    else if (repeat === "weekdays") do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
+    else if (repeat === "weekly") d.setDate(d.getDate() + 7);
+    else if (repeat === "monthly") {
+      const day = d.getDate();
+      d.setDate(1);
+      d.setMonth(d.getMonth() + 1);
+      d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+    } else {
+      const here = lastWorkday(d.getFullYear(), d.getMonth());
+      if (here > d) d.setTime(here.getTime());
+      else d.setTime(lastWorkday(d.getFullYear(), d.getMonth() + 1).getTime());
+    }
+  };
+  step();
+  for (let i = 0; i < 4000 && ymd(d) <= today; i++) step();
+  return ymd(d);
 }
 function checkTask(input: TaskInput) {
   const title = input.title.trim().replace(/\s+/g, " ");
@@ -345,18 +375,25 @@ function checkTask(input: TaskInput) {
   if (input.due_time && !input.due_date) throw new Error("Choose a day for that time.");
   if (input.minutes !== null && (input.minutes < 5 || input.minutes > 720)) throw new Error("A task can take 5 minutes to 12 hours.");
   const due: Task["due"] = !input.due_date ? null : input.due_time ? { kind: "at", at: new Date(`${input.due_date}T${input.due_time}`).toISOString() } : { kind: "date", date: input.due_date };
-  return { title, notes: input.notes?.trim() || null, due, minutes: input.minutes, from_meeting: input.from_meeting ?? null };
+  if (input.repeat && !due) throw new Error("Choose a day for a task that repeats.");
+  const waiting_on = input.waiting_on?.trim().replace(/\s+/g, " ") || null;
+  if (waiting_on && waiting_on.length > 100) throw new Error("That name is too long.");
+  return { title, notes: input.notes?.trim() || null, due, minutes: input.minutes, from_meeting: input.from_meeting ?? null, repeat: input.repeat ?? null, waiting_on };
 }
 const taskDay = (t: Task) => (!t.due ? null : t.due.kind === "date" ? t.due.date : ymd(new Date(t.due.at)));
 function taskLists(): TaskLists {
   const today = ymd(new Date());
-  const out: TaskLists = { today: [], upcoming: [], someday: [], done: [], done_today: 0 };
+  const out: TaskLists = { today: [], upcoming: [], someday: [], waiting: [], done: [], done_today: 0 };
   const key = (t: Task) => (t.due ? (t.due.kind === "at" ? t.due.at : `${t.due.date}T00:00:00`) : "~") + t.created_at;
   for (const t of tasks) {
     const v: TaskView = { ...structuredClone(t), days_late: 0 };
     if (t.done_at) {
       if (ymd(new Date(t.done_at)) === today) out.done_today++;
       if (Date.now() - Date.parse(t.done_at) <= 30 * 86_400_000) out.done.push(v);
+      continue;
+    }
+    if (t.waiting_on) {
+      out.waiting.push(v);
       continue;
     }
     const d = taskDay(t);
@@ -368,6 +405,7 @@ function taskLists(): TaskLists {
   out.upcoming.sort((a, b) => key(a).localeCompare(key(b)));
   out.someday.sort((a, b) => b.created_at.localeCompare(a.created_at));
   out.done.sort((a, b) => (b.done_at ?? "").localeCompare(a.done_at ?? ""));
+  out.waiting.sort((a, b) => (a.waiting_since ?? a.created_at).localeCompare(b.waiting_since ?? b.created_at));
   return out;
 }
 function findTask(id: string): Task {
@@ -636,6 +674,8 @@ export const fixtureBackend: Backend = {
   },
   async openMailMessage(target) {
     if (target.kind === "url" && !target.url.startsWith("https://")) throw new Error("Refusing to open that link.");
+    const w = window as unknown as { __opened?: unknown[] };
+    (w.__opened ??= []).push(target);
   },
   async aiStatus() {
     return { enabled: aiState.enabled, consented: aiState.consented, provider: aiState.provider, has_key: aiState.keys.has(aiState.provider) } satisfies AiStatus;
@@ -884,19 +924,30 @@ export const fixtureBackend: Backend = {
   },
   async addTask(input) {
     const now = new Date().toISOString();
-    const t: Task = { id: `task-${tasks.length + 1}-${Date.now()}`, ...checkTask(input), done_at: null, created_at: now, updated_at: now, planned_event: null, link: null };
+    const c = checkTask(input);
+    const t: Task = { id: `task-${tasks.length + 1}-${Date.now()}`, ...TASK_EXTRAS, ...c, waiting_since: c.waiting_on ? now : null, mail: input.mail ?? null, done_at: null, created_at: now, updated_at: now, planned_event: null, link: null };
     tasks.push(t);
     return structuredClone(t);
   },
   async updateTask(id, input) {
     const t = findTask(id);
     const c = checkTask(input);
-    Object.assign(t, { ...c, from_meeting: c.from_meeting ?? t.from_meeting, updated_at: new Date().toISOString() });
+    const now = new Date().toISOString();
+    const waiting_since = c.waiting_on === t.waiting_on ? t.waiting_since : c.waiting_on ? now : null;
+    Object.assign(t, { ...c, waiting_since, from_meeting: c.from_meeting ?? t.from_meeting, updated_at: now });
     return structuredClone(t);
   },
   async setTaskDone(id, done) {
     const t = findTask(id);
     t.done_at = done ? (t.done_at ?? new Date().toISOString()) : null;
+    if (done && t.repeat && t.due && !t.next_made) {
+      const day = nextDueDay(t.repeat, taskDay(t)!, ymd(new Date()));
+      const due: Task["due"] = t.due.kind === "date" ? { kind: "date", date: day } : { kind: "at", at: new Date(`${day}T${new Date(t.due.at).toTimeString().slice(0, 5)}`).toISOString() };
+      const now = new Date().toISOString();
+      const next: Task = { ...TASK_EXTRAS, id: `task-next-${Date.now()}`, title: t.title, notes: t.notes, due, minutes: t.minutes, done_at: null, created_at: now, updated_at: now, from_meeting: t.from_meeting, planned_event: null, link: null, repeat: t.repeat };
+      t.next_made = next.id;
+      tasks.push(next);
+    }
     return structuredClone(t);
   },
   async deleteTask(id) {
@@ -959,7 +1010,7 @@ export const fixtureBackend: Backend = {
     // The phone's list arrives, and tasks here go to the first account.
     const now = new Date().toISOString();
     if (!tasks.some((t) => t.title === "Pick up dry cleaning"))
-      tasks.push({ id: `task-remote-${Date.now()}`, title: "Pick up dry cleaning", notes: null, due: null, minutes: null, done_at: null, created_at: now, updated_at: now, from_meeting: null, planned_event: null, link: { account_id: accountId, list_id: "@default", remote_id: "r1", remote_updated: "s1" } });
+      tasks.push({ ...TASK_EXTRAS, id: `task-remote-${Date.now()}`, title: "Pick up dry cleaning", notes: null, due: null, minutes: null, done_at: null, created_at: now, updated_at: now, from_meeting: null, planned_event: null, link: { account_id: accountId, list_id: "@default", remote_id: "r1", remote_updated: "s1" } });
     tasks = tasks.map((t) => (t.link || t.done_at ? t : { ...t, link: { account_id: settings.tasks.sync_accounts[0]!, list_id: "@default", remote_id: `r-${t.id}`, remote_updated: "s1" } }));
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);

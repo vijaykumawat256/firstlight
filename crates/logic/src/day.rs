@@ -45,6 +45,33 @@ pub struct DaySettings {
     pub travel_maps: bool,
     /// Where the first trip of the day starts (your office, say), for Apple Maps.
     pub travel_from: String,
+    /// Remind you to nudge someone a task waits on every this many days. 0 = never.
+    pub waiting_nudge_days: u32,
+    /// Turn on the computer's Do Not Disturb during meetings and focus time (Mac: through two Shortcuts the person
+    /// makes). Off by default.
+    pub dnd_meetings: bool,
+    /// Days off. Summaries, wrap-up and nudges stay quiet on them; meetings on them are pointed out.
+    pub time_off: Vec<TimeOff>,
+}
+
+/// A stretch of days off (both days included).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TimeOff {
+    pub from: NaiveDate,
+    pub to: NaiveDate,
+    /// "Holiday", "Conference"... at most 60 characters.
+    #[serde(default)]
+    pub label: String,
+}
+
+/// Most stretches of time off kept.
+pub const MAX_TIME_OFF: usize = 30;
+
+impl DaySettings {
+    /// The stretch of time off that covers `day`, if any.
+    pub fn off_on(&self, day: NaiveDate) -> Option<&TimeOff> {
+        self.time_off.iter().find(|t| t.from <= day && day <= t.to)
+    }
 }
 
 impl Default for DaySettings {
@@ -66,6 +93,9 @@ impl Default for DaySettings {
             weekly_review: true,
             travel_maps: false,
             travel_from: String::new(),
+            waiting_nudge_days: 3,
+            dnd_meetings: false,
+            time_off: vec![],
         }
     }
 }
@@ -92,7 +122,58 @@ impl DaySettings {
             .take(200)
             .collect();
         self.travel_from = from.trim().to_string();
+        self.waiting_nudge_days = self.waiting_nudge_days.min(30);
+        // Time off: real stretches (to on or after from, at most a year long), tidy labels, no repeats, by date.
+        for t in &mut self.time_off {
+            let label: String = t
+                .label
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(60)
+                .collect();
+            t.label = label.split_whitespace().collect::<Vec<_>>().join(" ");
+        }
+        self.time_off
+            .retain(|t| t.to >= t.from && (t.to - t.from).num_days() <= 366);
+        self.time_off.sort_by_key(|t| (t.from, t.to));
+        self.time_off
+            .dedup_by(|a, b| a.from == b.from && a.to == b.to);
+        self.time_off.truncate(MAX_TIME_OFF);
     }
+}
+
+/// Nudges for tasks waiting on someone, due on weekdays inside working hours (so they never arrive at night), one per
+/// round of `waiting_nudge_days`.
+pub fn waiting_due(
+    tasks: &[crate::tasks::Task],
+    now: DateTime<Utc>,
+    tz: Tz,
+    ds: &DaySettings,
+    bs: &BriefingSettings,
+    hide_titles: bool,
+    sent: &HashSet<String>,
+) -> Vec<Notification> {
+    let local = now.with_timezone(&tz);
+    if matches!(local.weekday(), Weekday::Sat | Weekday::Sun)
+        || local.hour() < bs.work_start_hour
+        || local.hour() >= bs.work_end_hour
+    {
+        return vec![];
+    }
+    crate::tasks::waiting_nudges(tasks, now, ds.waiting_nudge_days)
+        .into_iter()
+        .filter(|n| !sent.contains(&n.id))
+        .map(|n| Notification {
+            id: n.id,
+            kind: Kind::Waiting,
+            title: format!("Still waiting on {}", n.who),
+            body: if hide_titles {
+                format!("A task has waited {} days. A quick nudge?", n.days)
+            } else {
+                format!("“{}” has waited {} days. A quick nudge?", n.title, n.days)
+            },
+        })
+        .collect()
 }
 
 /// Timed, shown events (not all-day, not cancelled or declined) touching `[from, to)`, as start-sorted spans.
@@ -604,6 +685,7 @@ mod tests {
                 planned_event: None,
                 link: None,
                 deleted_at: None,
+                ..Default::default()
             },
             days_late: 0,
         }
@@ -976,6 +1058,127 @@ mod tests {
                 ds.lunch_minutes
             ),
             (17, 60, 12, 120)
+        );
+    }
+
+    #[test]
+    fn waiting_nudges_come_only_on_weekdays_in_working_hours_and_once_per_round() {
+        let mut t = crate::tasks::Task {
+            id: "w".into(),
+            title: "Budget numbers".into(),
+            waiting_on: Some("Priya".into()),
+            waiting_since: Some("2026-11-13T15:00:00Z".parse().unwrap()),
+            ..Default::default()
+        };
+        let ds = DaySettings::default();
+        let bs = BriefingSettings::default();
+        let thu_11am: DateTime<Utc> = "2026-11-19T16:00:00Z".parse().unwrap();
+        let n = waiting_due(
+            std::slice::from_ref(&t),
+            thu_11am,
+            NY,
+            &ds,
+            &bs,
+            false,
+            &HashSet::new(),
+        );
+        assert_eq!(n.len(), 1);
+        assert_eq!(n[0].kind, Kind::Waiting);
+        assert!(n[0].body.contains("Budget numbers") && n[0].title.contains("Priya"));
+        let sent: HashSet<String> = [n[0].id.clone()].into();
+        assert!(
+            waiting_due(
+                std::slice::from_ref(&t),
+                thu_11am,
+                NY,
+                &ds,
+                &bs,
+                false,
+                &sent
+            )
+            .is_empty()
+        );
+        // Not at night, not at the weekend; titles hidden when asked.
+        let thu_11pm: DateTime<Utc> = "2026-11-20T04:00:00Z".parse().unwrap();
+        assert!(
+            waiting_due(
+                std::slice::from_ref(&t),
+                thu_11pm,
+                NY,
+                &ds,
+                &bs,
+                false,
+                &HashSet::new()
+            )
+            .is_empty()
+        );
+        let sat: DateTime<Utc> = "2026-11-21T16:00:00Z".parse().unwrap();
+        assert!(
+            waiting_due(
+                std::slice::from_ref(&t),
+                sat,
+                NY,
+                &ds,
+                &bs,
+                false,
+                &HashSet::new()
+            )
+            .is_empty()
+        );
+        let hidden = waiting_due(
+            std::slice::from_ref(&t),
+            thu_11am,
+            NY,
+            &ds,
+            &bs,
+            true,
+            &HashSet::new(),
+        );
+        assert!(!hidden[0].body.contains("Budget"));
+        t.done_at = Some(thu_11am);
+        assert!(waiting_due(&[t], thu_11am, NY, &ds, &bs, false, &HashSet::new()).is_empty());
+    }
+
+    #[test]
+    fn time_off_is_tidied_and_found_by_day() {
+        let d = |s: &str| -> NaiveDate { s.parse().unwrap() };
+        let mut ds = DaySettings {
+            time_off: vec![
+                TimeOff {
+                    from: d("2026-12-24"),
+                    to: d("2026-12-31"),
+                    label: "  Winter\n break ".into(),
+                },
+                TimeOff {
+                    from: d("2026-12-10"),
+                    to: d("2026-12-01"),
+                    label: "backwards".into(),
+                },
+                TimeOff {
+                    from: d("2026-11-27"),
+                    to: d("2026-11-27"),
+                    label: String::new(),
+                },
+                TimeOff {
+                    from: d("2026-12-24"),
+                    to: d("2026-12-31"),
+                    label: "again".into(),
+                },
+            ],
+            waiting_nudge_days: 99,
+            ..Default::default()
+        };
+        ds.sanitize();
+        assert_eq!(ds.time_off.len(), 2);
+        assert_eq!(ds.time_off[0].from, d("2026-11-27"));
+        assert_eq!(ds.time_off[1].label, "Winter break");
+        assert_eq!(ds.waiting_nudge_days, 30);
+        assert!(ds.off_on(d("2026-12-28")).is_some());
+        assert!(ds.off_on(d("2026-12-23")).is_none());
+        assert!(
+            Kind::Before.on_time_off()
+                && !Kind::Morning.on_time_off()
+                && !Kind::Waiting.on_time_off()
         );
     }
 }

@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
-import { CalendarPlus, ChevronRight, MailWarning } from "lucide-react";
-import { api, type MailMessage, type MailProblem, type OpenTarget } from "@/api";
-import { Button, ListGroup, SectionHeader, useToasts } from "@/design";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CalendarPlus, ChevronRight, ListPlus, MailWarning } from "lucide-react";
+import { api, errorMessage, type MailMessage, type MailProblem, type OpenTarget } from "@/api";
+import { Button, IconButton, ListGroup, SectionHeader, useToasts } from "@/design";
 import { useNav } from "@/app/nav";
 import { timeAgo } from "@/features/accounts/time";
 import { formatDate, formatTime } from "./format";
@@ -108,10 +108,37 @@ export function InboxSection() {
   );
 }
 
+/** Turns an email into a task that links back to it. Only the subject, the sender's name and how to open it are kept. */
+function MakeTaskButton({ m }: { m: MailMessage }) {
+  const push = useToasts((s) => s.push);
+  const qc = useQueryClient();
+  const add = useMutation({
+    mutationFn: () =>
+      api.addTask({
+        title: (m.subject.trim() || `Email from ${m.sender_name}`).slice(0, 300),
+        notes: null,
+        due_date: null,
+        due_time: null,
+        minutes: null,
+        mail: { subject: m.subject.slice(0, 300), from: m.sender_name.slice(0, 200), open: m.open },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tasks"] });
+      push({ title: "Added to your tasks" });
+    },
+    onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
+  });
+  return (
+    <IconButton label={`Make a task from ${m.subject || "this email"}`} disabled={add.isPending} onClick={() => add.mutate()}>
+      <ListPlus className="size-4" />
+    </IconButton>
+  );
+}
+
 function MessageRow({ m, onOpen }: { m: MailMessage; onOpen: () => void }) {
   return (
-    <li>
-      <button type="button" onClick={onOpen} className="flex min-h-12 w-full items-start gap-3 px-4 py-2.5 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong">
+    <li className="flex items-center pr-2">
+      <button type="button" onClick={onOpen} className="flex min-h-12 min-w-0 flex-1 items-start gap-3 px-4 py-2.5 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong">
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-2">
             <span className="truncate text-headline font-medium text-fg">{m.sender_name}</span>
@@ -121,6 +148,7 @@ function MessageRow({ m, onOpen }: { m: MailMessage; onOpen: () => void }) {
           {m.snippet && <span className="block truncate text-footnote text-fg-2">{m.snippet}</span>}
         </span>
       </button>
+      <MakeTaskButton m={m} />
     </li>
   );
 }

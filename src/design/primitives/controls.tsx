@@ -177,9 +177,11 @@ export interface SegmentedProps {
   onValueChange: (value: string) => void;
   options: SelectOption[];
   label: string;
+  /** Spread across the full width (labels never wrap; scrolls sideways if they cannot fit). */
+  fill?: boolean;
 }
 
-export function Segmented({ value, onValueChange, options, label }: SegmentedProps) {
+export function Segmented({ value, onValueChange, options, label, fill }: SegmentedProps) {
   return (
     <RToggleGroup.Root
       type="single"
@@ -187,14 +189,15 @@ export function Segmented({ value, onValueChange, options, label }: SegmentedPro
       aria-label={label}
       // A segmented control always has a selection; ignore the "deselect" event.
       onValueChange={(v) => v && onValueChange(v)}
-      className="inline-flex rounded-control bg-fill p-0.5"
+      className={clsx("rounded-control bg-fill p-0.5", fill ? "flex w-full overflow-x-auto" : "inline-flex")}
     >
       {options.map((o) => (
         <RToggleGroup.Item
           key={o.value}
           value={o.value}
           className={clsx(
-            "h-6 rounded-[5px] px-3 text-body font-medium text-fg-2",
+            "h-6 whitespace-nowrap rounded-[5px] text-body font-medium text-fg-2",
+            fill ? "flex-1 px-2" : "px-3",
             "transition-[background-color,color,box-shadow] duration-150 ease-standard",
             "data-[state=on]:bg-surface-raised data-[state=on]:text-fg data-[state=on]:shadow-card",
           )}

@@ -67,6 +67,11 @@ pub fn add(store: &Store, input: &TaskInput, tz: Tz, now: DateTime<Utc>) -> Resu
         planned_event: None,
         link: None,
         deleted_at: None,
+        repeat: c.repeat,
+        waiting_since: c.waiting_on.as_ref().map(|_| now),
+        waiting_on: c.waiting_on,
+        mail: c.mail,
+        ..Default::default()
     };
     put(store, &task)?;
     Ok(task)
@@ -86,6 +91,11 @@ pub fn update(
     task.notes = c.notes;
     task.due = c.due;
     task.minutes = c.minutes;
+    task.repeat = c.repeat;
+    if c.waiting_on != task.waiting_on {
+        task.waiting_since = c.waiting_on.as_ref().map(|_| now);
+        task.waiting_on = c.waiting_on;
+    }
     if c.from_meeting.is_some() {
         task.from_meeting = c.from_meeting;
     }
@@ -94,9 +104,23 @@ pub fn update(
     Ok(task)
 }
 
-pub fn set_done(store: &Store, id: &str, done: bool, now: DateTime<Utc>) -> Result<Task> {
+/// Ticks a task off (or back on). Ticking a repeating task adds its next copy, once.
+pub fn set_done(store: &Store, id: &str, done: bool, tz: Tz, now: DateTime<Utc>) -> Result<Task> {
     let mut task = get(store, id)?;
     task.done_at = done.then_some(task.done_at.unwrap_or(now));
+    task.updated_at = now;
+    if done && let Some(next) = tasks::next_copy(&task, new_id(), tz, now) {
+        task.next_made = Some(next.id.clone());
+        put(store, &next)?;
+    }
+    put(store, &task)?;
+    Ok(task)
+}
+
+/// Adds focus-timer minutes to a task.
+pub fn add_spent(store: &Store, id: &str, minutes: u32, now: DateTime<Utc>) -> Result<Task> {
+    let mut task = get(store, id)?;
+    task.spent_minutes = task.spent_minutes.saturating_add(minutes.min(24 * 60));
     task.updated_at = now;
     put(store, &task)?;
     Ok(task)
@@ -196,6 +220,7 @@ pub fn add_many(
             due_time: None,
             minutes: None,
             from_meeting: from_meeting.map(str::to_string),
+            ..Default::default()
         })
         .collect();
     for i in &inputs {
@@ -228,6 +253,7 @@ mod tests {
             due_time: None,
             minutes: None,
             from_meeting: None,
+            ..Default::default()
         }
     }
 
@@ -253,13 +279,13 @@ mod tests {
         assert_eq!(changed.created_at, a.created_at);
         assert_eq!(lists(&s, now, NY).unwrap().upcoming.len(), 1);
 
-        let done = set_done(&s, &a.id, true, now).unwrap();
+        let done = set_done(&s, &a.id, true, NY, now).unwrap();
         assert_eq!(done.done_at, Some(now));
         // Ticking it again keeps the first time it was done.
-        let again = set_done(&s, &a.id, true, now + chrono::Duration::hours(1)).unwrap();
+        let again = set_done(&s, &a.id, true, NY, now + chrono::Duration::hours(1)).unwrap();
         assert_eq!(again.done_at, Some(now));
         assert_eq!(lists(&s, now, NY).unwrap().done_today, 1);
-        assert_eq!(set_done(&s, &a.id, false, now).unwrap().done_at, None);
+        assert_eq!(set_done(&s, &a.id, false, NY, now).unwrap().done_at, None);
 
         delete(&s, &a.id).unwrap();
         assert!(get(&s, &a.id).is_err());
@@ -285,7 +311,7 @@ mod tests {
         let ev = s.get_event(&event_id).unwrap().unwrap();
         assert_eq!(ev.title, "Write the report");
         assert_eq!(ev.calendar_id, local::CALENDAR_ID);
-        set_done(&s, &a.id, true, now).unwrap();
+        set_done(&s, &a.id, true, NY, now).unwrap();
         assert!(
             plan(
                 &mut s,
@@ -355,5 +381,74 @@ mod tests {
         add(&s, &input("Fine", None), NY, now).unwrap();
         s.put_task("broken", "{not json").unwrap();
         assert_eq!(all(&s).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn ticking_a_repeating_task_adds_the_next_one_once_and_waiting_starts_a_clock() {
+        let s = store();
+        let now = t("2026-11-19T15:00:00Z");
+        let a = add(
+            &s,
+            &TaskInput {
+                repeat: Some(tasks::TaskRepeat::Weekly),
+                ..input("Weekly report", Some("2026-11-20"))
+            },
+            NY,
+            now,
+        )
+        .unwrap();
+        set_done(&s, &a.id, true, NY, now).unwrap();
+        set_done(&s, &a.id, false, NY, now).unwrap();
+        set_done(&s, &a.id, true, NY, now).unwrap();
+        let open: Vec<_> = all(&s)
+            .unwrap()
+            .into_iter()
+            .filter(|t| t.done_at.is_none())
+            .collect();
+        assert_eq!(open.len(), 1);
+        assert_eq!(
+            open[0].due,
+            Some(tasks::Due::Date {
+                date: "2026-11-27".parse().unwrap()
+            })
+        );
+
+        let w = add(
+            &s,
+            &TaskInput {
+                waiting_on: Some("Priya".into()),
+                ..input("Numbers", None)
+            },
+            NY,
+            now,
+        )
+        .unwrap();
+        assert_eq!(w.waiting_since, Some(now));
+        let later = now + chrono::Duration::days(2);
+        let same = update(
+            &s,
+            &w.id,
+            &TaskInput {
+                waiting_on: Some("Priya".into()),
+                ..input("Numbers!", None)
+            },
+            NY,
+            later,
+        )
+        .unwrap();
+        assert_eq!(same.waiting_since, Some(now));
+        let other = update(
+            &s,
+            &w.id,
+            &TaskInput {
+                waiting_on: Some("Sam".into()),
+                ..input("Numbers", None)
+            },
+            NY,
+            later,
+        )
+        .unwrap();
+        assert_eq!(other.waiting_since, Some(later));
+        assert_eq!(add_spent(&s, &w.id, 25, later).unwrap().spent_minutes, 25);
     }
 }

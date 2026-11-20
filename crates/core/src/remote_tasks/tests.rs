@@ -76,6 +76,7 @@ fn input(title: &str) -> TaskInput {
         due_time: Some("15:30".into()),
         minutes: None,
         from_meeting: None,
+        ..Default::default()
     }
 }
 

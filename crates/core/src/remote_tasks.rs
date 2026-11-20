@@ -427,6 +427,7 @@ pub fn sync_account(
                     planned_event: None,
                     link: Some(link(&r.id, &r.stamp)),
                     deleted_at: None,
+                    ..Default::default()
                 };
                 apply_remote(&mut t, &r, tz, now);
                 todo::put(store, &t)?;
