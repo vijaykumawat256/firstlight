@@ -48,6 +48,8 @@ fn main() {
             "disable_task_sync",
             "sync_tasks_now",
             "get_week_review",
+            "reminders_status",
+            "enable_reminders_sync",
             "clear_auto_reply",
             "set_auto_reply",
             "disable_account_autoreply",

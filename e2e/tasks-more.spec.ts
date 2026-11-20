@@ -164,3 +164,33 @@ test("a focus timer runs on a task, counts its minutes when stopped or finished,
   await page.clock.fastForward("00:10");
   expect(await page.evaluate(() => (window as unknown as { __timerAsks: number }).__timerAsks)).toBeLessThanOrEqual(asks + 1);
 });
+
+test("tasks can be kept in step with Apple Reminders, and stopped", async ({ page }) => {
+  await page.goto("/?tasks");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^General/ }).click();
+  const group = page.getByRole("region", { name: "Task sync" });
+  await expect(group).toContainText("Your Mac asks for permission once");
+  await group.getByRole("button", { name: "Sync tasks with Reminders" }).click();
+  await expect(page.getByText("Tasks are kept in step with Reminders").first()).toBeVisible();
+  await expect(group).toContainText("Kept in step with your default Reminders list");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Briefing", exact: true }).click();
+  await page.getByRole("button", { name: /^No day/ }).click();
+  await expect(page.getByText("Buy stamps")).toBeVisible();
+
+  await page.goto("/?tasks&remindersdenied");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^General/ }).click();
+  await page.getByRole("button", { name: "Sync tasks with Reminders" }).click();
+  await expect(page.getByText("Couldn't turn on Reminders").first()).toBeVisible();
+});
+
+test("Reminders is not offered on Windows", async ({ page }) => {
+  await page.goto("/?windows");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^General/ }).click();
+  await expect(page.getByRole("region", { name: "Task sync" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sync tasks with Reminders" })).toHaveCount(0);
+});

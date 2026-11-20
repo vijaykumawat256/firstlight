@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reminders-status"
+description = "Enables the reminders_status command without any pre-configured scope."
+commands.allow = ["reminders_status"]
+
+[[permission]]
+identifier = "deny-reminders-status"
+description = "Denies the reminders_status command without any pre-configured scope."
+commands.deny = ["reminders_status"]

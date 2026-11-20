@@ -147,7 +147,7 @@ test("task sync is turned on per account, brings in the phone's tasks, and can b
   await page.goto("/?withgoogle&tasks");
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("main").getByRole("button", { name: /^General/ }).click();
-  const allow = page.getByRole("button", { name: /^Sync tasks with / }).first();
+  const allow = page.getByRole("button", { name: /^Sync tasks with (?!Reminders)/ }).first();
   await allow.click();
   await expect(page.getByText(/Kept in step with Google Tasks; new tasks go here\./)).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();

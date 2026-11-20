@@ -581,12 +581,37 @@ export function TaskSyncGroup() {
       void qc.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
+  const reminders = useQuery({ queryKey: ["reminders-status"], queryFn: () => api.remindersStatus(), staleTime: 60_000 });
+  const allowReminders = useMutation({
+    mutationFn: () => api.enableRemindersSync(),
+    onSuccess: (v) => {
+      put(v);
+      void qc.invalidateQueries({ queryKey: ["tasks"] });
+      push({ title: "Tasks are kept in step with Reminders" });
+    },
+    onError: (e) => push({ title: "Couldn't turn on Reminders", description: errorMessage(e), tone: "danger" }),
+  });
   if (!s) return null;
   const list = (accounts.data ?? []).filter((a) => a.provider === "google" || a.provider === "microsoft");
   const on = s.tasks.sync_accounts;
+  const remindersOn = on.includes("apple-reminders");
   return (
-    <Group title="Task sync" footer="Your tasks and your Google Tasks or Microsoft To Do list stay the same on both sides, so they are on your phone too. When a task changed on both, the newer change wins. Google Tasks keeps only the day a task is due, not the time.">
+    <Group title="Task sync" footer="Your tasks and your Reminders, Google Tasks or Microsoft To Do list stay the same on both sides, so they are on your phone too. When a task changed on both, the newer change wins. These lists keep only the day a task is due, not the time.">
+      {reminders.data?.[0] && (
+        <SettingRow title="Reminders" description={remindersOn ? `Kept in step with your default Reminders list, on your iPhone and with Siri${on[0] === "apple-reminders" ? "; new tasks go here" : ""}.` : "Your tasks in the Reminders app, on your iPhone and with Siri. Your Mac asks for permission once."}>
+          {remindersOn ? (
+            <Button size="sm" variant="plain" aria-label="Stop task sync with Reminders" onClick={() => stop.mutate("apple-reminders")}>
+              Stop
+            </Button>
+          ) : (
+            <Button size="sm" variant="secondary" aria-label="Sync tasks with Reminders" disabled={allowReminders.isPending} onClick={() => allowReminders.mutate()}>
+              {allowReminders.isPending ? "Waiting…" : "Sync tasks"}
+            </Button>
+          )}
+        </SettingRow>
+      )}
       {list.length === 0 ? (
+        reminders.data?.[0] ? null : 
         <SettingRow title="No account to sync with" description="Connect a Google or Microsoft account in Accounts first." />
       ) : (
         list.map((a) => {

@@ -10,6 +10,10 @@
   <string>Firstlight reads the calendars in your Calendar app to show what is coming up today and tomorrow. Only if you turn it on, it also adds the events you create in Firstlight, and it only ever changes or deletes events it added itself.</string>
   <key>NSCalendarsUsageDescription</key>
   <string>Firstlight reads the calendars in your Calendar app to show what is coming up today and tomorrow. Only if you turn it on, it also adds the events you create in Firstlight, and it only ever changes or deletes events it added itself.</string>
+  <key>NSRemindersFullAccessUsageDescription</key>
+  <string>Only if you turn it on, Firstlight keeps your task list in step with Reminders, so your tasks reach your iPhone and Siri. It changes or deletes only reminders in your default list that it keeps in step.</string>
+  <key>NSRemindersUsageDescription</key>
+  <string>Only if you turn it on, Firstlight keeps your task list in step with Reminders, so your tasks reach your iPhone and Siri. It changes or deletes only reminders in your default list that it keeps in step.</string>
   <key>NSAppleEventsUsageDescription</key>
   <string>Firstlight asks Mail for your unread messages and meeting invitations so it can summarise them. It never changes or sends mail.</string>
 </dict>

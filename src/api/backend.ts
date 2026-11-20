@@ -110,6 +110,10 @@ export interface Backend {
   disableAccountSend(accountId: string): Promise<AppSettings>;
   /** Asks the account for its task permission (in the browser), then keeps your tasks in step with Google Tasks or Microsoft To Do. */
   enableTaskSync(accountId: string): Promise<AppSettings>;
+  /** Apple Reminders (Mac): asks for access the first time. Stopped with disableTaskSync("apple-reminders"). */
+  enableRemindersSync(): Promise<AppSettings>;
+  /** [offered here, access already granted] */
+  remindersStatus(): Promise<[boolean, boolean]>;
   /** Stops it; the tasks stay here as ordinary tasks. */
   disableTaskSync(accountId: string): Promise<AppSettings>;
   /** Syncs tasks now. Lists accounts that could not be synced, with a one-word reason. */

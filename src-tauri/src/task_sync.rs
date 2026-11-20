@@ -58,38 +58,48 @@ fn service(deps: &Deps, account: &Account) -> Option<Box<dyn TaskService>> {
     })
 }
 
+/// Every task list sync is on for, in order (the first takes tasks made here): its id, a name to show, the service.
+fn targets(store: &Store, deps: &Deps) -> Vec<(String, String, Box<dyn TaskService>)> {
+    let settings = store.load_settings();
+    settings
+        .tasks
+        .sync_accounts
+        .iter()
+        .filter_map(|id| {
+            if id == crate::reminders::ID {
+                return crate::reminders::AVAILABLE.then(|| {
+                    (
+                        id.clone(),
+                        "Reminders".to_string(),
+                        Box::new(crate::reminders::RemindersService) as Box<dyn TaskService>,
+                    )
+                });
+            }
+            let account = store.get_account(id).ok().flatten()?;
+            let svc = service(deps, &account)?;
+            Some((account.id.clone(), account.display_name.clone(), svc))
+        })
+        .collect()
+}
+
 /// Syncs every account task sync is on for. Returns whether anything changed here. Errors are logged (without
 /// content) and the next round tries again.
 pub(crate) fn run(store: &Store, deps: &Deps) -> bool {
-    let settings = store.load_settings();
     let mut changed = false;
-    for (i, id) in settings.tasks.sync_accounts.iter().enumerate() {
-        let Ok(Some(account)) = store.get_account(id) else {
-            continue;
-        };
-        let Some(svc) = service(deps, &account) else {
-            continue;
-        };
-        match remote_tasks::sync_account(
-            store,
-            svc.as_ref(),
-            &account.id,
-            i == 0,
-            deps.tz(),
-            Utc::now(),
-        ) {
+    for (i, (id, _, svc)) in targets(store, deps).into_iter().enumerate() {
+        match remote_tasks::sync_account(store, svc.as_ref(), &id, i == 0, deps.tz(), Utc::now()) {
             Ok(done) => {
                 changed |= done.changed_here > 0;
                 if done.changed_here + done.changed_there > 0 {
                     log::info!(
                         "tasks synced for {}: {} here, {} there",
-                        account.id,
+                        id,
                         done.changed_here,
                         done.changed_there
                     );
                 }
             }
-            Err(e) => log::warn!("task sync for {} failed: {}", account.id, kind(&e)),
+            Err(e) => log::warn!("task sync for {} failed: {}", id, kind(&e)),
         }
     }
     changed
@@ -177,24 +187,17 @@ pub async fn sync_tasks_now(
         move || -> Result<Vec<(String, &'static str)>, String> {
             let store =
                 Store::open(&db, &key).map_err(|_| "Couldn't open your data.".to_string())?;
-            let settings = store.load_settings();
             let mut problems = Vec::new();
-            for (i, id) in settings.tasks.sync_accounts.iter().enumerate() {
-                let Ok(Some(account)) = store.get_account(id) else {
-                    continue;
-                };
-                let Some(svc) = service(&deps, &account) else {
-                    continue;
-                };
+            for (i, (id, name, svc)) in targets(&store, &deps).into_iter().enumerate() {
                 if let Err(e) = remote_tasks::sync_account(
                     &store,
                     svc.as_ref(),
-                    &account.id,
+                    &id,
                     i == 0,
                     deps.tz(),
                     Utc::now(),
                 ) {
-                    problems.push((account.display_name.clone(), kind(&e)));
+                    problems.push((name, kind(&e)));
                 }
             }
             Ok(problems)
@@ -204,4 +207,47 @@ pub async fn sync_tasks_now(
     .map_err(|_| "Syncing was interrupted.".to_string())??;
     let _ = app.emit("tasks-changed", ());
     Ok(TaskSyncReply { problems })
+}
+
+/// Keeps tasks in step with Apple Reminders (Mac): asks for Reminders access the first time, then syncs.
+#[tauri::command]
+pub async fn enable_reminders_sync(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<AppSettings> {
+    if !crate::reminders::AVAILABLE {
+        return Err("Reminders is on Macs only.".into());
+    }
+    let allowed = tauri::async_runtime::spawn_blocking(crate::reminders::request)
+        .await
+        .map_err(|_| "Asking for Reminders was interrupted.".to_string())?
+        .map_err(|_| "Reminders needs macOS 14 or later.".to_string())?;
+    if !allowed {
+        return Err("Firstlight isn't allowed to use Reminders. Allow it in System Settings, Privacy & Security, Reminders.".into());
+    }
+    let saved = {
+        let store = lock_store(&state)?;
+        let mut s = store.load_settings();
+        if !s
+            .tasks
+            .sync_accounts
+            .iter()
+            .any(|a| a == crate::reminders::ID)
+        {
+            s.tasks.sync_accounts.push(crate::reminders::ID.to_string());
+        }
+        store
+            .save_settings(&s)
+            .map_err(internal("saving settings"))?;
+        s
+    };
+    let _ = app.emit("settings-changed", ());
+    sync_tasks_now(app, state).await?;
+    Ok(saved)
+}
+
+/// Whether Reminders can be offered here (Mac) and whether access is already granted.
+#[tauri::command]
+pub async fn reminders_status() -> CmdResult<(bool, bool)> {
+    Ok((crate::reminders::AVAILABLE, crate::reminders::granted()))
 }

@@ -15,6 +15,7 @@ mod notifier;
 #[cfg(windows)]
 mod outlook_win;
 mod providers;
+mod reminders;
 mod scheduler;
 mod task_sync;
 mod tasks_cmd;
@@ -528,6 +529,8 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            task_sync::reminders_status,
+            task_sync::enable_reminders_sync,
             mail_ai::clear_auto_reply,
             mail_ai::set_auto_reply,
             mail_ai::disable_account_autoreply,

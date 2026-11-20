@@ -1052,6 +1052,19 @@ export const fixtureBackend: Backend = {
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
   },
+  async enableRemindersSync() {
+    if (params.has("windows")) throw new Error("Reminders is on Macs only.");
+    if (params.has("remindersdenied")) throw new Error("Firstlight isn't allowed to use Reminders. Allow it in System Settings, Privacy & Security, Reminders.");
+    settings = { ...settings, tasks: { sync_accounts: [...new Set([...settings.tasks.sync_accounts, "apple-reminders"])] } };
+    const now = new Date().toISOString();
+    // A reminder from the iPhone arrives, and tasks here go to Reminders when it is the first list.
+    if (!tasks.some((t) => t.title === "Buy stamps")) tasks.push({ ...TASK_EXTRAS, id: `task-rem-${Date.now()}`, title: "Buy stamps", notes: null, due: null, minutes: null, done_at: null, created_at: now, updated_at: now, from_meeting: null, planned_event: null, link: { account_id: "apple-reminders", list_id: "default", remote_id: "x1", remote_updated: "1" } });
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async remindersStatus() {
+    return [!params.has("windows"), false] as [boolean, boolean];
+  },
   async disableTaskSync(accountId) {
     settings = { ...settings, tasks: { sync_accounts: settings.tasks.sync_accounts.filter((a) => a !== accountId) } };
     tasks = tasks.map((t) => (t.link?.account_id === accountId ? { ...t, link: null } : t));
