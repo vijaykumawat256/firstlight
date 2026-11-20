@@ -87,7 +87,7 @@ test("typing 'task …' in search adds a task", async ({ page }) => {
   await search.getByRole("combobox", { name: "Search events" }).fill("task renew passport tomorrow");
   await expect(search.getByRole("option").first()).toHaveText(/^Add task: Renew passport · /);
   await search.getByRole("combobox", { name: "Search events" }).press("Enter");
-  await expect(page.getByText("Task added: Renew passport").first()).toBeVisible();
+  await expect(page.getByText(/^Added to Upcoming, /).first()).toBeVisible();
 });
 
 test("task reminders can be turned off in Settings", async ({ page }) => {

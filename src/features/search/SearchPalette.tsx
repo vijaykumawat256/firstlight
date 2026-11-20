@@ -9,7 +9,7 @@ import { formatDate, formatTime } from "@/features/briefing/format";
 import { startOfLocalDay } from "@/features/calendar/layout";
 import { describeQuick, EventForm } from "@/features/events/EventForm";
 import { parseQuickAdd, parseQuickTask, taskLine, type QuickEvent, type QuickTask } from "@/features/events/quickAdd";
-import { dueText, quickToTaskInput } from "@/features/tasks/shared";
+import { dueText, quickToTaskInput, whereTask } from "@/features/tasks/shared";
 import { parseZoneQuestion, timeIn, zoneLabel, type ZoneAnswer } from "@/features/calendar/zones";
 import { AskAnswer } from "./AskAnswer";
 import { parseJump, searchEvents } from "./search";
@@ -102,9 +102,9 @@ export function SearchHost() {
     if (row.kind === "task") {
       api
         .addTask(quickToTaskInput(row.task))
-        .then(() => {
+        .then((t) => {
           void qc.invalidateQueries();
-          push({ title: `Task added: ${row.task.title}` });
+          push({ title: `Added to ${whereTask(t).text}`, description: row.task.title });
         })
         .catch(() => push({ title: "Couldn't add that task", tone: "danger" }));
       return;

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, CalendarClock, Mail, Pencil } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type Task, type TaskInput, type TaskView } from "@/api";
 import { IconButton, TextField, useToasts } from "@/design";
 import { formatDate, formatTime } from "@/features/briefing/format";
@@ -26,8 +26,30 @@ export function dueText(t: Task): string | null {
   return `${formatDate(d)}, ${formatTime(d)}`;
 }
 
-export function quickToTaskInput(q: QuickTask): TaskInput {
-  return { title: q.title, notes: null, due_date: q.dueDate, due_time: q.dueTime, minutes: null };
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const todayYmd = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+/** A typed line as a task. With no day in it, it goes on today's list unless `toToday` is false (adding to Someday). */
+export function quickToTaskInput(q: QuickTask, toToday = true): TaskInput {
+  return { title: q.title, notes: null, due_date: q.dueDate ?? (toToday ? todayYmd() : null), due_time: q.dueTime, minutes: null };
+}
+
+export type TaskTab = "today" | "upcoming" | "someday" | "waiting" | "done";
+
+/** Which list a task shows in, and how to say so ("Today", "Upcoming, Fri 20 Nov", "Someday"). */
+export function whereTask(t: Task): { tab: TaskTab; text: string } {
+  if (t.done_at) return { tab: "done", text: "Done" };
+  if (t.waiting_on) return { tab: "waiting", text: "Waiting" };
+  if (!t.due) return { tab: "someday", text: "Someday" };
+  const day = t.due.kind === "date" ? t.due.date : (() => {
+    const d = new Date(t.due.at);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  })();
+  if (day <= todayYmd()) return { tab: "today", text: "Today" };
+  return { tab: "upcoming", text: `Upcoming, ${dueText(t)}` };
 }
 
 const REPEAT_TEXT: Record<NonNullable<Task["repeat"]>, string> = {
@@ -65,7 +87,11 @@ function meta(t: TaskView): string {
 }
 
 /** One task: tick it off, set time aside for it, or open it to change it. */
-export function TaskRow({ task, onEdit, onPlan, onNudge }: { task: TaskView; onEdit: (t: TaskView) => void; onPlan?: (t: TaskView) => void; onNudge?: (t: TaskView) => void }) {
+export function TaskRow({ task, onEdit, onPlan, onNudge, fresh }: { task: TaskView; onEdit: (t: TaskView) => void; onPlan?: (t: TaskView) => void; onNudge?: (t: TaskView) => void; fresh?: boolean }) {
+  const row = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (fresh) row.current?.scrollIntoView({ block: "nearest" });
+  }, [fresh]);
   const push = useToasts((s) => s.push);
   const changed = useTaskChanged();
   const toggle = useMutation({
@@ -79,7 +105,7 @@ export function TaskRow({ task, onEdit, onPlan, onNudge }: { task: TaskView; onE
   const done = !!task.done_at;
   const line = meta(task);
   return (
-    <li className="flex min-h-12 items-center gap-3 px-4 py-2">
+    <li ref={row} data-fresh={fresh || undefined} className="flex min-h-12 items-center gap-3 px-4 py-2 transition-colors duration-700 ease-standard data-[fresh]:bg-accent-soft">
       <input
         type="checkbox"
         aria-label={`${done ? "Not done" : "Done"}: ${task.title}`}
@@ -114,17 +140,22 @@ export function TaskRow({ task, onEdit, onPlan, onNudge }: { task: TaskView; onE
   );
 }
 
-/** A one-line box to add a task: "call the bank friday 3pm". Shows how it was read before it is added. */
-export function AddTaskField({ label = "Add a task", autoFocus }: { label?: string; autoFocus?: boolean }) {
+/**
+ * A one-line box to add a task: "call the bank friday 3pm". Shows where it will go before it is added, and says where
+ * it went after. A line with no day goes on today's list (or Someday, with `toToday` false).
+ */
+export function AddTaskField({ label = "Add a task", autoFocus, toToday = true, onAdded }: { label?: string; autoFocus?: boolean; toToday?: boolean; onAdded?: (t: Task) => void }) {
   const push = useToasts((s) => s.push);
   const changed = useTaskChanged();
   const [text, setText] = useState("");
   const read = parseQuickTask(text, new Date());
   const add = useMutation({
-    mutationFn: () => api.addTask(quickToTaskInput(read!)),
-    onSuccess: () => {
+    mutationFn: () => api.addTask(quickToTaskInput(read!, toToday)),
+    onSuccess: (t) => {
       setText("");
       changed();
+      push({ title: `Added to ${whereTask(t).text}`, description: t.title });
+      onAdded?.(t);
     },
     onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
   });
@@ -142,7 +173,7 @@ export function AddTaskField({ label = "Add a task", autoFocus }: { label?: stri
         onChange={(e) => setText(e.target.value)}
         maxLength={300}
         placeholder="Call the bank friday 3pm"
-        hint={read && text.trim() ? `Adds “${read.title}”${when ? `, due ${when}` : ""}. Press Return.` : "Add a day or time if it has one."}
+        hint={read && text.trim() ? `Adds “${read.title}” to ${when ? `your list, due ${when}` : toToday ? "Today" : "Someday"}. Press Return.` : toToday ? "Goes on today's list unless you add a day, like “friday 3pm”." : "No day needed here; add one, like “friday”, to plan it."}
         autoComplete="off"
         autoFocus={autoFocus}
       />

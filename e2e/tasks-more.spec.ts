@@ -97,3 +97,37 @@ test("an email becomes a task that opens the email again", async ({ page }) => {
   await row.getByRole("button", { name: "Open the email for Agenda for Tuesday" }).click();
   expect(await page.evaluate(() => (window as unknown as { __opened?: unknown[] }).__opened?.length ?? 0)).toBeGreaterThan(0);
 });
+
+test("a task typed without a day goes on today's list, and every add says where it went", async ({ page }) => {
+  await page.clock.install({ time: at(9, 30) });
+  await page.goto("/?tasks");
+  // From the briefing: no day = today, shown straight away, lit up, with a confirmation.
+  const tasks = page.getByRole("region", { name: "Tasks" });
+  await expect(tasks).toContainText("Goes on today's list unless you add a day");
+  await tasks.getByLabel("Add a task").fill("Water the plants");
+  await expect(tasks).toContainText("Adds “Water the plants” to Today");
+  await tasks.getByLabel("Add a task").press("Enter");
+  await expect(page.getByText("Added to Today").first()).toBeVisible();
+  await expect(tasks.locator("li[data-fresh]")).toContainText("Water the plants");
+
+  // A later day goes to Upcoming, and the Tasks page opens that list and lights the row.
+  await page.getByRole("button", { name: "All tasks" }).click();
+  await page.getByLabel("Add a task").fill("Renew passport friday");
+  await page.getByLabel("Add a task").press("Enter");
+  await expect(page.getByText(/^Added to Upcoming, /).first()).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Upcoming" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("li[data-fresh]")).toContainText("Renew passport");
+
+  // On Someday, no day means no day.
+  await page.getByRole("radio", { name: "Someday" }).click();
+  await page.getByLabel("Add a task").fill("Learn Spanish");
+  await page.getByLabel("Add a task").press("Enter");
+  await expect(page.getByText("Added to Someday").first()).toBeVisible();
+  await expect(page.getByRole("list", { name: "someday tasks" })).toContainText("Learn Spanish");
+
+  // The briefing links straight to the tasks with no day.
+  await page.getByRole("button", { name: "Briefing" }).click();
+  await page.getByRole("button", { name: /^No day \(/ }).click();
+  await expect(page.getByRole("radio", { name: "Someday" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("list", { name: "someday tasks" }).getByText("Learn Spanish")).toBeVisible();
+});

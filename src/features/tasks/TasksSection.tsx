@@ -11,6 +11,8 @@ const SHOWN = 6;
 /** Today's tasks in the briefing: due today, plus unfinished ones carried over from earlier days. */
 export function TasksSection() {
   const go = useNav((s) => s.go);
+  const openTasks = useNav((s) => s.openTasks);
+  const [fresh, setFresh] = useState<string | null>(null);
   const lists = useTaskLists();
   const [editing, setEditing] = useState<TaskView | null>(null);
   const [planning, setPlanning] = useState<TaskView | null>(null);
@@ -26,12 +28,27 @@ export function TasksSection() {
       {today.length > 0 && (
         <ListGroup className="mb-2">
           {today.slice(0, SHOWN).map((t) => (
-            <TaskRow key={t.id} task={t} onEdit={setEditing} onPlan={setPlanning} />
+            <TaskRow key={t.id} task={t} onEdit={setEditing} onPlan={setPlanning} fresh={t.id === fresh} />
           ))}
         </ListGroup>
       )}
-      <AddTaskField />
-      <div className="mt-1 flex justify-end gap-1">
+      <AddTaskField
+        onAdded={(t) => {
+          setFresh(t.id);
+          setTimeout(() => setFresh((f) => (f === t.id ? null : f)), 2500);
+        }}
+      />
+      <div className="mt-1 flex flex-wrap justify-end gap-1">
+        {l.waiting.length > 0 && (
+          <Button variant="plain" size="sm" onClick={() => openTasks("waiting")}>
+            Waiting ({l.waiting.length})
+          </Button>
+        )}
+        {l.someday.length > 0 && (
+          <Button variant="plain" size="sm" onClick={() => openTasks("someday")}>
+            No day ({l.someday.length})
+          </Button>
+        )}
         {today.length + l.someday.length > 0 && (
           <Button variant="plain" size="sm" onClick={() => setPlanDay(true)}>
             Plan my day

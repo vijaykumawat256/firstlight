@@ -12,7 +12,10 @@ interface Nav {
   /** The settings page that is open, or null for the settings list. Kept here so it survives a remount. */
   settingsSection: string | null;
   setSettingsSection: (s: string | null) => void;
+  /** The list the Tasks page opens on (from the briefing's links). */
+  tasksTab: "today" | "upcoming" | "someday" | "waiting" | "done";
   go: (v: View) => void;
+  openTasks: (tab: Nav["tasksTab"]) => void;
   openCalendar: (mode: CalendarMode, date?: Date) => void;
 }
 
@@ -21,8 +24,10 @@ export const useNav = create<Nav>((set) => ({
   calendarMode: "day",
   calendarDate: null,
   settingsSection: null,
+  tasksTab: "today",
   setSettingsSection: (settingsSection) => set({ settingsSection }),
   // Arriving at Settings always starts at the list.
-  go: (view) => set({ view, settingsSection: null, calendarDate: null }),
+  go: (view) => set({ view, settingsSection: null, calendarDate: null, tasksTab: "today" }),
+  openTasks: (tasksTab) => set({ view: "tasks", tasksTab, settingsSection: null, calendarDate: null }),
   openCalendar: (calendarMode, date) => set({ view: "calendar", calendarMode, calendarDate: date ?? null, settingsSection: null }),
 }));

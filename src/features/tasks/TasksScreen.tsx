@@ -1,16 +1,16 @@
 import { ChevronLeft, ListChecks } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { TaskView } from "@/api";
 import { useNav } from "@/app/nav";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api";
 import { Button, EmptyState, ListGroup, Segmented, Skeleton, useToasts } from "@/design";
 import { useSettings } from "@/features/settings/useSettings";
-import { AddTaskField, TaskRow, useTaskLists } from "./shared";
+import { AddTaskField, TaskRow, useTaskLists, whereTask, type TaskTab } from "./shared";
 import { MonthEndDialog, NudgeDialog, PlanTask, TaskForm } from "./TaskDialogs";
 import { PlanDay } from "./PlanDay";
 
-type Tab = "today" | "upcoming" | "someday" | "waiting" | "done";
+type Tab = TaskTab;
 
 const EMPTY: Record<Tab, string> = {
   today: "Nothing to do today.",
@@ -24,12 +24,19 @@ const EMPTY: Record<Tab, string> = {
 export function TasksScreen() {
   const go = useNav((s) => s.go);
   const lists = useTaskLists();
-  const [tab, setTab] = useState<Tab>("today");
+  const [tab, setTab] = useState<Tab>(() => useNav.getState().tasksTab);
   const [editing, setEditing] = useState<TaskView | null>(null);
   const [planning, setPlanning] = useState<TaskView | null>(null);
   const [nudging, setNudging] = useState<TaskView | null>(null);
   const [planDay, setPlanDay] = useState(false);
   const [monthEnd, setMonthEnd] = useState(false);
+  // The task just added: its list is shown and the row lights up for a moment.
+  const [fresh, setFresh] = useState<string | null>(null);
+  useEffect(() => {
+    if (!fresh) return;
+    const t = setTimeout(() => setFresh(null), 2500);
+    return () => clearTimeout(t);
+  }, [fresh]);
   const push = useToasts((s) => s.push);
   const qc = useQueryClient();
   const syncing = (useSettings().settings?.tasks.sync_accounts.length ?? 0) > 0;
@@ -67,7 +74,14 @@ export function TasksScreen() {
             )}
           </header>
           <div className="flex flex-col gap-1">
-            <AddTaskField autoFocus />
+            <AddTaskField
+              autoFocus
+              toToday={tab !== "someday"}
+              onAdded={(t) => {
+                setTab(whereTask(t).tab);
+                setFresh(t.id);
+              }}
+            />
             <div className="flex justify-end gap-2">
               <Button variant="plain" size="sm" onClick={() => setMonthEnd(true)}>
                 Month-end
@@ -97,7 +111,7 @@ export function TasksScreen() {
           ) : (
             <ListGroup aria-label={`${tab} tasks`}>
               {shown.map((t) => (
-                <TaskRow key={t.id} task={t} onEdit={setEditing} onPlan={setPlanning} onNudge={setNudging} />
+                <TaskRow key={t.id} task={t} onEdit={setEditing} onPlan={setPlanning} onNudge={setNudging} fresh={t.id === fresh} />
               ))}
             </ListGroup>
           )}
