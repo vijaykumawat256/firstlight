@@ -9,6 +9,8 @@ import { useSettings } from "@/features/settings/useSettings";
 import { AddTaskField, TaskRow, useTaskLists, whereTask, type TaskTab } from "./shared";
 import { MonthEndDialog, NudgeDialog, PlanTask, TaskForm } from "./TaskDialogs";
 import { PlanDay } from "./PlanDay";
+import { StatusReportDialog } from "@/features/insights/StatusReport";
+import { TimeReportSheet } from "@/features/insights/TimeReport";
 
 type Tab = TaskTab;
 
@@ -30,6 +32,8 @@ export function TasksScreen() {
   const [nudging, setNudging] = useState<TaskView | null>(null);
   const [planDay, setPlanDay] = useState(false);
   const [monthEnd, setMonthEnd] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [timeReport, setTimeReport] = useState(false);
   // The task just added: its list is shown and the row lights up for a moment.
   const [fresh, setFresh] = useState<string | null>(null);
   useEffect(() => {
@@ -82,7 +86,13 @@ export function TasksScreen() {
                 setFresh(t.id);
               }}
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="plain" size="sm" onClick={() => setTimeReport(true)}>
+                My time
+              </Button>
+              <Button variant="plain" size="sm" onClick={() => setWriting(true)}>
+                Write update
+              </Button>
               <Button variant="plain" size="sm" onClick={() => setMonthEnd(true)}>
                 Month-end
               </Button>
@@ -121,6 +131,8 @@ export function TasksScreen() {
       {planning && <PlanTask task={planning} onClose={() => setPlanning(null)} />}
       {nudging && <NudgeDialog task={nudging} onClose={() => setNudging(null)} />}
       {planDay && <PlanDay onClose={() => setPlanDay(false)} />}
+      {writing && <StatusReportDialog onClose={() => setWriting(false)} />}
+      {timeReport && <TimeReportSheet onClose={() => setTimeReport(false)} />}
       {monthEnd && l && (
         <MonthEndDialog existing={[...l.today, ...l.upcoming].filter((t) => t.repeat === "last_workday").map((t) => t.title)} onClose={() => setMonthEnd(false)} />
       )}

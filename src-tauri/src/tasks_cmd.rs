@@ -215,3 +215,70 @@ pub async fn get_week_review(
     firstlight_core::meeting_flow::week_review(&store, Utc::now(), crate::local_tz(), &bs)
         .map_err(internal("working out the week"))
 }
+
+/// A standup ("daily") or weekly update, written from your tasks and calendar. Nothing is sent anywhere.
+#[tauri::command]
+pub async fn get_status_report(
+    state: State<'_, AppState>,
+    kind: firstlight_core::report::ReportKind,
+) -> CmdResult<firstlight_core::report::Report> {
+    let store = lock_store(&state)?;
+    let bs = store.load_settings().briefing;
+    firstlight_core::meeting_flow::status_report(&store, kind, Utc::now(), crate::local_tz(), &bs)
+        .map_err(internal("writing the update"))
+}
+
+fn day_arg(s: &str) -> Result<chrono::NaiveDate, String> {
+    chrono::NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d")
+        .map_err(|_| "Choose a valid day.".to_string())
+}
+
+/// Meeting and focus time between two days (`YYYY-MM-DD`, at most three months).
+#[tauri::command]
+pub async fn get_time_report(
+    state: State<'_, AppState>,
+    from: String,
+    to: String,
+) -> CmdResult<firstlight_core::timereport::TimeReport> {
+    let (from, to) = (day_arg(&from)?, day_arg(&to)?);
+    let store = lock_store(&state)?;
+    let bs = store.load_settings().briefing;
+    firstlight_core::meeting_flow::time_report(&store, from, to, Utc::now(), crate::local_tz(), &bs)
+        .map_err(user_input_error)
+}
+
+/// Saves the time report as a spreadsheet file (CSV) in Downloads and shows it in the file manager.
+#[tauri::command]
+pub async fn export_time_report(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    from: String,
+    to: String,
+) -> CmdResult<String> {
+    use tauri::Manager;
+    use tauri_plugin_opener::OpenerExt;
+    let (from_d, to_d) = (day_arg(&from)?, day_arg(&to)?);
+    let report = {
+        let store = lock_store(&state)?;
+        let bs = store.load_settings().briefing;
+        firstlight_core::meeting_flow::time_report(
+            &store,
+            from_d,
+            to_d,
+            Utc::now(),
+            crate::local_tz(),
+            &bs,
+        )
+        .map_err(user_input_error)?
+    };
+    let dir = app
+        .path()
+        .download_dir()
+        .map_err(|_| "Couldn't find your Downloads folder.".to_string())?;
+    let path =
+        crate::commands::unique_path(&dir, &format!("firstlight-time-{from_d}-to-{to_d}"), "csv");
+    std::fs::write(&path, firstlight_core::timereport::csv(&report))
+        .map_err(|_| "Couldn't save the file.".to_string())?;
+    let _ = app.opener().reveal_item_in_dir(&path);
+    Ok(path.display().to_string())
+}

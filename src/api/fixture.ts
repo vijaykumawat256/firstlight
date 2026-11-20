@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, StatusReport, TimeReport, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -1054,6 +1054,60 @@ export const fixtureBackend: Backend = {
       tasks_done: tasks.filter((t) => t.done_at && Date.parse(t.done_at) >= monday.getTime()).length,
       busiest: null,
     } satisfies WeekReview;
+  },
+  async getStatusReport(kind) {
+    // A small stand-in for crates/logic/src/report.rs.
+    const today = ymd(new Date());
+    const done = tasks.filter((t) => t.done_at).map((t) => t.title);
+    const due = tasks.filter((t) => !t.done_at && !t.waiting_on && t.due && taskDay(t)! <= today).map((t) => t.title);
+    const waiting = tasks.filter((t) => !t.done_at && t.waiting_on).map((t) => `${t.title}: waiting on ${t.waiting_on}`);
+    const sections =
+      kind === "daily"
+        ? [
+            { heading: "Yesterday", lines: done.length ? done : ["Nothing recorded"] },
+            { heading: "Today", lines: [...due, "Meeting: Team standup"] },
+            { heading: "Blockers", lines: waiting.length ? waiting : ["None"] },
+          ]
+        : [
+            { heading: "Done this week", lines: done.length ? done : ["No tasks ticked off"] },
+            { heading: "Meetings", lines: ["6 meetings this week, 5 h in all"] },
+            { heading: "Next week", lines: ["Nothing planned yet"] },
+            { heading: "Waiting on", lines: waiting.length ? waiting : ["No one"] },
+          ];
+    const text = sections.map((s) => `${s.heading}\n${s.lines.map((l) => `- ${l}`).join("\n")}`).join("\n\n");
+    return { subject: kind === "daily" ? "Update for today" : "Weekly update", sections, text } satisfies StatusReport;
+  },
+  async getTimeReport(from, to) {
+    // A small stand-in for crates/logic/src/timereport.rs (no overlaps merged, no focus time).
+    if (to < from) throw new Error("Choose up to three months.");
+    const ids = visibleCalendarIds();
+    const start = Date.parse(`${from}T00:00:00`);
+    const end = Math.min(Date.parse(`${to}T00:00:00`) + 86_400_000, Date.now());
+    const names = new Map<string, string>(CALENDARS.map((c) => [c.id, c.name]));
+    const rows = fixtureEvents()
+      .filter((e) => ids.has(e.calendar_id) && e.status !== "cancelled" && e.my_response !== "declined" && e.when.kind === "timed")
+      .map((e) => (e.when.kind === "timed" ? { e, s: Math.max(Date.parse(e.when.start), start), f: Math.min(Date.parse(e.when.end), end) } : null))
+      .filter((x): x is NonNullable<typeof x> => !!x && x.f > x.s)
+      .map(({ e, s, f }) => ({ date: ymd(new Date(s)), start: new Date(s).toTimeString().slice(0, 5), end: new Date(f).toTimeString().slice(0, 5), minutes: Math.round((f - s) / 60_000), title: e.title, calendar: names.get(e.calendar_id) ?? "Calendar", project: /^\[([^\]]+)\]/.exec(e.title)?.[1] ?? null, kind: "meeting" as const }));
+    const group = (key: (r: (typeof rows)[number]) => string | null, limit: number) => {
+      const m = new Map<string, { minutes: number; count: number }>();
+      for (const r of rows) {
+        const k = key(r);
+        if (!k) continue;
+        const v = m.get(k) ?? { minutes: 0, count: 0 };
+        m.set(k, { minutes: v.minutes + r.minutes, count: v.count + 1 });
+      }
+      return [...m].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.minutes - a.minutes).slice(0, limit);
+    };
+    const days: [string, number][] = [];
+    for (let d = new Date(`${from}T12:00:00`); ymd(d) <= to; d.setDate(d.getDate() + 1)) days.push([ymd(d), rows.filter((r) => r.date === ymd(d)).reduce((a, r) => a + r.minutes, 0)]);
+    const w = window as unknown as { __timeReports?: [string, string][] };
+    (w.__timeReports ??= []).push([from, to]);
+    return { from, to, meeting_minutes: rows.reduce((a, r) => a + r.minutes, 0), focus_minutes: 0, meetings: rows.length, by_calendar: group((r) => r.calendar, 20), by_project: group((r) => r.project, 20), by_title: group((r) => r.title, 10), by_day: days, rows } satisfies TimeReport;
+  },
+  async exportTimeReport(from, to) {
+    await this.getTimeReport(from, to);
+    return `/Users/you/Downloads/firstlight-time-${from}-to-${to}.csv`;
   },
   async getFollowUps() {
     // A small stand-in for crates/logic/src/followup.rs.

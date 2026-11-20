@@ -687,7 +687,7 @@ fn save_calendar_event(
 }
 
 /// `dir/stem.ext`, or `dir/stem (2).ext` and so on: never overwrites something the user already has.
-fn unique_path(dir: &std::path::Path, stem: &str, ext: &str) -> std::path::PathBuf {
+pub(crate) fn unique_path(dir: &std::path::Path, stem: &str, ext: &str) -> std::path::PathBuf {
     let mut path = dir.join(format!("{stem}.{ext}"));
     for n in 2..100 {
         if !path.exists() {

@@ -189,6 +189,33 @@ export interface WeekReview {
   busiest: [string, number] | null;
 }
 
+/** A standup or weekly update (crates/logic/src/report.rs). */
+export interface StatusReport {
+  subject: string;
+  sections: { heading: string; lines: string[] }[];
+  text: string;
+}
+
+export interface TimeTotal {
+  name: string;
+  minutes: number;
+  count: number;
+}
+
+/** Where the time went (crates/logic/src/timereport.rs). */
+export interface TimeReport {
+  from: string;
+  to: string;
+  meeting_minutes: number;
+  focus_minutes: number;
+  meetings: number;
+  by_calendar: TimeTotal[];
+  by_project: TimeTotal[];
+  by_title: TimeTotal[];
+  by_day: [string, number][];
+  rows: { date: string; start: string; end: string; minutes: number; title: string; calendar: string; project: string | null; kind: "meeting" | "focus" }[];
+}
+
 export interface PlanSuggestion {
   task_id: string;
   title: string;

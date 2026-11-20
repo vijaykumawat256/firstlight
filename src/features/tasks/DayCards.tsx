@@ -1,4 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { StatusReportDialog } from "@/features/insights/StatusReport";
+import { TimeReportSheet } from "@/features/insights/TimeReport";
 import { BarChart3, Car, Moon, UtensilsCrossed } from "lucide-react";
 import { api, errorMessage } from "@/api";
 import { Button, Card, useToasts } from "@/design";
@@ -138,6 +141,8 @@ export function TravelCard() {
 export function WeekReviewCard() {
   const status = useDayStatus();
   const review = useQuery({ queryKey: ["week-review"], queryFn: () => api.getWeekReview(), enabled: !!status.data?.review, staleTime: 5 * 60_000 });
+  const [writing, setWriting] = useState(false);
+  const [timeReport, setTimeReport] = useState(false);
   const r = review.data;
   if (!status.data?.review || !r) return null;
   const diff = r.meeting_minutes - r.previous_meeting_minutes;
@@ -166,8 +171,18 @@ export function WeekReviewCard() {
               </>
             )}
           </dl>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setWriting(true)}>
+              Write a weekly update
+            </Button>
+            <Button size="sm" variant="plain" onClick={() => setTimeReport(true)}>
+              Where my time went
+            </Button>
+          </div>
         </div>
       </Card>
+      {writing && <StatusReportDialog initial="weekly" onClose={() => setWriting(false)} />}
+      {timeReport && <TimeReportSheet onClose={() => setTimeReport(false)} />}
     </section>
   );
 }
