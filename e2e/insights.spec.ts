@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -19,6 +20,7 @@ test("a standup update is written from tasks and can be changed, copied or email
   const text = dialog.getByRole("textbox", { name: /Update for/ });
   await expect(text).toHaveValue(/Today\n- Send the budget to Priya/);
   await expect(text).toHaveValue(/Blockers\n- Budget numbers: waiting on priya@example.com/);
+  await settle(page);
   expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
 
   await text.fill("Yesterday\n- Shipped it");
@@ -46,6 +48,7 @@ test("where my time went shows totals by calendar and saves a spreadsheet", asyn
   await expect(sheet.getByRole("region", { name: "By calendar" })).toBeVisible();
   await expect(sheet.getByText("Meetings", { exact: true })).toBeVisible();
   await expect(sheet.getByRole("img", { name: /Meeting time per day/ })).toBeVisible();
+  await settle(page);
   expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
   await sheet.getByRole("radio", { name: "Last month" }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __timeReports?: [string, string][] }).__timeReports?.length ?? 0)).toBeGreaterThan(1);

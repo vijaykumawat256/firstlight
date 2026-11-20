@@ -37,6 +37,7 @@ test("the Tasks page shows each list, and a task can be changed and deleted", as
   await expect(page.getByText("Book flights")).toBeVisible();
   await page.getByRole("radio", { name: "Someday" }).click();
   await expect(page.getByText("Read the security report")).toBeVisible();
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await page.getByRole("button", { name: "Change Read the security report" }).click();

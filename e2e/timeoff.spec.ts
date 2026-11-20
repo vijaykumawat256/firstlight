@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -45,6 +46,7 @@ test("time off is added, its meetings are pointed out, and an out-of-office repl
   await expect(holidays).toContainText("Founders' Day");
   await holidays.getByRole("button", { name: "Mark as day off" }).click();
   await expect(holidays).toContainText("Day off");
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   // The briefing says you are off today.
@@ -87,5 +89,6 @@ test("the out-of-office reply is set in a Google account after allowing it once,
   expect(calls.at(-1)).toMatchObject({ from: ymdIn(3), to: ymdIn(5), text: "Away this week. Back Monday." });
   await group.getByRole("button", { name: "Turn off" }).click();
   await expect(page.getByText("Automatic reply turned off").first()).toBeVisible();
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });

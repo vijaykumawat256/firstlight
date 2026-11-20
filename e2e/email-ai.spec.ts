@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { settle } from "./settle";
 
 const SHOTS = "e2e/screenshots";
 
@@ -384,6 +385,7 @@ test("a failed OpenRouter sign-in explains itself", async ({ page }) => {
 test("the other AI services have no accessibility problems", async ({ page }) => {
   const dialog = await openConsent(page);
   await chooseProvider(page, dialog, "OpenRouter (many models)");
+  await settle(page);
   const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(r.violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(" ")}`)).toEqual([]);
 });

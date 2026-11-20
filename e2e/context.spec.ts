@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -47,6 +48,7 @@ test("the week's review shows on Friday afternoon, not before", async ({ page })
   const card = page.getByRole("region", { name: "Your week" });
   await expect(card).toContainText("Meetings");
   await expect(card).toContainText("than last week");
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
 

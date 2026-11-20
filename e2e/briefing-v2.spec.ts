@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { settle } from "./settle";
 
 const SHOTS = "e2e/screenshots";
 
@@ -91,6 +92,7 @@ test.describe("meeting prep", () => {
     await open(page, /^Design review/, "mailon&prepmail");
     const prep = page.getByRole("region", { name: "Prepare" });
     await expect(prep.getByRole("button", { name: "Design review: slides attached" })).toBeVisible();
+    await settle(page);
     const r = await new AxeBuilder({ page }).analyze();
     expect(r.violations).toEqual([]);
   });
@@ -215,6 +217,7 @@ test.describe("conflict help", () => {
     await start(page);
     await page.getByRole("button", { name: /^Sort out: .*1:1 with Sam/ }).first().click();
     await expect(page.getByRole("dialog", { name: "Sort out an overlap" }).getByRole("status")).toBeVisible();
+    await settle(page);
     const r = await new AxeBuilder({ page }).analyze();
     expect(r.violations).toEqual([]);
   });
@@ -235,6 +238,7 @@ test.describe("week ahead", () => {
     await expect(week.getByText(/Early start:/)).toBeVisible(); // tomorrow's 06:45 flight
     await expect(week.getByText(/\d+ meetings? · /)).toBeVisible();
     await week.scrollIntoViewIfNeeded();
+    await settle(page);
     const r = await new AxeBuilder({ page }).analyze();
     expect(r.violations).toEqual([]);
   });
@@ -270,6 +274,7 @@ test.describe("guest lists", () => {
     await expect(row("Sam Lee")).toContainText("No reply yet");
     await expect(row("kim@example.com")).toContainText("Declined");
     await expect(row("Lee Park")).toContainText("Maybe");
+    await settle(page);
     const r = await new AxeBuilder({ page }).analyze();
     expect(r.violations).toEqual([]);
   });

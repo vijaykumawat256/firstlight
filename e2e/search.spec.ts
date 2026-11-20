@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -81,6 +82,7 @@ test("search has no accessibility violations, with results showing", async ({ pa
   const dialog = page.getByRole("dialog", { name: "Search" });
   await dialog.getByRole("combobox", { name: "Search events" }).fill("design");
   await expect(dialog.getByRole("option").first()).toBeVisible();
+  await settle(page);
   const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(r.violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(" ")}`)).toEqual([]);
 });
@@ -143,6 +145,7 @@ test("the answer view has no accessibility problems", async ({ page }) => {
   const dialog = await asking(page, "aion", "when is my design review?");
   await dialog.getByRole("option", { name: /^Ask:/ }).click();
   await expect(dialog.getByRole("status")).toBeVisible();
+  await settle(page);
   const r = await new AxeBuilder({ page }).analyze();
   expect(r.violations).toEqual([]);
 });

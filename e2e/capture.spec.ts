@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -10,9 +11,10 @@ test("the capture box adds a task, or an event with Tab, and closes", async ({ p
   await page.goto("/#/capture");
   const box = page.getByLabel("Quick capture");
   await expect(box).toBeFocused();
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
-  await box.fill("Call the bank friday 3pm");
+  await box.fill("Call the bank tomorrow 3pm");
   await expect(page.getByRole("status")).toContainText("Task “Call the bank”, due");
   await box.press("Enter");
   await expect(page.getByRole("status")).toContainText("Added to Upcoming");

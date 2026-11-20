@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -13,6 +14,7 @@ const open = async (page: Page, query = "") => {
 test("the first computer starts sharing through a synced folder and gets a code to copy", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await open(page);
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("radio", { name: /iCloud Drive/ }).check();
   await page.getByRole("button", { name: "Start sharing" }).click();
@@ -21,6 +23,7 @@ test("the first computer starts sharing through a synced folder and gets a code 
   await page.getByRole("button", { name: "Copy" }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^FL1-/);
   await expect(page.getByText("None yet. Turn sharing on with this code")).toBeVisible();
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Stop sharing" }).click();
   await expect(page.getByRole("button", { name: "Start sharing" })).toBeVisible();

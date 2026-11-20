@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -89,6 +90,7 @@ test("the new-event form has no accessibility violations", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "New event" }).click();
   await expect(page.getByRole("dialog", { name: "New event" })).toBeVisible();
+  await settle(page);
   const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(r.violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(" ")}`)).toEqual([]);
 });
@@ -172,6 +174,7 @@ test("the form with repeat, reminder and invitees, and the invitation dialog, ha
   await sheet.getByRole("combobox", { name: "Repeat" }).click();
   await page.getByRole("option", { name: "Every week" }).click();
   await sheet.getByRole("radio", { name: "On a date" }).click();
+  await settle(page);
   const scan = async () => (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze()).violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(" ")}`);
   expect(await scan()).toEqual([]);
   await sheet.getByLabel("Title").fill("A11y");
@@ -362,6 +365,7 @@ test("the review window has no accessibility violations", async ({ page }) => {
   const dialog = await inviteDialog(page, "/?sendon");
   await dialog.getByRole("button", { name: "Review and send" }).click();
   await expect(page.getByRole("dialog", { name: "Review before sending" }).getByLabel("Message text")).toContainText("Team lunch");
+  await settle(page);
   const r = await new AxeBuilder({ page }).analyze();
   expect(r.violations).toEqual([]);
 });
@@ -375,6 +379,7 @@ test("Find a time lists free stretches, changes with the length asked, and has n
   const before = await dialog.getByRole("button", { name: /^Copy / }).count();
   await dialog.getByRole("radio", { name: "2 hours" }).click();
   await expect.poll(() => dialog.getByRole("button", { name: /^Copy / }).count()).toBeLessThanOrEqual(before);
+  await settle(page);
   const r = await new AxeBuilder({ page }).analyze();
   expect(r.violations).toEqual([]);
 });

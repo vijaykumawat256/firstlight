@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -18,6 +19,7 @@ test("Do Not Disturb walks through the two shortcuts, then can be tried and turn
   await expect(group).toContainText("Optional: Firstlight Focus Status");
   await group.getByRole("button", { name: "Open Shortcuts" }).click();
   expect(await page.evaluate(() => (window as unknown as { __shortcutsOpened?: number }).__shortcutsOpened)).toBe(1);
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await openNotifications(page, "?dnd");

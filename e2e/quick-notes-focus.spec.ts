@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -60,6 +61,7 @@ test("meeting notes are saved as you type and are there when the meeting is open
   await notes.fill("Ask about the budget");
   await page.clock.runFor(1000);
   await expect(detail.getByRole("status").filter({ hasText: /^Saved / })).toBeVisible();
+  await settle(page);
   const r = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
   expect(r.violations).toEqual([]);
 

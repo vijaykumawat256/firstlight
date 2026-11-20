@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -10,6 +11,7 @@ test("after a meeting with notes, the briefing offers tasks and a recap, and can
   await page.goto("/?followup");
   const card = page.getByRole("region", { name: "Follow up" });
   await expect(card).toContainText("Follow up on Roadmap planning");
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await card.getByRole("button", { name: "Email a recap" }).click();
   const recap = page.getByRole("dialog", { name: "Email a recap" });

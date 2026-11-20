@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -16,6 +17,7 @@ test("after the wrap-up time the briefing offers to move what is left to tomorro
   await page.goto("/?tasks");
   const card = page.getByRole("region", { name: "Wrap up" });
   await expect(card).toContainText("0 tasks done, 2 left.");
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await card.getByRole("button", { name: "Move Review Sam's slides to tomorrow" }).click();
   await expect(page.getByText("Moved to tomorrow").first()).toBeVisible();

@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { settle } from "./settle";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -41,6 +42,7 @@ test("a task waiting on someone moves to Waiting, shows how long, and the nudge 
   await page.getByRole("radio", { name: /^Waiting/ }).click();
   const waiting = page.getByRole("list", { name: "waiting tasks" });
   await expect(waiting).toContainText("Waiting on priya@example.com · 4 days");
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await waiting.getByRole("button", { name: "Nudge priya@example.com about Budget numbers" }).click();
   const nudge = page.getByRole("dialog", { name: "Nudge" });
@@ -70,6 +72,7 @@ test("month-end reminders add tasks that repeat on the last working day", async 
   await expect(dialog.getByRole("checkbox", { name: "Submit your timesheet" })).toBeChecked();
   await expect(dialog.getByRole("checkbox", { name: "File your expenses" })).toBeChecked();
   await dialog.getByLabel("Another one").fill("Pay the software bills");
+  await settle(page);
   expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
   await dialog.getByRole("button", { name: "Add 3 reminders" }).click();
   await expect(page.getByText("3 month-end reminders added").first()).toBeVisible();
@@ -110,9 +113,10 @@ test("a task typed without a day goes on today's list, and every add says where 
   await expect(page.getByText("Added to Today").first()).toBeVisible();
   await expect(tasks.locator("li[data-fresh]")).toContainText("Water the plants");
 
-  // A later day goes to Upcoming, and the Tasks page opens that list and lights the row.
+  // A later day goes to Upcoming, and the Tasks page opens that list and lights the row. ("tomorrow", not a weekday
+  // name: on that weekday it would be today.)
   await page.getByRole("button", { name: "All tasks" }).click();
-  await page.getByLabel("Add a task").fill("Renew passport friday");
+  await page.getByLabel("Add a task").fill("Renew passport tomorrow");
   await page.getByLabel("Add a task").press("Enter");
   await expect(page.getByText(/^Added to Upcoming, /).first()).toBeVisible();
   await expect(page.getByRole("radio", { name: "Upcoming" })).toHaveAttribute("aria-checked", "true");
@@ -142,6 +146,7 @@ test("a focus timer runs on a task, counts its minutes when stopped or finished,
   const bar = page.getByRole("region", { name: "Focus timer" });
   await expect(bar).toContainText("Review Sam's slides");
   await expect(bar).toContainText(/2[45]:\d\d/);
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await page.clock.fastForward("10:00");
@@ -174,6 +179,7 @@ test("tasks can be kept in step with Apple Reminders, and stopped", async ({ pag
   await group.getByRole("button", { name: "Sync tasks with Reminders" }).click();
   await expect(page.getByText("Tasks are kept in step with Reminders").first()).toBeVisible();
   await expect(group).toContainText("Kept in step with your default Reminders list");
+  await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Briefing", exact: true }).click();
