@@ -216,7 +216,9 @@ fn cell(s: &str) -> String {
 
 /// The rows as CSV (Date, Start, End, Minutes, Hours, Title, Calendar, Project, Kind), with a header line.
 pub fn csv(r: &TimeReport) -> String {
-    let mut out = String::from("Date,Start,End,Minutes,Hours,Title,Calendar,Project,Kind\r\n");
+    // The byte-order mark makes Excel on Windows read the file as UTF-8 (accented names stay readable).
+    let mut out =
+        String::from("\u{feff}Date,Start,End,Minutes,Hours,Title,Calendar,Project,Kind\r\n");
     for row in &r.rows {
         out.push_str(&format!(
             "{},{},{},{},{:.2},{},{},{},{}\r\n",
@@ -409,7 +411,7 @@ mod tests {
         let mut lines = text.lines();
         assert_eq!(
             lines.next(),
-            Some("Date,Start,End,Minutes,Hours,Title,Calendar,Project,Kind")
+            Some("\u{feff}Date,Start,End,Minutes,Hours,Title,Calendar,Project,Kind")
         );
         assert_eq!(
             lines.next(),

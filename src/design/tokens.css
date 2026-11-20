@@ -515,6 +515,17 @@ body {
 :root[data-view="capture"] body {
   background: transparent;
 }
+/* Windows windows are opaque: the capture box fills its window instead of floating on a see-through one. */
+:root[data-platform="windows"][data-view="capture"] body {
+  background: var(--surface-raised);
+}
+:root[data-platform="windows"][data-view="capture"] main {
+  padding: 0;
+}
+:root[data-platform="windows"][data-view="capture"] main > div {
+  box-shadow: none;
+  border-radius: 0;
+}
 
 /* Visible keyboard focus everywhere, never on mouse click. */
 :focus-visible {

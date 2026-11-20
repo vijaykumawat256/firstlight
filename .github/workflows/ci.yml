@@ -32,7 +32,6 @@ jobs:
           cargo clippy --workspace --all-targets -- -D warnings
           cargo test --workspace
       - name: Browser tests
-        if: matrix.os == 'macos-latest'
         run: |
           npx playwright install chromium
           npm run e2e
