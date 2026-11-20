@@ -26,7 +26,8 @@ test("a standup update is written from tasks and can be changed, copied or email
   await text.fill("Yesterday\n- Shipped it");
   await dialog.getByRole("button", { name: "Copy" }).click();
   await expect(page.getByText("Update copied").first()).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("Yesterday\n- Shipped it");
+  // Windows' clipboard turns line breaks into \r\n.
+  expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, "\n")).toBe("Yesterday\n- Shipped it");
 
   // Weekly keeps its own text; switching back keeps the change.
   await dialog.getByRole("radio", { name: "Weekly" }).click();
