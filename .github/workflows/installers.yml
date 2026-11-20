@@ -3,7 +3,7 @@ name: Installers
 # Builds the installers people actually install: an .exe for Windows and a .dmg for Mac. They are NOT signed
 # (see docs/RELEASE.md), so Windows shows "unknown publisher" and macOS asks to be opened with right-click.
 # Run it by hand (Actions tab, "Installers", Run workflow) or by pushing a tag such as v0.1.0. The finished
-# files appear at the bottom of the run as downloadable "artifacts".
+# files are attached to a release on the Releases page (and to the run as "artifacts").
 
 on:
   workflow_dispatch:
@@ -50,3 +50,28 @@ jobs:
           name: firstlight-${{ matrix.name }}
           path: ${{ matrix.files }}
           if-no-files-found: error
+
+  # Puts both installers on the repository's Releases page, which doesn't expire like run artifacts do. A tag such as
+  # v0.1.0 gives a release of that name; a run by hand gives a pre-release named after the run number.
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          IS_TAG: ${{ github.ref_type == 'tag' }}
+          REF: ${{ github.ref_name }}
+          RUN: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: |
+          ls -l dist
+          if [ "$IS_TAG" = "true" ]; then tag="$REF"; extra=""; else tag="build-$RUN"; extra="--prerelease"; fi
+          case "$tag" in *-*) extra="--prerelease" ;; esac
+          gh release create "$tag" dist/* --repo "$REPO" --target "$SHA" --title "Firstlight $tag" $extra \
+            --notes "Installers for Windows (.exe) and Mac (.dmg). Not signed yet: Windows may say \"unknown publisher\" (More info, Run anyway); on a Mac, right-click the app and choose Open the first time."
