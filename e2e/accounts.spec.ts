@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { settle } from "./settle";
 
 const SHOTS = "e2e/screenshots";
 
@@ -193,12 +194,46 @@ test("a failed sign-in explains and offers to try again", async ({ page }) => {
   await page.screenshot({ path: `${SHOTS}/oauth-error.png` });
 });
 
-test("providers without a client ID are shown as needing setup and cannot be started", async ({ page }) => {
+test("a provider with no sign-in app built in can be given your own in the app, with no .env or rebuild", async ({ page }) => {
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
   await page.goto("/?fresh&nomicrosoft");
   await openAdd(page);
-  await expect(page.getByText("Setup needed")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /^Microsoft/ })).toBeDisabled();
-  await expect(page.getByRole("button", { name: /^Google/ })).toBeEnabled();
+  const tile = page.getByRole("button", { name: /^Microsoft/ });
+  await expect(tile).toContainText("Set up");
+  await expect(page.getByRole("button", { name: /^Google/ })).not.toContainText("Set up");
+  await tile.click();
+
+  const dialog = page.getByRole("dialog", { name: "Your own sign-in app" });
+  await expect(dialog.getByLabel("Application (client) ID")).toBeFocused();
+  await expect(dialog).toContainText("This copy of Firstlight has none built in");
+  await settle(page);
+  expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
+  await dialog.getByLabel("Application (client) ID").fill("not-an-id");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("isn't a Microsoft application ID");
+  await dialog.getByLabel("Application (client) ID").fill("1A2B3C4D-1234-5678-9ABC-1A2B3C4D5E6F");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Sign-in app saved").first()).toBeVisible();
+  // Microsoft now signs in like Google.
+  await expect(tile).not.toContainText("Set up");
+  await tile.click();
+  await expect(page.getByText(/browser/i).first()).toBeVisible();
+});
+
+test("your own sign-in app can also be set from the Accounts screen, and is kept", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: /Accounts & calendars/ }).click();
+  await page.getByRole("button", { name: "Your own Google or Microsoft sign-in app…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Your own sign-in app" });
+  await expect(dialog).toContainText("Leave empty to use the one built into Firstlight");
+  await dialog.getByLabel("Client ID").fill("1234-abc.apps.googleusercontent.com");
+  await dialog.getByLabel("Client secret").fill("GOCSPX-abcdefghijkl");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole("button", { name: "Your own Google or Microsoft sign-in app…" }).click();
+  await expect(dialog.getByLabel("Client ID")).toHaveValue("1234-abc.apps.googleusercontent.com");
+  await expect(dialog.getByLabel("Client secret")).toHaveAttribute("placeholder", "Saved (type to replace)");
 });
 
 test("Reconnect restores an account that needs attention", async ({ page }) => {

@@ -19,6 +19,7 @@ mod outlook_win;
 mod providers;
 mod reminders;
 mod scheduler;
+mod sign_in_apps;
 mod task_sync;
 mod tasks_cmd;
 mod timer;
@@ -531,6 +532,8 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            sign_in_apps::set_sign_in_apps,
+            sign_in_apps::get_sign_in_apps,
             mail_ai::enable_outlook_mail,
             commands::save_problem_report,
             commands::get_problem_report,
@@ -740,6 +743,8 @@ pub fn run() {
                     .map_err(|e| e.to_string())?,
                 ),
             };
+            // Your own Google / Microsoft sign-in app from Settings, if you set one, replaces the built-in one.
+            sign_in_apps::apply(&store, &deps);
             let sync = scheduler::spawn(
                 app.handle().clone(),
                 db_path.clone(),

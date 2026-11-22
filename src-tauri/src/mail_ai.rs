@@ -232,8 +232,8 @@ fn collect(
 
     for account in &accounts {
         let cfg = match account.provider {
-            ProviderKind::Google => state_deps.oauth.google.clone(),
-            ProviderKind::Microsoft => state_deps.oauth.microsoft.clone(),
+            ProviderKind::Google => state_deps.oauth.google(),
+            ProviderKind::Microsoft => state_deps.oauth.microsoft(),
             _ => None,
         };
         let Some(cfg) = cfg else { continue };
@@ -1410,8 +1410,8 @@ pub async fn send_message(
         .map_err(internal("loading the account"))?
         .ok_or("That account no longer exists.")?;
     let cfg = match account.provider {
-        ProviderKind::Google => state.deps.oauth.google.clone(),
-        ProviderKind::Microsoft => state.deps.oauth.microsoft.clone(),
+        ProviderKind::Google => state.deps.oauth.google(),
+        ProviderKind::Microsoft => state.deps.oauth.microsoft(),
         _ => None,
     }
     .ok_or("Sending isn't available for that account.")?;
@@ -1628,8 +1628,8 @@ fn autoreply_account(state: &AppState, account_id: &str) -> CmdResult<AutoReplyA
         .map_err(internal("loading the account"))?
         .ok_or("That account no longer exists.")?;
     let cfg = match account.provider {
-        ProviderKind::Google => state.deps.oauth.google.clone(),
-        ProviderKind::Microsoft => state.deps.oauth.microsoft.clone(),
+        ProviderKind::Google => state.deps.oauth.google(),
+        ProviderKind::Microsoft => state.deps.oauth.microsoft(),
         _ => None,
     }
     .ok_or("That account has no automatic reply Firstlight can set.")?;

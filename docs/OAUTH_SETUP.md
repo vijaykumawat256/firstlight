@@ -47,6 +47,14 @@ work without it.
 
 ## Use it
 
+**Option A: in the app, no rebuild (for one person, or a company's own app).** Accounts → "Your own Google or
+Microsoft sign-in app…" (or click a provider marked "Set up" in Add a calendar), paste the IDs, Save. It works at
+once. The IDs stay on that computer only (never in a settings export); the Google secret goes in the keychain. Accounts
+connected through another app ask you to sign in again.
+
+**Option B: built in, for everyone who installs it (what a published release should do).** Put the IDs in `.env` for
+builds on your machine, and in the repository secrets for the Installers workflow (`docs/LAUNCH.md` section 1).
+
 1. `cp .env.example .env` and fill in the values above.
 2. Restart the app: `npm run tauri dev` (the IDs are read when the app is built, so a restart rebuilds it).
 3. **Add a calendar → Google / Microsoft**. The buttons say "Setup needed" until the matching ID is present.

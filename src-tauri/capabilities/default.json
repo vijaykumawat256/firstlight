@@ -28,6 +28,8 @@
     "allow-disable-task-sync",
     "allow-sync-tasks-now",
     "allow-get-week-review",
+    "allow-set-sign-in-apps",
+    "allow-get-sign-in-apps",
     "allow-enable-outlook-mail",
     "allow-save-problem-report",
     "allow-get-problem-report",

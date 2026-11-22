@@ -8,6 +8,7 @@ import {
 import { useNav } from "@/app/nav";
 import { useSettings } from "@/features/settings/useSettings";
 import { AddAccountSheet } from "./AddAccountSheet";
+import { SignInAppsDialog } from "./SignInApps";
 import { timeAgo } from "./time";
 
 const PROVIDER_LABEL: Record<AccountView["provider"], string> = {
@@ -236,6 +237,7 @@ function AccountCard({ account, onChanged }: { account: AccountView; onChanged: 
 }
 
 export function AccountsScreen() {
+  const [ownApp, setOwnApp] = useState(false);
   const qc = useQueryClient();
   const go = useNav((s) => s.go);
   const [adding, setAdding] = useState(false);
@@ -268,12 +270,18 @@ export function AccountsScreen() {
             {accounts.data.map((a) => (
               <AccountCard key={a.id} account={a} onChanged={changed} />
             ))}
-            <Button variant="secondary" leading={<Plus className="size-4" />} onClick={() => setAdding(true)} className="self-start">
-              Add a calendar
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" leading={<Plus className="size-4" />} onClick={() => setAdding(true)}>
+                Add a calendar
+              </Button>
+              <Button variant="plain" size="sm" onClick={() => setOwnApp(true)}>
+                Your own Google or Microsoft sign-in app…
+              </Button>
+            </div>
           </div>
         )}
       </main>
+      <SignInAppsDialog open={ownApp} onOpenChange={setOwnApp} />
       <AddAccountSheet open={adding} onOpenChange={setAdding} hasDemo={accounts.data?.some((a) => a.provider === "fixture") ?? false} />
     </div>
   );

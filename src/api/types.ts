@@ -209,6 +209,22 @@ export interface DndStatus {
   status_name: string;
 }
 
+/** Your own Google / Microsoft sign-in app (Settings), used instead of the one built into the app. */
+export interface SignInApps {
+  google_client_id: string | null;
+  google_has_secret: boolean;
+  microsoft_client_id: string | null;
+  built_in_google: boolean;
+  built_in_microsoft: boolean;
+}
+
+/** A field left out stays as it is; an empty string removes it. */
+export interface SignInAppsChange {
+  google_client_id?: string;
+  google_client_secret?: string;
+  microsoft_client_id?: string;
+}
+
 /** A problem report to read, save and email (nothing is sent by the app). */
 export interface ProblemReport {
   text: string;

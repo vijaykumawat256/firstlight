@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
+pub mod apps;
 pub mod loopback;
 
 /// Refresh this long before the access token actually expires.

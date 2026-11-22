@@ -5,6 +5,7 @@ import { api, errorMessage } from "@/api";
 import { Badge, Button, ListGroup, Select, Sheet, TextField } from "@/design";
 import { HOLIDAY_CALENDARS } from "./holidays";
 import { CALDAV_PRESETS, OTHER_SERVER } from "./presets";
+import { SignInAppsDialog } from "./SignInApps";
 
 type Step = "choose" | "ics" | "caldav" | "oauth" | "system" | "holidays";
 type OAuthProvider = "google" | "microsoft";
@@ -12,7 +13,7 @@ const OAUTH_LABEL: Record<OAuthProvider, string> = { google: "Google", microsoft
 
 const LINK_RE = /^(https|webcal):\/\/\S{4,}$/i;
 
-function Choice({ icon, title, subtitle, soon, badge, onClick }: { icon: ReactNode; title: string; subtitle: string; soon?: boolean; badge?: string; onClick?: () => void }) {
+function Choice({ icon, title, subtitle, soon, badge, tag, onClick }: { icon: ReactNode; title: string; subtitle: string; soon?: boolean; badge?: string; tag?: string; onClick?: () => void }) {
   return (
     <li>
       <button
@@ -26,7 +27,7 @@ function Choice({ icon, title, subtitle, soon, badge, onClick }: { icon: ReactNo
           <span className="block truncate text-headline font-medium text-fg">{title}</span>
           <span className="block truncate text-footnote text-fg-2">{subtitle}</span>
         </span>
-        {soon ? <Badge>{badge ?? "Soon"}</Badge> : <ChevronRight className="size-4 text-fg-3" aria-hidden />}
+        {soon ? <Badge>{badge ?? "Soon"}</Badge> : tag ? <Badge>{tag}</Badge> : <ChevronRight className="size-4 text-fg-3" aria-hidden />}
       </button>
     </li>
   );
@@ -43,6 +44,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [oauthProvider, setOauthProvider] = useState<OAuthProvider>("google");
+  const [ownApp, setOwnApp] = useState<"google" | "microsoft" | null>(null);
   const available = useQuery({ queryKey: ["oauth-available"], queryFn: () => api.oauthAvailable(), enabled: open, staleTime: Infinity });
 
   const close = (o: boolean) => {
@@ -177,17 +179,15 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
               icon={<Mail />}
               title="Google"
               subtitle="Gmail and Google Workspace"
-              soon={!available.data?.google}
-              badge="Setup needed"
-              onClick={() => startOauth("google")}
+              tag={available.data && !available.data.google ? "Set up" : undefined}
+              onClick={() => (available.data && !available.data.google ? setOwnApp("google") : startOauth("google"))}
             />
             <Choice
               icon={<CalendarDays />}
               title="Microsoft"
               subtitle="Outlook.com and Microsoft 365"
-              soon={!available.data?.microsoft}
-              badge="Setup needed"
-              onClick={() => startOauth("microsoft")}
+              tag={available.data && !available.data.microsoft ? "Set up" : undefined}
+              onClick={() => (available.data && !available.data.microsoft ? setOwnApp("microsoft") : startOauth("microsoft"))}
             />
             <Choice icon={<KeyRound />} title="iCloud, Yahoo and others" subtitle="CalDAV with an app password" onClick={() => setStep("caldav")} />
           </ListGroup>
@@ -375,6 +375,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
           <p className="text-footnote text-fg-2">Private links work like a password. Firstlight keeps yours in the system keychain, never in a file.</p>
         </form>
       )}
+      <SignInAppsDialog open={ownApp !== null} onOpenChange={(o) => !o && setOwnApp(null)} focus={ownApp ?? undefined} />
     </Sheet>
   );
 }

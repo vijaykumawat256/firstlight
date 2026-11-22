@@ -167,6 +167,8 @@ function demoAccount(): AccountView {
  */
 const params = typeof location === "undefined" ? new URLSearchParams() : new URLSearchParams(location.search);
 let autostartOn = false;
+const ownApps: { google_client_id: string | null; microsoft_client_id: string | null } = { google_client_id: null, microsoft_client_id: null };
+let ownSecret = false;
 let accounts: AccountView[] = params.has("fresh") ? [] : [demoAccount()];
 if (params.has("attention")) {
   accounts.push({
@@ -1086,6 +1088,20 @@ export const fixtureBackend: Backend = {
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
   },
+  async getSignInApps() {
+    return { ...ownApps, google_has_secret: ownApps.google_client_id !== null && ownSecret, built_in_google: !params.has("nogoogle"), built_in_microsoft: !params.has("nomicrosoft") };
+  },
+  async setSignInApps(change: { google_client_id?: string; google_client_secret?: string; microsoft_client_id?: string }) {
+    await sleep(200);
+    const g = change.google_client_id?.trim();
+    const m = change.microsoft_client_id?.trim();
+    if (g && !/^[a-z0-9-]+\.apps\.googleusercontent\.com$/.test(g)) throw new Error("That isn't a Google client ID. It ends in .apps.googleusercontent.com.");
+    if (m && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m)) throw new Error("That isn't a Microsoft application ID. It looks like 1a2b3c4d-1234-5678-9abc-1a2b3c4d5e6f.");
+    if (g !== undefined) ownApps.google_client_id = g || null;
+    if (m !== undefined) ownApps.microsoft_client_id = m ? m.toLowerCase() : null;
+    if (change.google_client_secret !== undefined) ownSecret = change.google_client_secret.trim() !== "";
+    return this.getSignInApps();
+  },
   async getProblemReport() {
     return {
       text: "Firstlight problem report\nVersion: 0.1.0\nSystem: macos aarch64\n\nWhat happened (write it here):\n\n\n--- Last crash report ---\nNone saved.\n\n--- Recent warnings and errors ---\n[WARN] folder sync failed\n\nThis report contains no calendar, email or account content.\n",
@@ -1608,7 +1624,7 @@ export const fixtureBackend: Backend = {
     return structuredClone(view);
   },
   async oauthAvailable() {
-    return { google: true, microsoft: !params.has("nomicrosoft") };
+    return { google: !params.has("nogoogle") || ownApps.google_client_id !== null, microsoft: !params.has("nomicrosoft") || ownApps.microsoft_client_id !== null };
   },
   async addOauthAccount(provider) {
     // Simulates the browser round trip so the waiting/cancel states can be exercised.

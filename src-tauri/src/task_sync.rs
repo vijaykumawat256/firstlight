@@ -33,8 +33,8 @@ pub(crate) fn scopes_held(settings: &AppSettings, account: &Account) -> Vec<&'st
 
 fn service(deps: &Deps, account: &Account) -> Option<Box<dyn TaskService>> {
     let cfg = match account.provider {
-        ProviderKind::Google => deps.oauth.google.clone(),
-        ProviderKind::Microsoft => deps.oauth.microsoft.clone(),
+        ProviderKind::Google => deps.oauth.google(),
+        ProviderKind::Microsoft => deps.oauth.microsoft(),
         _ => None,
     }?;
     let tokens = TokenManager {

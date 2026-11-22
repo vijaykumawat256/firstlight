@@ -262,8 +262,9 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("dnd-on"), b"on").unwrap();
         init(&dir);
-        // The Off shortcut runs on its own thread (and is missing here); the marker goes either way.
-        for _ in 0..100 {
+        // The Off shortcut runs on its own thread (and is missing here); the marker goes either way. The tool may take
+        // up to its 20 s limit on a busy machine, so wait a little longer than that.
+        for _ in 0..250 {
             if !dir.join("dnd-on").exists() {
                 break;
             }

@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport, BackupInfo, ProblemReport } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport, BackupInfo, ProblemReport, SignInApps, SignInAppsChange } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -118,6 +118,10 @@ export interface Backend {
   folderSyncChoices(): Promise<{ label: string; path: string }[]>;
   enableFolderSync(folder: string, code: string | null): Promise<{ settings: AppSettings; code: string; report: FolderSyncReport }>;
   disableFolderSync(): Promise<AppSettings>;
+  /** Your own Google / Microsoft sign-in app, if set, and whether this build has its own. */
+  getSignInApps(): Promise<SignInApps>;
+  /** Checks and saves your own sign-in app; used at once (no restart). */
+  setSignInApps(change: SignInAppsChange): Promise<SignInApps>;
   /** Version, system, last crash report and recent warnings, to show in full. */
   getProblemReport(): Promise<ProblemReport>;
   /** Saves the (edited) report to Downloads, shows it there, and returns its path. Sends nothing. */

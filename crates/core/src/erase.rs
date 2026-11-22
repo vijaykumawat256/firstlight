@@ -30,6 +30,7 @@ pub fn erase_everything(store: &Store, secrets: &dyn SecretStore) -> Result<Eras
     }
     // The key for sharing through a synced folder (the files in that folder stay; without the key they are noise).
     secrets.delete(crate::folder_sync::KEY_SECRET)?;
+    secrets.delete(crate::oauth::apps::GOOGLE_SECRET_KEY)?;
     store.erase_all()?;
     Ok(EraseReport {
         accounts: accounts.len(),

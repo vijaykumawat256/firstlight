@@ -1103,8 +1103,8 @@ pub struct OAuthAvailability {
 #[tauri::command]
 pub async fn oauth_available(state: State<'_, AppState>) -> CmdResult<OAuthAvailability> {
     Ok(OAuthAvailability {
-        google: state.deps.oauth.google.is_some(),
-        microsoft: state.deps.oauth.microsoft.is_some(),
+        google: state.deps.oauth.google().is_some(),
+        microsoft: state.deps.oauth.microsoft().is_some(),
     })
 }
 
@@ -1141,8 +1141,8 @@ pub(crate) fn oauth_error(e: Error) -> String {
 
 pub(crate) fn config_for(state: &AppState, kind: ProviderKind) -> CmdResult<OAuthConfig> {
     match kind {
-        ProviderKind::Google => state.deps.oauth.google.clone(),
-        ProviderKind::Microsoft => state.deps.oauth.microsoft.clone(),
+        ProviderKind::Google => state.deps.oauth.google(),
+        ProviderKind::Microsoft => state.deps.oauth.microsoft(),
         _ => None,
     }
     .ok_or_else(|| "Sign-in for this provider isn't set up in this build yet.".to_string())
