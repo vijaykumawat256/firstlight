@@ -6,6 +6,8 @@ import { Button, Segmented, Switch, TextField, useToasts } from "@/design";
 import { timeAgo } from "@/features/accounts/time";
 import { Group, SettingRow } from "./controls";
 import { useSettings } from "./useSettings";
+import { isPhone } from "@/app/platform";
+import { AddPhone, PairWithComputer } from "./Pairing";
 
 /**
  * Settings, Your computers: share tasks, meeting notes, your own events, templates and days off between your Mac and
@@ -21,7 +23,8 @@ export function FolderSyncSettings() {
   const code = useQuery({ queryKey: ["folder-code", sharing], queryFn: () => api.folderSyncCode(), enabled: !!sharing });
   const accounts = useQuery({ queryKey: ["accounts"], queryFn: () => api.listAccounts() });
   const cloudAccounts = (accounts.data ?? []).filter((a) => a.provider === "google" || a.provider === "microsoft");
-  const [where, setWhere] = useState<"folder" | "cloud" | "lan">("folder");
+  // A phone has no synced folder of its own: it pairs, or uses a cloud account.
+  const [where, setWhere] = useState<"folder" | "cloud" | "lan">(isPhone ? "lan" : "folder");
   const [cloudAccount, setCloudAccount] = useState("");
   const [folder, setFolder] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -65,6 +68,7 @@ export function FolderSyncSettings() {
     },
   });
   if (!s) return null;
+  const pairing = isPhone ? <PairWithComputer paired={s.tasks.lan_peers} /> : <AddPhone />;
   const storeName = (provider: string) => (provider === "google" ? "Google Drive" : "OneDrive");
   const cloudOn = s.tasks.cloud_sync ? cloudAccounts.find((a) => a.id === s.tasks.cloud_sync) : undefined;
   const place = s.tasks.folder_sync ?? (s.tasks.cloud_sync ? (cloudOn ? `${storeName(cloudOn.provider)} of ${cloudOn.email ?? cloudOn.display_name}` : "Your cloud storage") : null);
@@ -73,14 +77,15 @@ export function FolderSyncSettings() {
     const list = choices.data ?? [];
     return (
       <div className="flex flex-col gap-7">
-        <Group title="Share between your computers" footer="Your tasks, meeting notes, events you made here, templates and days off. Each computer keeps an encrypted file there; only your computers have the code to open them. Use the same place on every computer. No server of ours, no new account.">
+        {pairing}
+        <Group title={isPhone ? "Or share another way" : "Share between your computers"} footer="Your tasks, meeting notes, events you made here, templates and days off. Each computer keeps an encrypted file there; only your computers have the code to open them. Use the same place on every computer. No server of ours, no new account.">
           <li className="flex flex-col gap-3 px-4 py-3">
             <Segmented
               label="Where to keep the files"
               value={where}
               onValueChange={(v) => v && setWhere(v as "folder" | "cloud" | "lan")}
               options={[
-                { value: "folder", label: "Synced folder" },
+                ...(isPhone ? [] : [{ value: "folder", label: "Synced folder" }]),
                 { value: "cloud", label: "Cloud account" },
                 { value: "lan", label: "Same network" },
               ]}
@@ -140,6 +145,7 @@ export function FolderSyncSettings() {
   }
   return (
     <div className="flex flex-col gap-7">
+      {pairing}
       <Group title="Sharing" footer="Changes are shared each time calendars refresh, and when you press Sync now. Your cloud service moves the files between computers, so allow it a minute.">
         <SettingRow title={s.tasks.cloud_sync ? "Kept in" : s.tasks.folder_sync ? "Folder" : "Sharing"} description={on} />
         {place && (

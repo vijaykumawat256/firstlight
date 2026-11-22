@@ -48,6 +48,8 @@ fn main() {
             "disable_task_sync",
             "sync_tasks_now",
             "get_week_review",
+            "pair_with_computer",
+            "pairing_code",
             "lan_sync_status",
             "disable_lan_sync",
             "enable_lan_sync",

@@ -539,6 +539,9 @@ pub fn run() {
     // Android has no keychain the `keyring` crate can reach: secrets go to the Android Keystore through this.
     #[cfg(target_os = "android")]
     let builder = builder.plugin(android_secrets::init());
+    // Phones: the camera reads a computer's pairing code (capabilities/mobile.json).
+    #[cfg(mobile)]
+    let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
     let builder = builder
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
@@ -574,6 +577,8 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            lan_sync::pair_with_computer,
+            lan_sync::pairing_code,
             lan_sync::lan_sync_status,
             lan_sync::disable_lan_sync,
             lan_sync::enable_lan_sync,

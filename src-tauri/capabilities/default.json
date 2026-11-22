@@ -28,6 +28,8 @@
     "allow-disable-task-sync",
     "allow-sync-tasks-now",
     "allow-get-week-review",
+    "allow-pair-with-computer",
+    "allow-pairing-code",
     "allow-lan-sync-status",
     "allow-disable-lan-sync",
     "allow-enable-lan-sync",

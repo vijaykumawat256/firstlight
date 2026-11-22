@@ -198,6 +198,18 @@ impl LanFiles {
             .map_err(io)
     }
 
+    /// Where the devices heard recently are, so announcements can also go to each of them directly (a phone often
+    /// can't hear network-wide ones).
+    pub fn peer_addrs(&self) -> Vec<IpAddr> {
+        let Ok(peers) = self.peers.lock() else {
+            return vec![];
+        };
+        let mut out: Vec<IpAddr> = peers.values().map(|p| p.addr).collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
     fn peer(&self, device: &str) -> Option<SocketAddr> {
         let peers = self.peers.lock().ok()?;
         peers.get(device).map(|p| SocketAddr::new(p.addr, p.port))

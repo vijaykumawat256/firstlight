@@ -464,7 +464,7 @@ export interface AppSettings {
 
   templates: EventTemplate[];
   /** Accounts your tasks are kept in step with (the first takes tasks made here). */
-  tasks: { sync_accounts: string[]; folder_sync: string | null; cloud_sync: string | null; lan_sync: boolean };
+  tasks: { sync_accounts: string[]; folder_sync: string | null; cloud_sync: string | null; lan_sync: boolean; lan_peers: string[] };
 }
 
 export type AiProvider = "anthropic" | "local" | "openai" | "xai" | "gemini" | "mistral" | "groq" | "openrouter" | "custom";
@@ -609,4 +609,11 @@ export interface FreeSlot {
   start: string;
   end: string;
   minutes: number;
+}
+
+/** What a computer shows to pair a phone: the text to copy, the same as a QR code (SVG), and its network addresses. */
+export interface PairingCode {
+  text: string;
+  svg: string;
+  addrs: string[];
 }

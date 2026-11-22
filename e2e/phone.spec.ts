@@ -43,3 +43,49 @@ test("on a computer the same settings are all there", async ({ page }) => {
   await page.getByRole("main").getByRole("button", { name: /^General/ }).click();
   await expect(page.getByText("Start at login", { exact: true })).toBeVisible();
 });
+
+async function openComputers(page: import("@playwright/test").Page, query: string) {
+  await page.clock.install({ time: todayAt(9, 30) });
+  await page.goto(`/${query}`);
+  await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("main").getByRole("button", { name: /^Your computers/ }).click();
+}
+
+test("a computer shows a pairing code for the phone, and turns on sharing on the network", async ({ page }) => {
+  await openComputers(page, "");
+  await page.getByRole("button", { name: "Show code" }).click();
+  const dialog = page.getByRole("dialog", { name: "Scan this with your phone" });
+  await expect(dialog.getByRole("img", { name: "Pairing code for your phone" })).toBeVisible();
+  await expect(dialog.getByText(/192\.168\.1\.20/)).toBeVisible();
+  await settle(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await dialog.getByRole("button", { name: "Done" }).click();
+  // Sharing on the network is now on, so the page shows the running state.
+  await expect(page.getByText("This network only")).toBeVisible();
+});
+
+test("a phone pairs by scanning, or by pasting the text, and refuses anything else", async ({ page }) => {
+  await openComputers(page, "?phone");
+  await expect(page.getByRole("radio", { name: "Synced folder" })).toHaveCount(0);
+  // Something that isn't a pairing code.
+  await page.getByLabel("Or paste the pairing text").fill("FL1-NOPE");
+  await page.getByRole("button", { name: "Pair", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText("That isn't a Firstlight pairing code.");
+  // Scanning the computer's code.
+  await page.evaluate(() => {
+    (window as unknown as { __scanText: string }).__scanText = "firstlight:pair?v=1&code=FL1-ABCD-EFGH&device=a1b2c3d4&at=192.168.1.20";
+  });
+  await page.getByRole("button", { name: "Scan the code" }).click();
+  await expect(page.getByText("Paired with your computer").first()).toBeVisible();
+  await expect(page.getByText(/Looking for your computer at 192\.168\.1\.20/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Scan again" })).toBeVisible();
+  await settle(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});
+
+test("a phone without camera permission is told how to pair instead", async ({ page }) => {
+  await openComputers(page, "?phone&scanfail");
+  await page.getByRole("button", { name: "Scan the code" }).click();
+  await expect(page.getByRole("alert")).toContainText("paste the pairing text instead");
+});

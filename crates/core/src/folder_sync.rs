@@ -562,6 +562,7 @@ pub fn sync(
 
 pub mod cloud;
 pub mod lan;
+pub mod pairing;
 
 #[cfg(test)]
 mod tests;

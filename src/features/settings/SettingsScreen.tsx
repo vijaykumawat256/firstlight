@@ -56,7 +56,13 @@ const HOME: HomeItem[][] = [
 const PHONE_HIDDEN: Section[] = ["appears"];
 const homeFor = (phone: boolean) =>
   phone
-    ? HOME.map((c) => c.filter((i) => !i.section || !PHONE_HIDDEN.includes(i.section)).map((i) => (i.section === "general" ? { ...i, description: "Task sync, templates and refreshing" } : i)))
+    ? HOME.map((c) =>
+        c
+          .filter((i) => !i.section || !PHONE_HIDDEN.includes(i.section))
+          .map((i) =>
+            i.section === "general" ? { ...i, description: "Task sync, templates and refreshing" } : i.section === "computers" ? { ...i, description: "Pair with your Mac or PC to share tasks, notes and events" } : i,
+          ),
+      )
     : HOME;
 const titleOf = (section: Section) => HOME.flat().find((i) => i.section === section)?.title ?? "Settings";
 

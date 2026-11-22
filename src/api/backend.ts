@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport, BackupInfo, ProblemReport, SignInApps, SignInAppsChange } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport, BackupInfo, ProblemReport, SignInApps, SignInAppsChange, PairingCode } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -126,6 +126,12 @@ export interface Backend {
   disableLanSync(): Promise<AppSettings>;
   /** The devices seen on this network in the last round. */
   lanSyncStatus(): Promise<FolderSyncReport>;
+  /** On a computer: the code a phone scans to pair with it (turns on sharing on the network). */
+  pairingCode(): Promise<PairingCode>;
+  /** On a phone: pairs with a computer from its pairing code (scanned or pasted). */
+  pairWithComputer(text: string): Promise<{ settings: AppSettings; code: string; report: FolderSyncReport }>;
+  /** On a phone: opens the camera to read a QR code. Null when cancelled. */
+  scanQrCode(): Promise<string | null>;
   /** Your own Google / Microsoft sign-in app, if set, and whether this build has its own. */
   getSignInApps(): Promise<SignInApps>;
   /** Checks and saves your own sign-in app; used at once (no restart). */

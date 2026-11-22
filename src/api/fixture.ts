@@ -206,7 +206,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   privacy: { crash_reports: false },
   day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true, travel_maps: false, travel_from: "", waiting_nudge_days: 3, dnd_meetings: false, time_off: [] },
   templates: [],
-  tasks: { sync_accounts: [], folder_sync: null, cloud_sync: null, lan_sync: false },
+  tasks: { sync_accounts: [], folder_sync: null, cloud_sync: null, lan_sync: false, lan_peers: [] },
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
 if (["week", "day", "month"].includes(params.get("defaultview") ?? "")) settings.general.default_view = params.get("defaultview") as "day" | "week" | "month";
@@ -1122,6 +1122,27 @@ export const fixtureBackend: Backend = {
   async lanSyncStatus() {
     if (!settings.tasks.lan_sync || !params.has("lanpeer")) return { applied: 0, peers: [], unreadable: 0 };
     return { applied: 0, peers: [{ name: "Office desktop", written_at: new Date(Date.now() - 60_000).toISOString() }], unreadable: 0 };
+  },
+  async pairingCode() {
+    await this.enableLanSync(null);
+    const text = `firstlight:pair?v=1&code=${folderCode}&device=a1b2c3d4&at=192.168.1.20`;
+    // A stand-in picture: the browser tests check that a code is shown, not that it scans.
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#fff"/><rect x="1" y="1" width="3" height="3"/></svg>';
+    return { text, svg, addrs: ["192.168.1.20"] };
+  },
+  async pairWithComputer(text: string) {
+    await sleep(200);
+    const m = /^firstlight:pair\?v=1&code=(FL1-[A-Z0-9-]+)&device=[0-9a-f]+&at=([0-9.,]*)$/i.exec(text.trim());
+    if (!m) throw new Error("That isn't a Firstlight pairing code.");
+    const on = await this.enableLanSync(m[1] ?? null);
+    settings = { ...on.settings, tasks: { ...on.settings.tasks, lan_peers: (m[2] ?? "").split(",").filter(Boolean) } };
+    settingsListeners.forEach((l) => l());
+    return { ...on, settings: structuredClone(settings) };
+  },
+  async scanQrCode() {
+    await sleep(100);
+    if (params.has("scanfail")) throw new Error("Firstlight isn't allowed to use the camera. You can allow it in the phone's Settings, or paste the pairing text instead.");
+    return (window as unknown as { __scanText?: string }).__scanText ?? null;
   },
   async getSignInApps() {
     return { ...ownApps, google_has_secret: ownApps.google_client_id !== null && ownSecret, built_in_google: !params.has("nogoogle"), built_in_microsoft: !params.has("nomicrosoft") };

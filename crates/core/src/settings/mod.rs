@@ -161,6 +161,10 @@ pub struct TaskSyncSettings {
     /// Also (or only) share directly with your devices on the same network. This computer only: changed only by
     /// `enable_lan_sync` / `disable_lan_sync`; import clears it.
     pub lan_sync: bool,
+    /// The home-network addresses of the computer this phone was paired with (from its QR code), greeted directly
+    /// because a phone often can't use network-wide announcements. This device only: changed only by
+    /// `pair_with_computer`; import clears it; at most 4 local-network addresses (`pairing::clean_peers`).
+    pub lan_peers: Vec<String>,
 }
 
 /// Choices about what Firstlight does on its own and what it keeps.
@@ -674,6 +678,7 @@ impl AppSettings {
         let d = Self::default();
         self.version = CURRENT_VERSION;
         self.general.sync_interval_minutes = self.general.sync_interval_minutes.clamp(1, 1440);
+        self.tasks.lan_peers = crate::folder_sync::pairing::clean_peers(&self.tasks.lan_peers);
         if self
             .general
             .global_shortcut
@@ -915,6 +920,7 @@ impl AppSettings {
         imported.tasks.folder_sync = None;
         imported.tasks.cloud_sync = None;
         imported.tasks.lan_sync = false;
+        imported.tasks.lan_peers.clear();
         imported.ai.consented = None;
         imported.ai.consented_host = None;
         imported.ai.plan_consented = None;

@@ -196,9 +196,9 @@ fn check_folder(folder: &str) -> CmdResult<PathBuf> {
 
 #[derive(Serialize)]
 pub(crate) struct FolderSyncOn {
-    settings: AppSettings,
+    pub(crate) settings: AppSettings,
     /// The sync code to type on your other computers.
-    code: String,
+    pub(crate) code: String,
     report: Report,
 }
 
