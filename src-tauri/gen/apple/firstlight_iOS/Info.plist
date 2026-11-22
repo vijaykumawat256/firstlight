@@ -52,5 +52,7 @@
 	<string>Only if you turn on sharing on the same network, Firstlight finds your other devices on this network and exchanges your tasks, notes and events with them, encrypted with your sync code.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Firstlight asks Mail for your unread messages and meeting invitations so it can summarise them. It never changes or sends mail.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>To scan the pairing code your computer shows, so this phone and your computer share your tasks, notes and events. Nothing is recorded or kept.</string>
 </dict>
 </plist>
