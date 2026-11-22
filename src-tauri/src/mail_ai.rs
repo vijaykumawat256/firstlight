@@ -164,6 +164,26 @@ fn fetch_apple(days: i64) -> Result<Apple, Error> {
     }
 }
 
+/// Classic Outlook's inbox (Windows only; see `firstlight_core::mail::outlookmail`).
+fn fetch_outlook(days: i64, now: chrono::DateTime<Utc>) -> Result<SourceBatch, Error> {
+    #[cfg(windows)]
+    {
+        firstlight_core::mail::outlookmail::fetch(
+            &crate::outlook_win::PowerShell::default(),
+            days,
+            now,
+            crate::local_tz(),
+        )
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (days, now);
+        Err(Error::Provider(
+            "Outlook mail is read on Windows only".into(),
+        ))
+    }
+}
+
 // ---- collecting the digest -------------------------------------------------------------
 
 fn problem_kind(e: &Error) -> &'static str {
@@ -195,6 +215,16 @@ fn collect(
             }),
             Err(e) => problems.push(MailProblem {
                 source: "apple_mail".into(),
+                kind: problem_kind(&e),
+            }),
+        }
+    }
+
+    if settings.email.outlook_mail {
+        match fetch_outlook(days, now) {
+            Ok(b) => batches.push(b),
+            Err(e) => problems.push(MailProblem {
+                source: "Outlook".into(),
                 kind: problem_kind(&e),
             }),
         }
@@ -364,6 +394,26 @@ pub async fn enable_apple_mail(
         Err(RunError::Timeout) => Err("Mail didn't respond. Open Mail, then try again.".into()),
         Err(RunError::Failed) => Err("Couldn't talk to Mail. Make sure the Mail app is installed and has an account.".into()),
     }
+}
+
+/// Turns on reading classic Outlook's inbox (Windows), after one successful read so a problem shows now, not later.
+#[tauri::command]
+pub async fn enable_outlook_mail(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<AppSettings> {
+    let days = lock_store(&state)?.load_settings().email.days_back;
+    tauri::async_runtime::spawn_blocking(move || fetch_outlook(days, Utc::now()))
+        .await
+        .map_err(|_| "mail failed".to_string())?
+        .map_err(|e| match e {
+            Error::Provider(m) => m,
+            _ => "Outlook couldn't be read.".to_string(),
+        })?;
+    save_settings(&app, &state, |s| {
+        s.email.outlook_mail = true;
+        s.email.enabled = true;
+    })
 }
 
 /// Asks the provider for permission to read mail for one connected account, then turns the digest on for it.

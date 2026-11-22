@@ -369,6 +369,22 @@ pub fn refresh(store: &mut Store, now: DateTime<Utc>) -> Result<()> {
     store.replace_events(CALENDAR_ID, &events)
 }
 
+/// Whether a record from another of the person's computers (sharing through a folder) may be stored here: it must
+/// read as a record, pass the same checks as the New event form, and live on that computer only (a record pointing at
+/// a Calendar-app or CalDAV event is refused, so sharing can never give this computer something to change there).
+pub fn valid_shared_record(json: &str, now: DateTime<Utc>) -> bool {
+    let Ok(stored) = serde_json::from_str::<Stored>(json) else {
+        return false;
+    };
+    let Ok(tz) = stored.tz.parse::<Tz>() else {
+        return false;
+    };
+    stored.remote.is_none()
+        && stored.skipped.len() <= 1000
+        && stored.skipped.iter().all(|k| k.len() <= 64)
+        && build_event(&stored.input, None, tz, now).is_ok()
+}
+
 /// Adds an event (`id` is `None`) or changes one of our own, for a repeating one the whole series.
 pub fn save(
     store: &mut Store,

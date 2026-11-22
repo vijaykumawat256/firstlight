@@ -1301,7 +1301,8 @@ pub struct SystemStatus {
     name: &'static str,
     /// Whether events can be added here (not for Outlook yet).
     writable: bool,
-    /// Whether the Mac's Mail app can be offered as a mail source.
+    /// Whether this computer's mail app can be offered as a mail source: Mail on a Mac, classic Outlook on Windows
+    /// (only when `supported`, which for Outlook means it is installed).
     mail_app: bool,
     /// "granted" | "not_determined" | "denied" | "restricted" | "unsupported"
     access: &'static str,
@@ -1325,7 +1326,7 @@ pub async fn system_calendar_status(state: State<'_, AppState>) -> CmdResult<Sys
         supported: access != Access::Unsupported,
         name: state.deps.system.name(),
         writable: state.deps.system.writable(),
-        mail_app: cfg!(target_os = "macos"),
+        mail_app: cfg!(any(target_os = "macos", windows)),
         access: access_name(access),
     })
 }
@@ -1756,6 +1757,73 @@ pub async fn get_last_crash_report(app: AppHandle) -> CmdResult<Option<String>> 
         .app_log_dir()
         .ok()
         .and_then(|d| crate::crash_reports::latest(&d)))
+}
+
+/// The text of a problem report (shown in full before it is saved).
+fn problem_text(app: &AppHandle) -> String {
+    use std::io::{Read, Seek, SeekFrom};
+    use tauri::Manager;
+    let log_dir = app.path().app_log_dir().ok();
+    let crash = log_dir.as_deref().and_then(crate::crash_reports::latest);
+    // The end of the log (the newest lines), at most 512 KB.
+    let mut log = String::new();
+    if let Some(mut f) = log_dir
+        .as_deref()
+        .and_then(|d| std::fs::File::open(d.join("Firstlight.log")).ok())
+    {
+        let len = f.metadata().map(|m| m.len()).unwrap_or(0);
+        let _ = f.seek(SeekFrom::Start(len.saturating_sub(512 * 1024)));
+        let mut bytes = Vec::new();
+        let _ = f.read_to_end(&mut bytes);
+        log = String::from_utf8_lossy(&bytes).into_owned();
+    }
+    let home = app.path().home_dir().ok().map(|h| h.display().to_string());
+    firstlight_core::crash::problem_report(
+        &app.package_info().version.to_string(),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        crash.as_deref(),
+        &log,
+        home.as_deref(),
+        Utc::now(),
+    )
+}
+
+/// Where problem reports go, if this build was given an address (`FIRSTLIGHT_SUPPORT_EMAIL` at build time).
+pub(crate) fn support_email() -> Option<&'static str> {
+    option_env!("FIRSTLIGHT_SUPPORT_EMAIL")
+        .filter(|a| firstlight_core::invite::parse_address(a).is_some())
+}
+
+#[derive(serde::Serialize)]
+pub struct ProblemReport {
+    text: String,
+    /// The address to email it to, when this build has one.
+    support: Option<&'static str>,
+}
+
+#[tauri::command]
+pub async fn get_problem_report(app: AppHandle) -> CmdResult<ProblemReport> {
+    Ok(ProblemReport {
+        text: problem_text(&app),
+        support: support_email(),
+    })
+}
+
+/// Saves the report (as the person edited it) to Downloads and shows it there. Nothing is sent.
+#[tauri::command]
+pub async fn save_problem_report(app: AppHandle, text: String) -> CmdResult<String> {
+    use tauri::Manager;
+    use tauri_plugin_opener::OpenerExt;
+    let text: String = text.chars().take(200_000).collect();
+    let dir = app
+        .path()
+        .download_dir()
+        .map_err(|_| "Couldn't find your Downloads folder.".to_string())?;
+    let path = unique_path(&dir, "firstlight-problem-report", "txt");
+    std::fs::write(&path, text).map_err(|_| "Couldn't save the file.".to_string())?;
+    let _ = app.opener().reveal_item_in_dir(&path);
+    Ok(path.display().to_string())
 }
 
 #[tauri::command]

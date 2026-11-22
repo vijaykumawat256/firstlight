@@ -1,4 +1,4 @@
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, CalEvent, AskReply, ConflictHelp, EventInput, ExportResult, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskInput, TaskLists, WeekAhead, MeetingNote, MeetingPrep, FreeSlot, ImapPreset, InvitePreview, InviteSender, OwnEvent, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, WritableCalendar, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport, BackupInfo, ProblemReport } from "./types";
 
 /**
  * Everything the UI may ask of the outside world. The UI imports `api` and never
@@ -12,6 +12,8 @@ export interface Backend {
   getMailDigest(force: boolean): Promise<MailResult>;
   /** Asks macOS for permission to read the Mail app (one-time prompt) and turns it on. */
   enableAppleMail(): Promise<AppSettings>;
+  /** Windows: reads unread mail and invitations from classic Outlook (tries once, then turns it on). */
+  enableOutlookMail(): Promise<AppSettings>;
   /** Asks Google/Microsoft for permission to read this account's mail, then turns it on. */
   enableAccountMail(accountId: string): Promise<AppSettings>;
   /** Add, change or remove an event of your own (stored only on this computer). */
@@ -116,6 +118,14 @@ export interface Backend {
   folderSyncChoices(): Promise<{ label: string; path: string }[]>;
   enableFolderSync(folder: string, code: string | null): Promise<{ settings: AppSettings; code: string; report: FolderSyncReport }>;
   disableFolderSync(): Promise<AppSettings>;
+  /** Version, system, last crash report and recent warnings, to show in full. */
+  getProblemReport(): Promise<ProblemReport>;
+  /** Saves the (edited) report to Downloads, shows it there, and returns its path. Sends nothing. */
+  saveProblemReport(text: string): Promise<string>;
+  /** Automatic backups, newest first. */
+  listBackups(): Promise<BackupInfo[]>;
+  /** Puts a backup back: the app restarts and swaps it in before opening the database. */
+  restoreBackup(name: string): Promise<void>;
   folderSyncCode(): Promise<string | null>;
   syncFolderNow(): Promise<FolderSyncReport>;
   /** [offered here, access already granted] */

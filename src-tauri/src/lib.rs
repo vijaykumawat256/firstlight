@@ -2,6 +2,7 @@
 //! small set of commands the UI is allowed to call. All calendar logic lives in
 //! `firstlight-core`.
 
+mod backups;
 mod commands;
 mod crash_reports;
 mod dnd;
@@ -530,6 +531,11 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            mail_ai::enable_outlook_mail,
+            commands::save_problem_report,
+            commands::get_problem_report,
+            backups::restore_backup,
+            backups::list_backups,
             folder_sync_cmd::sync_folder_now,
             folder_sync_cmd::folder_sync_code,
             folder_sync_cmd::disable_folder_sync,
@@ -691,7 +697,20 @@ pub fn run() {
                 e.to_string()
             })?;
 
-            let db_path = dir.join(firstlight_core::profile::db_file_name(profile.as_deref()));
+            let db_file = firstlight_core::profile::db_file_name(profile.as_deref());
+            let db_path = dir.join(&db_file);
+            // A restore asked for in Settings happens now, before the database opens; and a version that has not
+            // opened this database before copies it first, so a format change can be undone.
+            match firstlight_core::backup::before_open(
+                &dir,
+                &db_file,
+                &key,
+                &app.package_info().version.to_string(),
+                chrono::Utc::now(),
+            ) {
+                Ok(done) => log::info!("backups at start: {done:?}"),
+                Err(e) => log::error!("backup at start failed: {e}"),
+            }
             let store = Store::open(&db_path, &key).map_err(|e| {
                 log::error!("cannot open database: {e}");
                 e.to_string()

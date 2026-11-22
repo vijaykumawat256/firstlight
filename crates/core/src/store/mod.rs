@@ -291,6 +291,34 @@ impl Store {
         Ok(())
     }
 
+    /// Writes a consistent, encrypted copy of the whole database to `path` (which must not exist), with the same key,
+    /// while the database stays in use (SQLCipher's `sqlcipher_export`). Used for the daily backup.
+    pub fn export_copy(&self, path: &Path, key: &Redacted) -> Result<()> {
+        let k = key.expose();
+        if k.len() != 64 || !k.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(Error::Invalid("database key must be 64 hex characters"));
+        }
+        let p = path
+            .to_str()
+            .filter(|p| !p.contains('\''))
+            .ok_or(Error::Invalid("backup path"))?;
+        self.conn
+            .execute_batch(&format!("ATTACH DATABASE '{p}' AS backup KEY \"x'{k}'\";"))?;
+        let done = self
+            .conn
+            .query_row("SELECT sqlcipher_export('backup')", [], |_| Ok(()))
+            .and_then(|_| {
+                self.conn.execute_batch(&format!(
+                    "PRAGMA backup.user_version = {};",
+                    self.schema_version().unwrap_or(0)
+                ))
+            });
+        let detached = self.conn.execute_batch("DETACH DATABASE backup;");
+        done?;
+        detached?;
+        Ok(())
+    }
+
     pub fn schema_version(&self) -> Result<i64> {
         Ok(self
             .conn

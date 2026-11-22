@@ -266,6 +266,8 @@ pub struct EmailSettings {
     pub enabled: bool,
     /// Read the Mail app on this Mac.
     pub apple_mail: bool,
+    /// Read classic Outlook's inbox on this Windows PC (unread count and invitations; no senders).
+    pub outlook_mail: bool,
     /// Connected Google/Microsoft accounts the user has allowed mail access for.
     pub account_ids: Vec<String>,
     /// Yahoo and iCloud mailboxes (IMAP). Only added or removed by their own commands, which keep the
@@ -295,6 +297,7 @@ impl Default for EmailSettings {
         Self {
             enabled: false,
             apple_mail: false,
+            outlook_mail: false,
             account_ids: vec![],
             imap: vec![],
             send_invitations: false,

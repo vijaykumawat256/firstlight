@@ -1,14 +1,31 @@
 name: Installers
 
-# Builds the installers people actually install: an .exe for Windows and a .dmg for Mac. They are NOT signed
-# (see docs/RELEASE.md), so Windows shows "unknown publisher" and macOS asks to be opened with right-click.
-# Run it by hand (Actions tab, "Installers", Run workflow) or by pushing a tag such as v0.1.0. The finished
-# files are attached to a release on the Releases page (and to the run as "artifacts").
+# Builds the installers people install: an .exe for Windows and a universal .dmg for Mac (Apple chips and Intel),
+# and puts them on a release. Run it by hand (Actions tab, Installers, Run workflow: a pre-release named after the
+# run) or push a tag such as v0.2.0 (a release of that name; a tag with a dash, like v0.2.0-beta.1, is a pre-release
+# and goes to the beta update channel).
+#
+# Everything below switches itself on when its secret is there, and is skipped (with a note in the run) when not.
+# Setup for each one: docs/RELEASE.md.
+#   - Mac signing + notarising:  APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#                                APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID        (otherwise: ad hoc, "unknown developer")
+#   - Windows signing (Azure Trusted Signing): AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID secrets and
+#                                the TRUSTED_SIGNING_ENDPOINT, TRUSTED_SIGNING_ACCOUNT, TRUSTED_SIGNING_PROFILE
+#                                variables                                       (otherwise: "unknown publisher")
+#   - Updates: TAURI_SIGNING_PRIVATE_KEY (+ _PASSWORD) secrets and the UPDATER_PUBKEY variable. Installed copies
+#                                download from the PUBLIC repository in the RELEASES_REPO variable (owner/name;
+#                                a private repository's files can't be downloaded by the app). Publishing there
+#                                needs RELEASES_TOKEN (a token allowed to write that repository's contents).
+#   - Google / Microsoft sign-in: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, MICROSOFT_OAUTH_CLIENT_ID.
+#   - Support address for "Report a problem": the SUPPORT_EMAIL variable.
 
 on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+
+env:
+  RELEASES_REPO: ${{ vars.RELEASES_REPO || github.repository }}
 
 jobs:
   build:
@@ -18,60 +35,177 @@ jobs:
         include:
           - os: windows-latest
             name: windows
-            bundles: nsis
-            files: target/release/bundle/nsis/*.exe
+            args: --bundles nsis
+            out: target/release/bundle/nsis
           - os: macos-latest
             name: mac
-            bundles: app,dmg
-            files: target/release/bundle/dmg/*.dmg
+            args: --target universal-apple-darwin --bundles app,dmg
+            out: target/universal-apple-darwin/release/bundle
     runs-on: ${{ matrix.os }}
     env:
-      # Baked into the app at build time (they identify the app; they are not passwords). Add them under
-      # Settings, Secrets and variables, Actions. If they are missing the app still builds, and the Google and
-      # Microsoft buttons say "Setup needed".
+      # Baked into the app at build time (they identify the app; they are not passwords).
       GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
       MICROSOFT_OAUTH_CLIENT_ID: ${{ secrets.MICROSOFT_OAUTH_CLIENT_ID }}
+      # Where "Report a problem" offers to email the report (a repository variable; without it, Save only).
+      FIRSTLIGHT_SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
+      HAS_UPDATER: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && vars.UPDATER_PUBKEY != '' }}
+      HAS_APPLE: ${{ secrets.APPLE_CERTIFICATE != '' }}
+      HAS_AZURE: ${{ secrets.AZURE_CLIENT_ID != '' && vars.TRUSTED_SIGNING_ACCOUNT != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.name == 'mac' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
-      - name: Build the installer
-        run: npm run tauri build -- --bundles ${{ matrix.bundles }}
+
+      - name: Version from the tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          v=$(node -e 'import("./scripts/release-manifest.mjs").then(m => console.log(m.versionOf(process.argv[1])))' "$GITHUB_REF_NAME")
+          node -e 'const f="src-tauri/tauri.conf.json",fs=require("fs"),c=JSON.parse(fs.readFileSync(f));c.version=process.argv[1];fs.writeFileSync(f,JSON.stringify(c,null,2))' "$v"
+          # The Rust side reports the same version (About, crash reports, backups before an update).
+          node -e 'const f="Cargo.toml",fs=require("fs");fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/(\[workspace\.package\][^\[]*?\nversion = )"[^"]*"/,`$1"${process.argv[1]}"`))' "$v"
+          grep -n '^version' Cargo.toml
+          echo "Building version $v"
+
+      - name: Release settings (updates, Windows signing)
+        shell: bash
         env:
-          # "-" signs the Mac app with no certificate ("ad hoc"), so its seal is intact. Without it macOS can call
-          # a downloaded copy "damaged". It is still not notarised: macOS asks to confirm the developer.
-          APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
+          PUBKEY: ${{ vars.UPDATER_PUBKEY }}
+          TS_ENDPOINT: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
+          TS_ACCOUNT: ${{ vars.TRUSTED_SIGNING_ACCOUNT }}
+          TS_PROFILE: ${{ vars.TRUSTED_SIGNING_PROFILE }}
+          OS: ${{ matrix.name }}
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          node -e '
+            const e = process.env, c = {};
+            if (e.HAS_UPDATER === "true") {
+              c.bundle = { createUpdaterArtifacts: true };
+              c.plugins = { updater: { pubkey: e.PUBKEY, endpoints: ["https://github.com/" + e.RELEASES_REPO + "/releases/download/stable/latest.json"] } };
+            }
+            if (e.OS === "windows" && e.HAS_AZURE === "true") {
+              c.bundle = { ...(c.bundle || {}), windows: { signCommand: `trusted-signing-cli -e ${e.TS_ENDPOINT} -a ${e.TS_ACCOUNT} -c ${e.TS_PROFILE} -d Firstlight %1` } };
+            }
+            require("fs").writeFileSync("release.conf.json", JSON.stringify(c, null, 2));
+          '
+          cat release.conf.json
+          args="--config release.conf.json"
+          if [ "$HAS_UPDATER" = "true" ]; then
+            args="$args --features updater"
+            echo "FIRSTLIGHT_UPDATE_BASE=https://github.com/$RELEASES_REPO/releases/download" >> "$GITHUB_ENV"
+          else
+            echo "::notice::Updates are off in this build (no TAURI_SIGNING_PRIVATE_KEY secret or UPDATER_PUBKEY variable)."
+          fi
+          if [ "$OS" = "mac" ] && [ "$HAS_APPLE" = "true" ]; then
+            echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          elif [ "$OS" = "mac" ]; then
+            # "-" signs with no certificate ("ad hoc"), so the seal is intact; without it macOS can call a download damaged.
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+            echo "::notice::The Mac app is not signed with a Developer ID (no APPLE_CERTIFICATE secret): macOS will ask to confirm the developer."
+          fi
+          if [ "$OS" = "windows" ] && [ "$HAS_AZURE" != "true" ]; then
+            echo "::notice::The Windows installer is not signed (no Azure Trusted Signing secrets): Windows will say unknown publisher."
+          fi
+          echo "RELEASE_ARGS=$args" >> "$GITHUB_ENV"
+
+      - name: Signing tool (Windows)
+        if: matrix.name == 'windows' && env.HAS_AZURE == 'true'
+        run: cargo install trusted-signing-cli --locked
+
+      - name: Build the installer
+        shell: bash
+        run: npm run tauri build -- ${{ matrix.args }} $RELEASE_ARGS
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Mac: Tauri imports the certificate into a temporary keychain, signs, notarises and staples.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows: read by trusted-signing-cli.
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+      - name: Check the build
+        shell: bash
+        run: |
+          if [ "${{ matrix.name }}" = "mac" ]; then
+            app="${{ matrix.out }}/macos/Firstlight.app"
+            archs=$(lipo -archs "$app/Contents/MacOS/Firstlight"); echo "Mac app built for: $archs"
+            case "$archs" in *x86_64*arm64*|*arm64*x86_64*) ;; *) echo "::error::not universal"; exit 1 ;; esac
+            codesign --verify --deep --strict "$app"
+          fi
+
+      - name: Collect the files
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ matrix.name }}" = "mac" ]; then
+            cp "${{ matrix.out }}"/dmg/*.dmg dist/
+            cp "${{ matrix.out }}"/macos/*.app.tar.gz* dist/ 2>/dev/null || true
+          else
+            cp "${{ matrix.out }}"/*-setup.exe* dist/
+          fi
+          ls -l dist
+
       - uses: actions/upload-artifact@v4
         with:
           name: firstlight-${{ matrix.name }}
-          path: ${{ matrix.files }}
+          path: dist/*
           if-no-files-found: error
 
-  # Puts both installers on the repository's Releases page, which doesn't expire like run artifacts do. A tag such as
-  # v0.1.0 gives a release of that name; a run by hand gives a pre-release named after the run number.
+  # Puts the installers on a release (which doesn't expire like run artifacts). With updates set up, also writes the
+  # update file to the "stable" or "beta" release, where installed copies look.
   release:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
+      IS_TAG: ${{ github.ref_type == 'tag' }}
+      REF: ${{ github.ref_name }}
+      RUN: ${{ github.run_number }}
+      SHA: ${{ github.sha }}
+      SOURCE: ${{ github.repository }}
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { path: dist, merge-multiple: true }
       - name: Publish the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          IS_TAG: ${{ github.ref_type == 'tag' }}
-          REF: ${{ github.ref_name }}
-          RUN: ${{ github.run_number }}
-          SHA: ${{ github.sha }}
         run: |
           ls -l dist
-          if [ "$IS_TAG" = "true" ]; then tag="$REF"; extra=""; else tag="build-$RUN"; extra="--prerelease"; fi
-          case "$tag" in *-*) extra="--prerelease" ;; esac
-          gh release create "$tag" dist/* --repo "$REPO" --target "$SHA" --title "Firstlight $tag" $extra \
-            --notes "Installers for Windows (.exe) and Mac (.dmg). Not signed yet: Windows may say \"unknown publisher\" (More info, Run anyway); on a Mac, right-click the app and choose Open the first time."
+          if [ "$IS_TAG" = "true" ]; then tag="$REF"; else tag="build-$RUN"; fi
+          extra=""
+          case "$tag" in build-*|*-*) extra="--prerelease" ;; esac
+          target=""
+          [ "$RELEASES_REPO" = "$SOURCE" ] && target="--target $SHA"
+          notes="Installers for Windows (.exe) and Mac (.dmg, Apple chips and Intel)."
+          ls dist/*.sig >/dev/null 2>&1 || notes="$notes Not signed yet: Windows may say \"unknown publisher\" (More info, Run anyway); on a Mac, right-click the app and choose Open the first time."
+          # Installers people download by hand; the updater files go up too when present.
+          gh release create "$tag" dist/* --repo "$RELEASES_REPO" $target --title "Firstlight $tag" $extra --notes "$notes"
+
+      - name: Publish the update file
+        if: github.ref_type == 'tag' && hashFiles('dist/*.sig') != ''
+        run: |
+          node scripts/release-manifest.mjs dist "$RELEASES_REPO" "$REF" > latest.json
+          cat latest.json
+          channel=$(node -e 'import("./scripts/release-manifest.mjs").then(m => console.log(m.channelOf(process.argv[1])))' "$REF")
+          channels="$channel"
+          # A stable release reaches beta people too (their channel never lags behind stable).
+          [ "$channel" = "stable" ] && channels="stable beta"
+          for c in $channels; do
+            gh release view "$c" --repo "$RELEASES_REPO" >/dev/null 2>&1 || \
+              gh release create "$c" --repo "$RELEASES_REPO" --prerelease --title "Update channel: $c" \
+                --notes "Holds latest.json for installed copies on the $c channel. Not an installer; see the other releases."
+            gh release upload "$c" latest.json --repo "$RELEASES_REPO" --clobber
+          done

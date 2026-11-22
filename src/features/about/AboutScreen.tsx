@@ -5,6 +5,7 @@ import { api, errorMessage } from "@/api";
 import { useNav } from "@/app/nav";
 import { Button, Card, Segmented, Skeleton } from "@/design";
 import { Markdown } from "./markdown";
+import { ProblemReportButton } from "./ProblemReport";
 import privacyPolicy from "../../../docs/PRIVACY.md?raw";
 
 type Tab = "help" | "privacy" | "licences";
@@ -73,6 +74,7 @@ function Updates() {
             </Button>
           </>
         )}
+        <ProblemReportButton />
       </div>
       {install.isError && <p role="alert" className="mt-2 text-footnote text-danger">{errorMessage(install.error)}</p>}
     </Card>

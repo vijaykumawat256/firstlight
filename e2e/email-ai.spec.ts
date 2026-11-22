@@ -389,3 +389,18 @@ test("the other AI services have no accessibility problems", async ({ page }) =>
   const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(r.violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(" ")}`)).toEqual([]);
 });
+
+test("on Windows, Outlook's inbox can be read without signing in, and a failure says why", async ({ page }) => {
+  await openSettings(page, "?outlook&outlookfail");
+  await page.getByRole("switch", { name: "Show email in the briefing" }).click();
+  await expect(page.getByText("Senders and previews aren't read")).toBeVisible();
+  await expect(page.getByText("Mail app", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Connect" }).first().click();
+  await expect(page.getByText("Couldn't read Outlook").first()).toBeVisible();
+
+  await openSettings(page, "?outlook");
+  await page.getByRole("switch", { name: "Show email in the briefing" }).click();
+  await page.getByRole("button", { name: "Connect" }).first().click();
+  await expect(page.getByRole("switch", { name: "Read Outlook" })).toBeChecked();
+  await expect(page.getByText("Reading unread mail and meeting invitations from Outlook")).toBeVisible();
+});

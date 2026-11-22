@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport, BackupInfo, ProblemReport } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -33,6 +33,10 @@ export const tauriBackend: Backend = {
   folderSyncChoices: () => invoke<{ label: string; path: string }[]>("folder_sync_choices"),
   enableFolderSync: (folder, code) => invoke<{ settings: AppSettings; code: string; report: FolderSyncReport }>("enable_folder_sync", { folder, code }),
   disableFolderSync: () => invoke<AppSettings>("disable_folder_sync"),
+  getProblemReport: () => invoke<ProblemReport>("get_problem_report"),
+  saveProblemReport: (text) => invoke<string>("save_problem_report", { text }),
+  listBackups: () => invoke<BackupInfo[]>("list_backups"),
+  restoreBackup: (name) => invoke<void>("restore_backup", { name }),
   folderSyncCode: () => invoke<string | null>("folder_sync_code"),
   syncFolderNow: () => invoke<FolderSyncReport>("sync_folder_now"),
   remindersStatus: () => invoke<[boolean, boolean]>("reminders_status"),
@@ -67,6 +71,7 @@ export const tauriBackend: Backend = {
   onCaptureShown: async (callback) => listen("capture-shown", () => callback()),
   getMailDigest: (force) => invoke<MailResult>("get_mail_digest", { force }),
   enableAppleMail: () => invoke<AppSettings>("enable_apple_mail"),
+  enableOutlookMail: () => invoke<AppSettings>("enable_outlook_mail"),
   enableAccountMail: (accountId) => invoke<AppSettings>("enable_account_mail", { accountId }),
   createEvent: (event, calendarId) => invoke("create_event", { event, calendarId: calendarId ?? null }),
   writableCalendars: () => invoke("writable_calendars"),

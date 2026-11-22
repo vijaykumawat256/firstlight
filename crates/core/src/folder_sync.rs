@@ -199,7 +199,9 @@ pub fn apply_changes(store: &mut Store, changes: &[Change], now: DateTime<Utc>) 
         let done = if let Some(id) = key.strip_prefix("task:") {
             match rec {
                 Some(r) => match serde_json::from_str::<Task>(&r.json) {
-                    Ok(t) if t.id == id => crate::todo::put(store, &t).is_ok(),
+                    Ok(t) if t.id == id && task_within_limits(store, &t) => {
+                        crate::todo::put(store, &t).is_ok()
+                    }
                     _ => false,
                 },
                 None => store.delete_task(id).is_ok(),
@@ -232,7 +234,10 @@ pub fn apply_changes(store: &mut Store, changes: &[Change], now: DateTime<Utc>) 
             } else {
                 events_changed = true;
                 match rec {
-                    Some(r) => store.put_own_event(id, &r.json).is_ok(),
+                    Some(r) if crate::local::valid_shared_record(&r.json, now) => {
+                        store.put_own_event(id, &r.json).is_ok()
+                    }
+                    Some(_) => false,
                     None => store.delete_own_event(id).is_ok(),
                 }
             }
@@ -319,6 +324,24 @@ fn folder(base: &Path) -> PathBuf {
     base.join(SUBFOLDER)
 }
 
+/// The same limits as a task typed here (title, notes, the size of the list), for one from another computer.
+fn task_within_limits(store: &Store, t: &Task) -> bool {
+    use crate::tasks::{MAX_NOTES, MAX_TASKS, MAX_TITLE};
+    let title = t.title.trim();
+    let fits = !title.is_empty()
+        && title.chars().count() <= MAX_TITLE
+        && !title.chars().any(char::is_control)
+        && t.notes
+            .as_ref()
+            .is_none_or(|n| n.chars().count() <= MAX_NOTES);
+    let room = store.get_task(&t.id).ok().flatten().is_some()
+        || store
+            .all_tasks()
+            .map(|a| a.len() < MAX_TASKS)
+            .unwrap_or(false);
+    fits && room
+}
+
 /// Whether the folder already holds a file this key cannot open (someone else's code, or this computer is joining).
 pub fn needs_code(base: &Path, key: Option<&[u8; 32]>, own: &str) -> bool {
     let Ok(entries) = std::fs::read_dir(folder(base)) else {
@@ -330,6 +353,9 @@ pub fn needs_code(base: &Path, key: Option<&[u8; 32]>, own: &str) -> bool {
         .filter(|p| p.extension().is_some_and(|x| x == EXT))
         .filter(|p| p.file_stem().is_some_and(|s| s != own))
         .any(|p| {
+            if std::fs::metadata(&p).map_or(true, |m| m.len() > MAX_FILE) {
+                return false;
+            }
             let Ok(data) = std::fs::read(&p) else {
                 return false;
             };
@@ -393,7 +419,7 @@ pub fn sync(
             &serde_json::to_value(foldersync::base_of(&snap.records)).unwrap_or_default(),
         )?;
         report.peers.push(Peer {
-            name: snap.name.clone(),
+            name: snap.name.chars().take(80).collect(),
             written_at: snap.written_at,
         });
     }

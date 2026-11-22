@@ -1,11 +1,13 @@
 import { CalendarDays } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/design";
+import { markFreshInstall } from "@/features/briefing/GettingStarted";
 import { AddAccountSheet } from "./AddAccountSheet";
 
 /** First-run screen: shown whenever no calendar is connected. */
 export function Onboarding() {
   const [open, setOpen] = useState(false);
+  useEffect(markFreshInstall, []);
   return (
     <div className="flex h-full flex-col">
       <div data-tauri-drag-region className="h-11 shrink-0" />

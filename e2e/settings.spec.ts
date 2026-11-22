@@ -46,7 +46,7 @@ test("every section from the plan is there", async ({ page }) => {
     Notifications: ["Meetings", "Daily summaries"],
     Email: ["Email"],
     "AI summaries": ["AI summaries"],
-    "Privacy & data": ["Backup", "Crash reports", "Your data"],
+    "Privacy & data": ["Automatic backups", "Settings file", "Crash reports", "Your data"],
   };
   for (const [name, groups] of Object.entries(pages)) {
     await section(page, name);

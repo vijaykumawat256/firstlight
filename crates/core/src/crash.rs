@@ -51,10 +51,100 @@ pub fn report_text(
     )
 }
 
+/// Most warning and error lines a problem report carries.
+pub const REPORT_LOG_LINES: usize = 60;
+
+/// One log line made safe to share: the home folder becomes "~", anything shaped like an email address becomes
+/// "[address]", and it is cut at 300 characters. (Log lines never carry event or mail text by rule; this is a second
+/// guard against a name in a path or an address in an error.)
+fn scrub_line(line: &str, home: Option<&str>) -> String {
+    let mut l = line.to_string();
+    if let Some(h) = home.filter(|h| h.len() > 1) {
+        l = l.replace(h, "~");
+        l = l.replace(&h.replace('\\', "/"), "~");
+    }
+    let words: Vec<String> = l
+        .split(' ')
+        .map(|w| {
+            let at = w.find('@');
+            match at {
+                Some(i) if i > 0 && w[i + 1..].contains('.') => "[address]".to_string(),
+                _ => w.to_string(),
+            }
+        })
+        .collect();
+    words.join(" ").chars().take(300).collect()
+}
+
+/// The text of a problem report the person can read in full, save and email: version and system, the last crash
+/// report, and the recent warnings and errors from the log (not the ordinary lines).
+pub fn problem_report(
+    version: &str,
+    os: &str,
+    arch: &str,
+    crash: Option<&str>,
+    log: &str,
+    home: Option<&str>,
+    at: DateTime<Utc>,
+) -> String {
+    let lines: Vec<String> = log
+        .lines()
+        .filter(|l| l.contains("[WARN]") || l.contains("[ERROR]"))
+        .map(|l| scrub_line(l, home))
+        .collect();
+    let recent = &lines[lines.len().saturating_sub(REPORT_LOG_LINES)..];
+    let mut out = format!(
+        "Firstlight problem report\nMade: {}\nVersion: {version}\nSystem: {os} {arch}\n\nWhat happened (write it here):\n\n\n",
+        at.format("%Y-%m-%d %H:%M UTC")
+    );
+    out.push_str("--- Last crash report ---\n");
+    out.push_str(crash.unwrap_or("None saved.\n"));
+    out.push_str("\n--- Recent warnings and errors ---\n");
+    if recent.is_empty() {
+        out.push_str("None.\n");
+    }
+    for l in recent {
+        out.push_str(l);
+        out.push('\n');
+    }
+    out.push_str("\nThis report contains no calendar, email or account content.\n");
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    #[test]
+    fn a_problem_report_keeps_only_warnings_and_errors_and_hides_names_and_addresses() {
+        let log = "\
+[2026-11-21][09:00:00][firstlight_lib][INFO] sync done
+[2026-11-21][09:01:00][firstlight_lib][WARN] folder sync failed at /Users/jane/Library/CloudStorage/x
+[2026-11-21][09:02:00][firstlight_lib][ERROR] sign-in for jane@example.com failed
+";
+        let at = Utc.with_ymd_and_hms(2026, 11, 21, 10, 0, 0).unwrap();
+        let r = problem_report(
+            "0.2.0",
+            "macos",
+            "aarch64",
+            None,
+            log,
+            Some("/Users/jane"),
+            at,
+        );
+        assert!(r.contains("Version: 0.2.0"));
+        assert!(!r.contains("sync done"), "ordinary lines are left out");
+        assert!(r.contains("folder sync failed at ~/Library/CloudStorage/x"));
+        assert!(r.contains("sign-in for [address] failed"));
+        assert!(!r.contains("jane"));
+        assert!(r.contains("None saved."));
+        // Only the newest lines.
+        let many: String = (0..100).map(|i| format!("[x][ERROR] line {i}\n")).collect();
+        let r = problem_report("1", "w", "x", Some("crash!\n"), &many, None, at);
+        assert!(r.contains("line 99") && !r.contains("line 39\n") && r.contains("line 40\n"));
+        assert!(r.contains("crash!"));
+    }
 
     #[test]
     fn paths_never_reveal_a_username_or_folder_layout() {

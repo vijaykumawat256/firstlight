@@ -36,7 +36,7 @@ impl<R: ScriptRunner> OutlookSource<R> {
 /// error text>` on failure. Base64 keeps the answer safe from the console's code page, and the marker keeps it
 /// apart from any banner or warning PowerShell prints. The error text comes from Outlook or Windows (for example a
 /// COM error code), never from the calendar's contents.
-const PRELUDE: &str = "$ErrorActionPreference='Stop'\n\
+pub(crate) const PRELUDE: &str = "$ErrorActionPreference='Stop'\n\
 try{\n\
 $ol=New-Object -ComObject Outlook.Application\n\
 $ns=$ol.GetNamespace('MAPI')\n";
@@ -179,7 +179,7 @@ pub fn explain_failure(raw: &str) -> Error {
 }
 
 /// Finds the answer in what the script printed: the JSON it produced, or the failure it reported.
-fn read_answer(out: &str) -> Result<String> {
+pub(crate) fn read_answer(out: &str) -> Result<String> {
     use base64::Engine;
     let decode = |b64: &str| {
         base64::engine::general_purpose::STANDARD

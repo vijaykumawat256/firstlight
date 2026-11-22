@@ -4,6 +4,12 @@ import { settle } from "./settle";
 test.use({ reducedMotion: "reduce" });
 
 const at = (h: number, m: number) => new Date(new Date().setHours(h, m, 0, 0));
+/** Today at that time if it is a weekday, else the coming Monday: planning only uses working days. */
+const weekdayAt = (h: number, m: number) => {
+  const d = at(h, m);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d;
+};
 
 test("the briefing lists today's tasks with ones carried over, and a task can be added and ticked off", async ({ page }) => {
   await page.clock.install({ time: at(9, 30) });
@@ -103,7 +109,7 @@ test("task reminders can be turned off in Settings", async ({ page }) => {
 });
 
 test("plan my day suggests times for today's tasks, and sets time aside only for the ones kept", async ({ page }) => {
-  await page.clock.install({ time: at(9, 0) });
+  await page.clock.install({ time: weekdayAt(9, 0) });
   await page.goto("/?tasks");
   await page.getByRole("region", { name: "Tasks" }).getByRole("button", { name: "Plan my day" }).click();
   const dialog = page.getByRole("dialog", { name: "Plan my day" });
@@ -121,7 +127,7 @@ test("plan my day suggests times for today's tasks, and sets time aside only for
 
 test("planning with AI needs its own agreement, shows what is sent, and falls back when AI fails", async ({ page }) => {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
-  await page.clock.install({ time: at(9, 0) });
+  await page.clock.install({ time: weekdayAt(9, 0) });
   await page.goto("/?tasks&aion&planfail");
   await page.getByRole("region", { name: "Tasks" }).getByRole("button", { name: "Plan my day" }).click();
   await page.getByRole("dialog", { name: "Plan my day" }).getByRole("button", { name: "Ask AI instead…" }).click();

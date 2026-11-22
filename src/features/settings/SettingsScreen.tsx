@@ -7,6 +7,7 @@ import { Button, CALENDAR_COLOURS, Dialog, ListGroup, Segmented, Select, Skeleto
 import { FontPicker, ThemePicker } from "./LookPickers";
 import { TimeOffSettings } from "./TimeOffSettings";
 import { FolderSyncSettings } from "./FolderSyncSettings";
+import { BackupsGroup } from "./BackupsGroup";
 import { DndGroup } from "./DndGroup";
 import { DayPicker, Group, HourSelect, NavRow, NumberSelect, SettingRow, ShortcutRecorder } from "./controls";
 import { AiGroup, EmailGroup, SendingGroup, TaskSyncGroup } from "./EmailAiSettings";
@@ -46,7 +47,7 @@ const HOME: HomeItem[][] = [
     { section: "ai", title: "AI summaries", description: "An optional smarter summary of your day", icon: Sparkles },
   ],
   [
-    { section: "privacy", title: "Privacy & data", description: "Backup, crash reports and erasing everything", icon: ShieldCheck },
+    { section: "privacy", title: "Privacy & data", description: "Automatic backups, crash reports and erasing everything", icon: ShieldCheck },
     { view: "about", title: "About Firstlight", description: "Version, help, privacy policy and licences", icon: Info },
   ],
 ];
@@ -539,7 +540,9 @@ export function SettingsScreen() {
         {section === "computers" && <FolderSyncSettings />}
         {section === "privacy" && (
           <div className="flex flex-col gap-7">
-            <Group title="Backup">
+            <BackupsGroup />
+
+            <Group title="Settings file">
               <SettingRow title="Back up your settings" description="Settings only. No accounts, links or passwords are included.">
                 <div className="flex gap-1">
                   <Button size="sm" variant="secondary" onClick={() => exportFile.mutate()}>

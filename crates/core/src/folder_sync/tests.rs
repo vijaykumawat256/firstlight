@@ -163,3 +163,47 @@ fn a_file_made_with_another_code_is_reported_and_changes_nothing() {
     assert!(crate::todo::all(&a).unwrap().is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn records_from_another_computer_get_the_same_checks_as_typed_ones() {
+    let mut here = store();
+    let now = t("2026-11-19T15:00:00Z");
+    let mut task = crate::tasks::Task {
+        id: "t-long".into(),
+        title: "x".repeat(crate::tasks::MAX_TITLE + 1),
+        created_at: now,
+        updated_at: now,
+        ..Default::default()
+    };
+    let ok_event = r#"{"input":{"title":"Dentist","all_day":false,"start":"2026-11-20T15:00:00Z","end":"2026-11-20T16:00:00Z","location":null,"join_url":null,"notes":null,"repeat":null,"reminder_minutes":null,"invitees":[],"focus":false},"tz":"America/New_York"}"#;
+    let remote_event = ok_event.replace(
+        r#""tz":"America/New_York"}"#,
+        r#""tz":"America/New_York","remote":{"calendar_id":"c","event_id":"someone-elses"}}"#,
+    );
+    let rec = |json: String| foldersync::Rec { json, ts: Some(1) };
+    let changes = vec![
+        Change::Set(
+            "task:t-long".into(),
+            rec(serde_json::to_string(&task).unwrap()),
+        ),
+        Change::Set("event:own-ok".into(), rec(ok_event.into())),
+        Change::Set("event:own-remote".into(), rec(remote_event)),
+        Change::Set(
+            "event:own-bad".into(),
+            rec(r#"{"input":{"title":""},"tz":"Nowhere"}"#.into()),
+        ),
+    ];
+    let applied = apply_changes(&mut here, &changes, now).unwrap();
+    assert_eq!(applied, 1, "only the valid event is taken");
+    assert!(crate::todo::get(&here, "t-long").is_err());
+    assert!(here.get_own_event("own-ok").unwrap().is_some());
+    assert!(here.get_own_event("own-remote").unwrap().is_none());
+    assert!(here.get_own_event("own-bad").unwrap().is_none());
+    // A task within the limits comes over.
+    task.title = "Call the bank".into();
+    let ok = vec![Change::Set(
+        "task:t-long".into(),
+        rec(serde_json::to_string(&task).unwrap()),
+    )];
+    assert_eq!(apply_changes(&mut here, &ok, now).unwrap(), 1);
+}

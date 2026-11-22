@@ -121,6 +121,14 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                         refreshed_on = Some(today);
                         let _ = firstlight_core::local::refresh(&mut store, now);
                     }
+                    // The day's backup (does nothing if one was taken in the last 20 hours).
+                    if let Some(dir) = crate::backups::dir(&db_path) {
+                        match firstlight_core::backup::daily(&store, &key, &dir, now) {
+                            Ok(Some(name)) => log::info!("daily backup {name}"),
+                            Ok(None) => {}
+                            Err(e) => log::warn!("daily backup failed: {e}"),
+                        }
+                    }
                     let (from, _) = day_bounds(today, tz);
                     // Eight days, so the Sunday week preview can see all of the week ahead; everything else only looks at
                     // today and tomorrow.

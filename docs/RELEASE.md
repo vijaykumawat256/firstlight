@@ -60,6 +60,9 @@ Build on Windows (or a Windows CI runner) with the same command. Sign with `sign
 
 ## 3. Updater key (do this once, keep it forever)
 
+> The Installers workflow now does all of this from repository secrets, and serves updates from GitHub Releases:
+> see `docs/LAUNCH.md` section 3c. The manual steps below still describe what happens underneath.
+
 ```sh
 npx tauri signer generate -w ~/.tauri/firstlight-updater.key
 ```

@@ -209,6 +209,21 @@ export interface DndStatus {
   status_name: string;
 }
 
+/** A problem report to read, save and email (nothing is sent by the app). */
+export interface ProblemReport {
+  text: string;
+  /** The address to email it to, when this build has one. */
+  support: string | null;
+}
+
+/** An automatic backup of the database (kept on this computer, encrypted like the database). */
+export interface BackupInfo {
+  name: string;
+  taken_at: string;
+  reason: "daily" | "update" | "before_restore";
+  bytes: number;
+}
+
 /** One round of sharing through a synced folder. */
 export interface FolderSyncReport {
   applied: number;
@@ -426,7 +441,7 @@ export interface AppSettings {
   };
   notify: { before_event: boolean; before_minutes: number; morning: boolean; morning_hour: number; evening: boolean; evening_hour: number; week_preview: boolean; time_24h: boolean; hide_titles: boolean };
   appearance: { theme: ThemeChoice; accent: string; ambient: boolean; font: FontStyle; text_size: TextSize; extra_zones: string[] };
-  email: { enabled: boolean; apple_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; send_messages: boolean; send_accounts: string[]; autoreply_accounts: string[]; important_senders: string[]; days_back: number };
+  email: { enabled: boolean; apple_mail: boolean; outlook_mail: boolean; account_ids: string[]; imap: ImapMailbox[]; send_invitations: boolean; send_messages: boolean; send_accounts: string[]; autoreply_accounts: string[]; important_senders: string[]; days_back: number };
   ai: { enabled: boolean; provider: AiProvider; model: string; endpoint: string; custom_endpoint: string; include_email: boolean; consented: AiProvider | null; consented_host: string | null; plan_consented: AiProvider | null };
   privacy: { crash_reports: boolean };
   day: { task_reminders: boolean; wrap_up: boolean; wrap_up_hour: number; wrap_up_minute: number; break_nudge: boolean; break_after_minutes: number; lunch_check: boolean; lunch_from_hour: number; lunch_to_hour: number; lunch_minutes: number; stop_work: boolean; follow_ups: boolean; travel_minutes: number; weekly_review: boolean; travel_maps: boolean; travel_from: string; waiting_nudge_days: number; dnd_meetings: boolean; time_off: TimeOff[] };

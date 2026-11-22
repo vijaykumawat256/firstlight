@@ -19,6 +19,7 @@ pub mod autoreply;
 pub mod gmail;
 pub mod imap;
 pub mod microsoft;
+pub mod outlookmail;
 pub mod related;
 pub mod send;
 pub mod smtp;

@@ -31,6 +31,8 @@ export function EmailGroup() {
   const mailAccounts = (accounts.data ?? []).filter((a) => a.provider === "google" || a.provider === "microsoft");
 
   const apple = useMutation({ mutationFn: () => api.enableAppleMail(), onSuccess: put, onError: (e) => push({ title: "Couldn't connect Mail", description: errorMessage(e), tone: "danger" }) });
+  const outlook = useMutation({ mutationFn: () => api.enableOutlookMail(), onSuccess: put, onError: (e) => push({ title: "Couldn't read Outlook", description: errorMessage(e), tone: "danger" }) });
+  const isOutlook = system.data?.name === "Outlook";
   const account = useMutation({
     mutationFn: (id: string) => api.enableAccountMail(id),
     onSuccess: put,
@@ -45,7 +47,7 @@ export function EmailGroup() {
 
   if (!s) return null;
   const e = s.email;
-  const nothingChosen = e.enabled && !e.apple_mail && e.account_ids.length === 0 && e.imap.length === 0;
+  const nothingChosen = e.enabled && !e.apple_mail && !e.outlook_mail && e.account_ids.length === 0 && e.imap.length === 0;
   const addSender = () => {
     const v = sender.trim();
     if (!v) return;
@@ -63,7 +65,26 @@ export function EmailGroup() {
         <>
           {nothingChosen && <SettingRow title="Choose where to read email from" description="Connect the Mail app or one of your accounts below." />}
 
-          {system.data?.supported && system.data.mail_app && (
+          {system.data?.supported && system.data.mail_app && isOutlook && (
+            <SettingRow
+              title="Outlook"
+              description={
+                e.outlook_mail
+                  ? "Reading unread mail and meeting invitations from Outlook on this computer."
+                  : "Unread count and meeting invitations from classic Outlook, with no sign-in. Senders and previews aren't read, because Outlook asks before sharing them."
+              }
+            >
+              {e.outlook_mail ? (
+                <Switch label="Read Outlook" checked onCheckedChange={() => update((d) => void (d.email.outlook_mail = false))} />
+              ) : (
+                <Button size="sm" variant="secondary" disabled={outlook.isPending} onClick={() => outlook.mutate()}>
+                  {outlook.isPending ? "Waiting…" : "Connect"}
+                </Button>
+              )}
+            </SettingRow>
+          )}
+
+          {system.data?.supported && system.data.mail_app && !isOutlook && (
             <SettingRow title="Mail app" description={e.apple_mail ? "Reading unread mail from the Mail app on this Mac." : "macOS will ask you to allow Firstlight to control Mail."}>
               {e.apple_mail ? (
                 <Switch label="Read the Mail app" checked onCheckedChange={() => update((d) => void (d.email.apple_mail = false))} />

@@ -83,7 +83,7 @@ export function InboxSection() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-headline font-medium text-fg">{i.title ?? i.message.subject}</span>
                     <span className="block truncate text-footnote text-fg-2">
-                      Invitation from {i.organizer ?? i.message.sender_name}
+                      {i.organizer || i.message.sender_name ? `Invitation from ${i.organizer ?? i.message.sender_name}` : "Invitation"}
                       {i.when ? ` · ${whenText(i.when)}` : ""}
                     </span>
                   </span>

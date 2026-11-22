@@ -5,6 +5,7 @@
 //! behind a web front end (see PLAN.md, section 3).
 
 pub mod ai;
+pub mod backup;
 pub mod crash;
 pub mod erase;
 #[cfg(test)]

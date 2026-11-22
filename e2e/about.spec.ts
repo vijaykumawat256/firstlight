@@ -97,3 +97,31 @@ test("update settings: automatic checks and channel", async ({ page }) => {
   await page.getByRole("switch", { name: "Check for updates automatically" }).click();
   await expect(page.getByRole("radio", { name: "Beta" })).toHaveCount(0); // channel only matters while checking
 });
+
+test("a problem report is shown in full, can be edited, and is saved and attached to an email by the person", async ({ page }) => {
+  await openAbout(page);
+  await page.getByRole("button", { name: "Report a problem…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Report a problem" });
+  const text = dialog.getByRole("textbox", { name: "Problem report" });
+  await expect(text).toHaveValue(/Recent warnings and errors/);
+  await expect(dialog).toContainText("Firstlight doesn't send it");
+  await text.fill("It froze when I opened Settings.");
+  await dialog.getByRole("button", { name: "Save and email" }).click();
+  await expect(page.getByText("Report saved: attach it to the email").first()).toBeVisible();
+  const w = await page.evaluate(() => {
+    const x = window as unknown as { __problemReport?: string; __drafts?: { to: string; body: string }[] };
+    return { __problemReport: x.__problemReport, __drafts: x.__drafts };
+  });
+  expect(w.__problemReport).toBe("It froze when I opened Settings.");
+  expect(w.__drafts?.[0].to).toBe("help@firstlight.example");
+  expect(w.__drafts?.[0].body).toContain("firstlight-problem-report.txt");
+});
+
+test("without a support address the report can still be saved", async ({ page }) => {
+  await openAbout(page, "?nosupport");
+  await page.getByRole("button", { name: "Report a problem…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Report a problem" });
+  await expect(dialog.getByRole("button", { name: "Save and email" })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Save to Downloads" }).click();
+  await expect(page.getByText("Report saved").first()).toBeVisible();
+});

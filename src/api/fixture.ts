@@ -166,6 +166,7 @@ function demoAccount(): AccountView {
  * `?fresh` (to exercise onboarding) or `?attention` (an account needing reconnection).
  */
 const params = typeof location === "undefined" ? new URLSearchParams() : new URLSearchParams(location.search);
+let autostartOn = false;
 let accounts: AccountView[] = params.has("fresh") ? [] : [demoAccount()];
 if (params.has("attention")) {
   accounts.push({
@@ -198,7 +199,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   unlock: { first_unlock_after_hour: 6, min_interval_minutes: 30, quiet_hours: [22, 6], days: [true, true, true, true, true, true, true], up_next_lead_minutes: 15, skip_when_fullscreen: true, open_every_time: false },
   notify: { before_event: true, before_minutes: 10, morning: true, morning_hour: 8, evening: true, evening_hour: 18, week_preview: true, time_24h: false, hide_titles: false },
   appearance: { theme: "system", accent: "system", ambient: params.has("ambient"), font: "system", text_size: "default", extra_zones: params.has("zones") ? ["Europe/London", "Asia/Kolkata"] : [] },
-  email: { enabled: false, apple_mail: false, account_ids: [], imap: [], send_invitations: false, send_messages: false, send_accounts: [], autoreply_accounts: [], important_senders: [], days_back: 3 },
+  email: { enabled: false, apple_mail: false, outlook_mail: false, account_ids: [], imap: [], send_invitations: false, send_messages: false, send_accounts: [], autoreply_accounts: [], important_senders: [], days_back: 3 },
   ai: { enabled: false, provider: "anthropic", model: "claude-haiku-5-5", endpoint: "http://127.0.0.1:11434", custom_endpoint: "", include_email: false, consented: null, consented_host: null, plan_consented: null },
   privacy: { crash_reports: false },
   day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true, travel_maps: false, travel_from: "", waiting_nudge_days: 3, dnd_meetings: false, time_off: [] },
@@ -594,6 +595,14 @@ export const fixtureBackend: Backend = {
     await sleep(300);
     if (params.has("macdenied")) throw new Error("Firstlight isn't allowed to control Mail. Open System Settings, go to Automation, switch Mail on under Firstlight, then try again.");
     settings = { ...settings, email: { ...settings.email, apple_mail: true, enabled: true } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async enableOutlookMail() {
+    await sleep(300);
+    if (!params.has("outlook")) throw new Error("Outlook mail is read on Windows only.");
+    if (params.has("outlookfail")) throw new Error("Outlook couldn't be read. (Windows said: Server execution failed)");
+    settings = { ...settings, email: { ...settings.email, outlook_mail: true, enabled: true } };
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
   },
@@ -1076,6 +1085,28 @@ export const fixtureBackend: Backend = {
     settings = { ...settings, tasks: { ...settings.tasks, folder_sync: null } };
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
+  },
+  async getProblemReport() {
+    return {
+      text: "Firstlight problem report\nVersion: 0.1.0\nSystem: macos aarch64\n\nWhat happened (write it here):\n\n\n--- Last crash report ---\nNone saved.\n\n--- Recent warnings and errors ---\n[WARN] folder sync failed\n\nThis report contains no calendar, email or account content.\n",
+      support: params.has("nosupport") ? null : "help@firstlight.example",
+    };
+  },
+  async saveProblemReport(text: string) {
+    (window as unknown as { __problemReport?: string }).__problemReport = text;
+    return "/Users/you/Downloads/firstlight-problem-report.txt";
+  },
+  async listBackups() {
+    const day = 86_400_000;
+    const at = (ms: number) => new Date(Date.now() - ms).toISOString();
+    const name = (ms: number, tag: string) => `firstlight-${at(ms).slice(0, 19).replace(/[-:]/g, "").replace("T", "-")}-${tag}.db`;
+    return [
+      { name: name(2 * 3_600_000, "daily"), taken_at: at(2 * 3_600_000), reason: "daily" as const, bytes: 1_540_096 },
+      { name: name(3 * day, "update"), taken_at: at(3 * day), reason: "update" as const, bytes: 1_490_944 },
+    ];
+  },
+  async restoreBackup(name: string) {
+    (window as unknown as { __restored?: string }).__restored = name;
   },
   async folderSyncCode() {
     return folderCode;
@@ -1611,7 +1642,7 @@ export const fixtureBackend: Backend = {
     oauthCancelled = true;
   },
   async systemCalendarStatus() {
-    return { supported: !params.has("nosystem"), name: params.has("outlook") ? "Outlook" : "Calendar app", writable: !params.has("outlook"), mail_app: !params.has("outlook"), access: params.has("denied") ? "denied" : "not_determined" } as const;
+    return { supported: !params.has("nosystem"), name: params.has("outlook") ? "Outlook" : "Calendar app", writable: !params.has("outlook"), mail_app: true, access: params.has("denied") ? "denied" : "not_determined" } as const;
   },
   async addSystemAccount() {
     if (params.has("denied")) throw new Error("Calendar access is turned off for Firstlight. Open System Settings, switch Firstlight on under Calendars, then try again.");
@@ -1662,9 +1693,11 @@ export const fixtureBackend: Backend = {
     return () => listeners.delete(cb);
   },
   async getAutostart() {
-    return false;
+    return autostartOn;
   },
-  async setAutostart() {},
+  async setAutostart(on: boolean) {
+    autostartOn = on;
+  },
   async onUnlock() {
     return () => {};
   },
