@@ -28,6 +28,7 @@
     "allow-disable-task-sync",
     "allow-sync-tasks-now",
     "allow-get-week-review",
+    "allow-share-now",
     "allow-pair-with-code",
     "allow-stop-pairing",
     "allow-pairing-status",

@@ -48,6 +48,7 @@ fn main() {
             "disable_task_sync",
             "sync_tasks_now",
             "get_week_review",
+            "share_now",
             "pair_with_code",
             "stop_pairing",
             "pairing_status",

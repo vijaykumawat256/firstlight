@@ -77,6 +77,10 @@ export interface Backend {
   /** Deletes all accounts, events, history, settings and saved credentials. */
   eraseAllData(): Promise<void>;
   onSettingsChanged(callback: () => void): Promise<() => void>;
+  /** Tasks, events or notes changed outside the page (sharing with another device brought changes). */
+  onDataChanged(callback: () => void): Promise<() => void>;
+  /** Shares with the other devices on the network now (when the app comes back to the front). */
+  shareNow(): Promise<void>;
   /** Today and tomorrow, worked out by the briefing engine. */
   getBriefing(): Promise<Briefing>;
   /** The next seven days (from tomorrow): load per day, busiest and lightest, early starts, a block to focus. */

@@ -1064,6 +1064,8 @@ pub async fn set_calendar_colour(
 #[tauri::command]
 pub async fn refresh_now(state: State<'_, AppState>) -> CmdResult<()> {
     state.sync.trigger(Trigger::Manual);
+    // Refresh also means "anything new from my other devices?".
+    crate::lan_sync::kick();
     Ok(())
 }
 

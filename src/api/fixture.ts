@@ -331,6 +331,9 @@ function expandOwn(id: string, input: EventInput, calendar?: string): CalEvent[]
 
 /** The sync code for sharing through a folder (stand-in for the keychain). */
 let pairingSince: number | null = null;
+/** Tests call `window.__dataChanged()` to stand for changes arriving from another device. */
+const dataListeners = new Set<() => void>();
+if (typeof window !== "undefined") (window as unknown as { __dataChanged: () => void }).__dataChanged = () => dataListeners.forEach((l) => l());
 let folderCode: string | null = null;
 /** Fields a new task starts with (crates/logic/src/tasks.rs `Task` defaults). */
 const TASK_EXTRAS = { repeat: null, next_made: null, waiting_on: null, waiting_since: null, mail: null, spent_minutes: 0 } satisfies Partial<Task>;
@@ -1635,6 +1638,13 @@ export const fixtureBackend: Backend = {
     settings = structuredClone(DEFAULT_SETTINGS);
     settingsListeners.forEach((l) => l());
     notify();
+  },
+  async onDataChanged(cb) {
+    dataListeners.add(cb);
+    return () => void dataListeners.delete(cb);
+  },
+  async shareNow() {
+    (window as unknown as { __shared?: number }).__shared = ((window as unknown as { __shared?: number }).__shared ?? 0) + 1;
   },
   async onSettingsChanged(cb) {
     settingsListeners.add(cb);

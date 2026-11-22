@@ -262,6 +262,18 @@ pub(crate) fn spawn(app: AppHandle, db: PathBuf, db_key: Redacted, deps: Deps) {
         });
 }
 
+/// Runs a sharing round now instead of at the next one (Refresh, or the app coming back to the front).
+pub(crate) fn kick() {
+    KICK.store(true, Ordering::Relaxed);
+}
+
+/// Shares with the other devices on the network now. Does nothing if sharing on the network is off.
+#[tauri::command]
+pub async fn share_now() -> CmdResult<()> {
+    kick();
+    Ok(())
+}
+
 /// Logs a phone's trouble reaching its computer once when it starts ("" = reached again).
 fn push_trouble(problem: &str) {
     static LAST: Mutex<String> = Mutex::new(String::new());

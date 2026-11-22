@@ -42,10 +42,18 @@ function useBackendEvents() {
       void p.then((off) => (cancelled ? off() : offs.push(off)));
     keep(api.onUnlock(() => void qc.invalidateQueries()));
     keep(api.onSyncFinished(() => void qc.invalidateQueries()));
+    // Changes from another device (sharing): every screen shows them at once.
+    keep(api.onDataChanged(() => void qc.invalidateQueries()));
     keep(api.onUpdateAvailable((version) => useToasts.getState().push({ title: `Firstlight ${version} is available`, description: "Open Settings, then About, to install it." })));
+    // Coming back to the app (a phone unlocked, the app switched to): ask the other devices for anything new.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void api.shareNow().catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       offs.forEach((off) => off());
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [qc]);
 }

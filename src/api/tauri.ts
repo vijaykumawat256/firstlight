@@ -120,6 +120,11 @@ export const tauriBackend: Backend = {
   importSettings: (text) => invoke<AppSettings>("import_settings", { text }),
   eraseAllData: () => invoke<void>("erase_all_data"),
   onSettingsChanged: async (callback) => listen("settings-changed", () => callback()),
+  onDataChanged: async (callback) => {
+    const offs = await Promise.all([listen("tasks-changed", () => callback()), listen("events-changed", () => callback())]);
+    return () => offs.forEach((off) => off());
+  },
+  shareNow: () => invoke<void>("share_now"),
   getCalendars: () => invoke<CalendarInfo[]>("get_calendars"),
   listAccounts: () => invoke<AccountView[]>("list_accounts"),
   addIcsAccount: (name, url) => invoke<AccountView>("add_ics_account", { name, url }),
