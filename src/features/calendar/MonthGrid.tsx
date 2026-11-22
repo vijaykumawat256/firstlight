@@ -36,7 +36,7 @@ export function MonthGrid({ anchor, events, now, colourOf, onPickDay, onOpen }: 
   const weeks = useMemo(() => monthWeeks(anchor, localeFirstDay()), [anchor]);
   const shown = useMemo(() => events.filter(isShown), [events]);
   return (
-    <div role="grid" aria-label="Month" className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-6">
+    <div role="grid" aria-label="Month" className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-6 phone:pb-24">
       <div role="row" className="grid grid-cols-7 pb-1">
         {weeks[0]!.map((d) => (
           <div key={d.getDay()} role="columnheader" className="px-1 text-center text-caption font-medium text-fg-2">
@@ -52,12 +52,12 @@ export function MonthGrid({ anchor, events, now, colourOf, onPickDay, onOpen }: 
               const inMonth = d.getMonth() === anchor.getMonth();
               const today = sameDay(d, now);
               return (
-                <div key={d.toISOString()} role="gridcell" className={clsx("flex min-w-0 flex-col gap-0.5 bg-surface p-1", !inMonth && "opacity-50")}>
+                <div key={d.toISOString()} role="gridcell" className={clsx("relative flex min-w-0 flex-col gap-0.5 bg-surface p-1", !inMonth && "opacity-50")}>
                   <button
                     type="button"
                     onClick={() => onPickDay(d)}
                     aria-label={`${d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}, ${todays.length} ${todays.length === 1 ? "event" : "events"}`}
-                    className={clsx("flex min-h-6 min-w-6 items-center justify-center self-start rounded-full px-1.5 text-footnote tabular-nums hover:bg-fill", today ? "bg-accent-fill font-semibold text-accent-fg" : "text-fg")}
+                    className={clsx("flex min-h-6 min-w-6 items-center justify-center self-start rounded-full px-1.5 text-footnote tabular-nums hover:bg-fill after:absolute after:inset-0 after:content-[''] sm:after:hidden", today ? "bg-accent-fill font-semibold text-accent-fg" : "text-fg")}
                   >
                     {d.getDate()}
                   </button>

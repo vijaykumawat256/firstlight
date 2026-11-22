@@ -6,15 +6,15 @@ import { Button, ListGroup, SectionHeader, Select } from "@/design";
 import { formatHour } from "@/features/briefing/format";
 import { acceleratorFromEvent, prettyAccelerator } from "./accelerator";
 
-/** One line of a settings group: a title, an optional explanation, and the control on the right. */
-export function SettingRow({ title, description, children, stack }: { title: string; description?: string; children?: ReactNode; stack?: boolean }) {
+/** One line of a settings group: a title, an optional explanation, and the control on the right (or below on a phone when wide). */
+export function SettingRow({ title, description, children, stack, phoneStack }: { title: string; description?: string; children?: ReactNode; stack?: boolean; phoneStack?: boolean }) {
   return (
-    <li className={clsx("flex min-h-12 gap-3 px-4 py-2.5", stack ? "flex-col" : "items-center justify-between")}>
+    <li className={clsx("flex min-h-12 gap-3 px-4 py-2.5", stack ? "flex-col" : phoneStack ? "items-center justify-between phone:flex-col phone:items-stretch" : "items-center justify-between")}>
       <div className="min-w-0">
         <p className="text-headline font-medium text-fg">{title}</p>
         {description && <p className="mt-0.5 text-footnote text-fg-2">{description}</p>}
       </div>
-      {children && <div className={clsx("shrink-0", stack && "self-start")}>{children}</div>}
+      {children && <div className={clsx("shrink-0", stack && "w-full", phoneStack && "phone:w-full")}>{children}</div>}
     </li>
   );
 }
@@ -55,14 +55,14 @@ export function DayPicker({ days, onChange }: { days: boolean[]; onChange: (d: b
       value={on}
       aria-label="Days"
       onValueChange={(vals) => onChange(DAYS.map((d) => vals.includes(d.full)))}
-      className="flex gap-1"
+      className="flex gap-1 phone:w-full phone:justify-between"
     >
       {DAYS.map((d) => (
         <RToggleGroup.Item
           key={d.full}
           value={d.full}
           aria-label={d.full}
-          className="flex size-8 items-center justify-center rounded-full bg-fill text-body font-medium text-fg-2 transition-colors duration-150 ease-standard data-[state=on]:bg-accent-fill data-[state=on]:text-accent-fg"
+          className="flex size-8 items-center justify-center rounded-full bg-fill text-body font-medium text-fg-2 transition-colors duration-150 ease-standard data-[state=on]:bg-accent-fill data-[state=on]:text-accent-fg phone:size-10"
         >
           {d.short}
         </RToggleGroup.Item>
@@ -137,8 +137,10 @@ export function Group({ title, footer, children }: { title: string; footer?: str
 export function NavRow({ icon: Icon, title, description, onClick }: { icon: LucideIcon; title: string; description: string; onClick: () => void }) {
   return (
     <li>
-      <button type="button" onClick={onClick} className="flex min-h-12 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong">
-        <Icon className="size-5 shrink-0 text-fg-2" aria-hidden />
+      <button type="button" onClick={onClick} className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-card bg-accent-soft text-accent">
+          <Icon className="size-[18px]" aria-hidden />
+        </span>
         <span className="min-w-0 flex-1">
           <span className="block text-headline font-medium text-fg">{title}</span>
           <span className="block truncate text-footnote text-fg-2">{description}</span>

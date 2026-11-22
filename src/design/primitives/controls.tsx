@@ -132,7 +132,7 @@ export function Select({ value, onValueChange, options, label }: SelectProps) {
       <RSelect.Trigger
         aria-label={label}
         className={clsx(
-          "inline-flex h-8 items-center gap-1.5 rounded-control bg-fill pl-3 pr-2 text-body text-fg phone:h-10 phone:pl-4",
+          "inline-flex h-8 max-w-full min-w-0 items-center justify-between gap-1.5 rounded-control bg-fill pl-3 pr-2 text-body text-fg phone:h-10 phone:pl-4 [&>span:first-child]:truncate",
           "transition-colors duration-150 ease-standard hover:bg-fill-strong",
         )}
       >
@@ -189,17 +189,17 @@ export function Segmented({ value, onValueChange, options, label, fill }: Segmen
       aria-label={label}
       // A segmented control always has a selection; ignore the "deselect" event.
       onValueChange={(v) => v && onValueChange(v)}
-      className={clsx("rounded-control bg-fill p-0.5", fill ? "flex w-full overflow-x-auto" : "inline-flex")}
+      className={clsx("no-scrollbar max-w-full overflow-x-auto rounded-card bg-fill p-1", fill ? "flex w-full" : "inline-flex")}
     >
       {options.map((o) => (
         <RToggleGroup.Item
           key={o.value}
           value={o.value}
           className={clsx(
-            "h-6 whitespace-nowrap rounded-[5px] text-body font-medium text-fg-2 phone:h-9",
-            fill ? "flex-1 px-2" : "px-3",
+            "h-7 whitespace-nowrap rounded-control text-body font-medium text-fg-2 phone:h-9",
+            fill ? "flex-1 px-2.5" : "px-3",
             "transition-[background-color,color,box-shadow] duration-150 ease-standard",
-            "data-[state=on]:bg-surface-raised data-[state=on]:text-fg data-[state=on]:shadow-card",
+            "data-[state=on]:bg-surface-raised data-[state=on]:font-semibold data-[state=on]:text-fg data-[state=on]:shadow-card",
           )}
         >
           {o.label}
@@ -225,7 +225,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   const inputId = id ?? auto;
   const descId = `${inputId}-desc`;
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex min-w-0 flex-col gap-1.5">
       <label htmlFor={inputId} className="text-footnote font-medium text-fg-2">
         {label}
       </label>

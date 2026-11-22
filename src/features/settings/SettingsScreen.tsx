@@ -151,7 +151,7 @@ export function SettingsScreen() {
       ) : (
         <div className="h-3 shrink-0" />
       )}
-      <main key={section ?? "home"} className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
+      <main key={section ?? "home"} className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 phone:px-4 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
         <h1 ref={heading} tabIndex={-1} className="mb-6 text-largetitle font-bold tracking-tight text-fg outline-none">
           {section ? titleOf(section) : "Settings"}
         </h1>
@@ -289,6 +289,7 @@ export function SettingsScreen() {
               </SettingRow>
               <SettingRow title="Text size" stack>
                 <Segmented
+                  fill
                   label="Text size"
                   value={s.appearance.text_size}
                   onValueChange={(v) => update((d) => void (d.appearance.text_size = v as TextSize))}
@@ -303,8 +304,8 @@ export function SettingsScreen() {
               <SettingRow title="Time-of-day background" description="A soft tint behind the app that changes from morning to night.">
                 <Switch label="Time-of-day background" checked={s.appearance.ambient} onCheckedChange={(v) => update((d) => void (d.appearance.ambient = v))} />
               </SettingRow>
-              <SettingRow title="Accent colour" description="Default follows your Mac's accent colour." stack>
-                <div role="radiogroup" aria-label="Accent colour" className="flex flex-wrap gap-2.5">
+              <SettingRow title="Accent colour" description={isPhone ? "Default uses Firstlight's blue." : "Default follows your Mac's accent colour."} stack>
+                <div role="radiogroup" aria-label="Accent colour" className="flex flex-wrap gap-2.5 phone:gap-3">
                   {ACCENTS.map((c) => (
                     <button
                       key={c}
@@ -313,7 +314,7 @@ export function SettingsScreen() {
                       aria-checked={s.appearance.accent === c}
                       aria-label={c === "system" ? "Default" : c}
                       onClick={() => update((d) => void (d.appearance.accent = c))}
-                      className="size-7 rounded-full ring-offset-2 ring-offset-surface transition-transform duration-150 ease-standard hover:scale-110 aria-checked:ring-2 aria-checked:ring-fg"
+                      className="size-7 rounded-full ring-offset-2 ring-offset-surface transition-transform duration-150 ease-standard hover:scale-110 aria-checked:ring-2 aria-checked:ring-fg phone:size-10"
                       style={{ background: c === "system" ? "#007aff" : calendarColour(c) }}
                     />
                   ))}
@@ -322,8 +323,9 @@ export function SettingsScreen() {
             </Group>
 
             <Group title="Date and time">
-              <SettingRow title="Time format">
+              <SettingRow title="Time format" phoneStack>
                 <Segmented
+                  fill={isPhone}
                   label="Time format"
                   value={s.general.time_format}
                   onValueChange={(v) => update((d) => void (d.general.time_format = v as TimeFormat))}
@@ -488,7 +490,7 @@ export function SettingsScreen() {
                 <Switch label="Wrap up your day" checked={s.day.wrap_up} onCheckedChange={(v) => update((d) => void (d.day.wrap_up = v))} />
               </SettingRow>
               {s.day.wrap_up && (
-                <SettingRow title="Wrap-up time">
+                <SettingRow title="Wrap-up time" phoneStack>
                   <input
                     type="time"
                     aria-label="Wrap-up time"
@@ -497,7 +499,7 @@ export function SettingsScreen() {
                       const [h, m] = e.target.value.split(":").map(Number);
                       if (Number.isFinite(h) && Number.isFinite(m)) update((d) => void ((d.day.wrap_up_hour = h!), (d.day.wrap_up_minute = m!)));
                     }}
-                    className="h-8 rounded-control bg-fill px-2 text-body text-fg"
+                    className="h-8 rounded-control bg-fill px-2 text-body text-fg phone:h-10 phone:px-3"
                   />
                 </SettingRow>
               )}
@@ -518,8 +520,8 @@ export function SettingsScreen() {
                 <Switch label="Room for lunch" checked={s.day.lunch_check} onCheckedChange={(v) => update((d) => void (d.day.lunch_check = v))} />
               </SettingRow>
               {s.day.lunch_check && (
-                <SettingRow title="Lunch between">
-                  <div className="flex items-center gap-1">
+                <SettingRow title="Lunch between" phoneStack>
+                  <div className="flex items-center gap-2 phone:[&>*]:flex-1">
                     <Select label="Lunch from" value={String(s.day.lunch_from_hour)} onValueChange={(v) => update((d) => void (d.day.lunch_from_hour = Number(v)))} options={[11, 12, 13].map((h) => ({ value: String(h), label: `${h}:00` }))} />
                     <Select label="Lunch until" value={String(s.day.lunch_to_hour)} onValueChange={(v) => update((d) => void (d.day.lunch_to_hour = Number(v)))} options={[13, 14, 15].map((h) => ({ value: String(h), label: `${h}:00` }))} />
                   </div>
@@ -569,8 +571,8 @@ export function SettingsScreen() {
             <BackupsGroup />
 
             <Group title="Settings file">
-              <SettingRow title="Back up your settings" description="Settings only. No accounts, links or passwords are included.">
-                <div className="flex gap-1">
+              <SettingRow title="Back up your settings" description="Settings only. No accounts, links or passwords are included." phoneStack>
+                <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="secondary" onClick={() => exportFile.mutate()}>
                     Save to Downloads
                   </Button>

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, CalendarX, CloudOff, Hourglass, ListChecks, Plus, RefreshCw, Search, Settings as SettingsIcon } from "lucide-react";
 import { useNav } from "@/app/nav";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { api, type CalEvent } from "@/api";
 import { Button, EmptyState, IconButton, Skeleton, Tooltip, useToasts } from "@/design";
 import { formatDate, greeting } from "./format";
@@ -23,6 +23,9 @@ import { FollowUpCard } from "@/features/meetings/FollowUpCard";
 import { summarise } from "./summary";
 import { isPhone } from "@/app/platform";
 import { Fab } from "@/app/Fab";
+import { PullIndicator } from "@/app/PullIndicator";
+import { usePullToRefresh } from "@/app/usePullToRefresh";
+import { SyncStatus } from "./SyncStatus";
 
 function LoadingState() {
   return (
@@ -58,6 +61,7 @@ export function BriefingScreen() {
   const colourOf = (id: string) => colours.get(id) ?? "blue";
 
   const [refreshing, setRefreshing] = useState(false);
+  const scroller = useRef<HTMLElement>(null);
   const refresh = () => {
     setRefreshing(true);
     api.refreshNow().catch(() => push({ title: "Couldn't refresh", tone: "danger" }));
@@ -65,6 +69,8 @@ export function BriefingScreen() {
     void api.onSyncFinished(() => setRefreshing(false)).then((off) => setTimeout(off, 15_000));
     setTimeout(() => setRefreshing(false), 15_000);
   };
+  // Phones: pull down from the top to refresh, as well as the button.
+  const pulling = usePullToRefresh(scroller, refresh);
 
   const join = (url: string) => {
     api.openUrl(url).catch(() => push({ title: "Couldn't open the link", tone: "danger" }));
@@ -125,10 +131,12 @@ export function BriefingScreen() {
       </div>
 
       {isPhone && <Fab label="New event" onClick={() => setAdding(true)} />}
-      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 phone:pb-24 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
+      <main ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 phone:px-4 phone:pb-24 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
+        <PullIndicator {...pulling} />
         <header className="mb-6">
           <h1 className="text-display font-bold tracking-tight text-fg">{greeting(now)}</h1>
           <p className="mt-0.5 text-headline font-medium text-fg-2">{formatDate(now)}</p>
+          <SyncStatus />
           {b && !dayIsEmpty && (
             <p className="mt-3 text-headline text-fg">{aiOn && ai.data ? ai.data : summarise(b, now)}</p>
           )}

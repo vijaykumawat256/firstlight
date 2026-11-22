@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, Flag, KeyRound, Laptop, Link2, Mail, Sparkles } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, Flag, KeyRound, Laptop, Link2, Mail, Smartphone, Sparkles } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { api, errorMessage } from "@/api";
 import { Badge, Button, ListGroup, Select, Sheet, TextField } from "@/design";
 import { HOLIDAY_CALENDARS } from "./holidays";
 import { CALDAV_PRESETS, OTHER_SERVER } from "./presets";
 import { SignInAppsDialog } from "./SignInApps";
+import { isIos } from "@/app/platform";
 
 type Step = "choose" | "ics" | "caldav" | "oauth" | "system" | "holidays";
 type OAuthProvider = "google" | "microsoft";
@@ -25,7 +26,7 @@ function Choice({ icon, title, subtitle, soon, badge, tag, onClick }: { icon: Re
         <span className="flex size-9 shrink-0 items-center justify-center rounded-card bg-accent-soft text-accent [&>svg]:size-[18px]">{icon}</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-headline font-medium text-fg">{title}</span>
-          <span className="block truncate text-footnote text-fg-2">{subtitle}</span>
+          <span className="block truncate text-footnote text-fg-2 phone:whitespace-normal phone:line-clamp-2">{subtitle}</span>
         </span>
         {soon ? <Badge>{badge ?? "Soon"}</Badge> : tag ? <Badge>{tag}</Badge> : <ChevronRight className="size-4 text-fg-3" aria-hidden />}
       </button>
@@ -164,30 +165,43 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
         <div className="flex flex-col gap-3 pb-4">
           {system.data?.supported && (
             <ListGroup>
-              <Choice
-                icon={<Laptop />}
-                title={system.data.name === "Outlook" ? "Outlook on this device" : "Calendar app on this device"}
-                subtitle={system.data.name === "Outlook" ? "Every account already in Outlook: Microsoft 365, Exchange, Gmail, IMAP…" : "Everything already in Calendar: iCloud, Gmail, Outlook, Yahoo…"}
-                onClick={() => setStep("system")}
-              />
+              {isIos ? (
+                // An iPhone: its own Calendar already holds every account added in the iPhone's Settings.
+                <Choice
+                  icon={<Smartphone />}
+                  title="iPhone Calendar"
+                  subtitle="Every account in your iPhone's Settings: iCloud, Google, Outlook, Yahoo… No sign-in needed."
+                  tag="Recommended"
+                  onClick={() => setStep("system")}
+                />
+              ) : (
+                <Choice
+                  icon={<Laptop />}
+                  title={system.data.name === "Outlook" ? "Outlook on this device" : "Calendar app on this device"}
+                  subtitle={system.data.name === "Outlook" ? "Every account already in Outlook: Microsoft 365, Exchange, Gmail, IMAP…" : "Everything already in Calendar: iCloud, Gmail, Outlook, Yahoo…"}
+                  onClick={() => setStep("system")}
+                />
+              )}
             </ListGroup>
           )}
           <ListGroup>
             <Choice icon={<Link2 />} title="Calendar link" subtitle="Any published calendar (ICS or webcal)" onClick={() => setStep("ics")} />
             <Choice icon={<Flag />} title="Public holidays" subtitle="Pick a country; nothing to sign in to" onClick={() => setStep("holidays")} />
+            {/* Signing in from inside an iPhone app needs a different sign-in method (not built yet): until then the
+                account goes into the iPhone's Settings and comes through iPhone Calendar. */}
             <Choice
               icon={<Mail />}
               title="Google"
-              subtitle="Gmail and Google Workspace"
-              tag={available.data && !available.data.google ? "Set up" : undefined}
-              onClick={() => (available.data && !available.data.google ? setOwnApp("google") : startOauth("google"))}
+              subtitle={isIos ? "Add your Google account in iPhone Settings, then choose iPhone Calendar" : "Gmail and Google Workspace"}
+              tag={!isIos && available.data && !available.data.google ? "Set up" : undefined}
+              onClick={() => (isIos ? setStep("system") : available.data && !available.data.google ? setOwnApp("google") : startOauth("google"))}
             />
             <Choice
               icon={<CalendarDays />}
               title="Microsoft"
-              subtitle="Outlook.com and Microsoft 365"
-              tag={available.data && !available.data.microsoft ? "Set up" : undefined}
-              onClick={() => (available.data && !available.data.microsoft ? setOwnApp("microsoft") : startOauth("microsoft"))}
+              subtitle={isIos ? "Add your Outlook account in iPhone Settings, then choose iPhone Calendar" : "Outlook.com and Microsoft 365"}
+              tag={!isIos && available.data && !available.data.microsoft ? "Set up" : undefined}
+              onClick={() => (isIos ? setStep("system") : available.data && !available.data.microsoft ? setOwnApp("microsoft") : startOauth("microsoft"))}
             />
             <Choice icon={<KeyRound />} title="iCloud, Yahoo and others" subtitle="CalDAV with an app password" onClick={() => setStep("caldav")} />
           </ListGroup>

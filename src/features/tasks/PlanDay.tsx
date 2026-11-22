@@ -52,26 +52,47 @@ export function PlanDay({ onClose }: { onClose: () => void }) {
 
   if (consenting) {
     return (
-      <Dialog open onOpenChange={(o) => !o && onClose()} title="Plan with AI?" description="This is exactly what would be sent to your AI service: your task titles and how long they take, and today's free times. No meetings, people or notes.">
+      <Dialog
+        open
+        onOpenChange={(o) => !o && onClose()}
+        title="Plan with AI?"
+        description="This is exactly what would be sent to your AI service: your task titles and how long they take, and today's free times. No meetings, people or notes."
+        footer={
+          <>
+            <Button onClick={() => setConsenting(false)}>Not now</Button>
+            <Button variant="primary" disabled={!preview.data || agree.isPending} onClick={() => agree.mutate()}>
+              Agree and ask AI
+            </Button>
+          </>
+        }
+      >
         <pre aria-label="What would be sent" className="mb-3 max-h-60 overflow-auto whitespace-pre-wrap rounded-card bg-fill p-3 text-footnote text-fg-2">
           {preview.data ?? "Loading…"}
         </pre>
-        <p className="mb-3 text-footnote text-fg-2">You can withdraw this in Settings, AI. The suggestions are always checked against your free time on this device.</p>
-        <div className="flex justify-end gap-2 pb-2">
-          <Button onClick={() => setConsenting(false)}>Not now</Button>
-          <Button variant="primary" disabled={!preview.data || agree.isPending} onClick={() => agree.mutate()}>
-            Agree and ask AI
-          </Button>
-        </div>
+        <p className="text-footnote text-fg-2">You can withdraw this in Settings, AI. The suggestions are always checked against your free time on this device.</p>
       </Dialog>
     );
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Plan my day" description="Suggested times for today's tasks in your free time. Nothing is added until you choose.">
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Plan my day"
+      description="Suggested times for today's tasks in your free time. Nothing is added until you choose."
+      footer={
+        <>
+          <Button onClick={onClose}>Close</Button>
+          <Button variant="primary" disabled={chosen === 0 || accept.isPending || plan.isPending} onClick={() => accept.mutate()}>
+            {accept.isPending ? "Adding…" : "Set time aside"}
+          </Button>
+        </>
+      }
+    >
       {p?.ai_allowed && (
         <div className="pb-3">
           <Segmented
+            fill
             label="Suggested by"
             value={useAi ? "ai" : "local"}
             onValueChange={(v) => setUseAi(v === "ai")}
@@ -100,13 +121,13 @@ export function PlanDay({ onClose }: { onClose: () => void }) {
           {p.suggestions.length === 0 ? (
             <p className="text-body text-fg-2">None of your tasks fit in today's free time.</p>
           ) : (
-            <ul aria-label="Suggestions" className="flex flex-col gap-2 pb-2">
+            <ul aria-label="Suggestions" className="flex flex-col gap-1 pb-2">
               {p.suggestions.map((s) => (
                 <li key={s.task_id}>
-                  <label className="flex items-start gap-3">
+                  <label className="flex items-start gap-3 py-1 phone:min-h-11 phone:items-center">
                     <input
                       type="checkbox"
-                      className="mt-1 size-4 accent-accent"
+                      className="mt-1 size-4 shrink-0 accent-accent phone:mt-0 phone:size-5"
                       checked={!skipped.has(s.task_id)}
                       onChange={(e) => {
                         const next = new Set(skipped);
@@ -126,24 +147,16 @@ export function PlanDay({ onClose }: { onClose: () => void }) {
               ))}
             </ul>
           )}
-          <p className="pb-3 text-footnote text-fg-2">{p.by_ai ? "Suggested by AI and checked against your free time." : "Worked out on this device: tasks that have waited longest go first."}</p>
+          <p className="pb-2 text-footnote text-fg-2">{p.by_ai ? "Suggested by AI and checked against your free time." : "Worked out on this device: tasks that have waited longest go first."}</p>
         </>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
-        {p?.ai_available && !p.ai_allowed ? (
+      {p?.ai_available && !p.ai_allowed && (
+        <div className="pt-1">
           <Button variant="plain" size="sm" onClick={() => setConsenting(true)}>
             Ask AI instead…
           </Button>
-        ) : (
-          <span />
-        )}
-        <div className="flex gap-2">
-          <Button onClick={onClose}>Close</Button>
-          <Button variant="primary" disabled={chosen === 0 || accept.isPending || plan.isPending} onClick={() => accept.mutate()}>
-            {accept.isPending ? "Adding…" : "Set time aside"}
-          </Button>
         </div>
-      </div>
+      )}
     </Dialog>
   );
 }

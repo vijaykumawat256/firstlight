@@ -43,8 +43,8 @@ export function ThemePicker({ value, onChange }: { value: ThemeChoice; onChange:
 /** A small picture of a theme: its background, a card with two lines of text, and its accent. */
 function Swatch({ theme, mode, half }: { theme: string; mode: "light" | "dark"; half?: boolean }) {
   return (
-    <span aria-hidden className={clsx(`theme-${mode} theme-${theme}`, "flex h-14 flex-col justify-end gap-1 bg-bg p-1.5", !half && "rounded-control")}>
-      <span className="flex items-center gap-1 rounded-control bg-surface px-1.5 py-1 shadow-card">
+    <span aria-hidden className={clsx(`theme-${mode} theme-${theme}`, "flex h-14 flex-col justify-end gap-1 bg-bg", half ? "p-1" : "rounded-control p-1.5")}>
+      <span className={clsx("flex items-center gap-1 rounded-control bg-surface py-1 shadow-card", half ? "px-1" : "px-1.5")}>
         <span className="size-2 shrink-0 rounded-full bg-accent-fill" />
         <span className="text-caption leading-none font-semibold text-fg">Aa</span>
         {!half && <span className="truncate text-caption leading-none text-fg-2">9:30</span>}

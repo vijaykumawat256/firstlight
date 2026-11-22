@@ -413,9 +413,9 @@
   --text-display: calc(34px * var(--text-scale));
   --text-display--line-height: calc(40px * var(--text-scale));
 
-  --radius-control: 6px;
-  --radius-card: 10px;
-  --radius-sheet: 14px;
+  --radius-control: 8px;
+  --radius-card: 14px;
+  --radius-sheet: 20px;
 
   --shadow-card: var(--sh-card);
   --shadow-float: var(--sh-float);
@@ -524,6 +524,14 @@ body {
 :root[data-shell="tauri"]:is([data-platform="ios"], [data-platform="android"]):not([data-theme]) body {
   background: var(--bg);
 }
+:root:is([data-platform="ios"], [data-platform="android"]) html,
+:root:is([data-platform="ios"], [data-platform="android"]) body {
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+:root:is([data-platform="ios"], [data-platform="android"]) :is(button, a, input, select, textarea, [role="button"], [role="radio"], [role="option"]) {
+  touch-action: manipulation;
+}
 :root:is([data-platform="ios"], [data-platform="android"]) #root {
   height: 100dvh;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -537,6 +545,7 @@ body {
 :root:is([data-platform="ios"], [data-platform="android"]) input:is([type="date"], [type="time"], [type="datetime-local"]) {
   min-width: 0;
   width: 100%;
+  padding-inline: 0.75rem;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -572,6 +581,13 @@ body {
 
 ::selection {
   background: var(--accent-soft);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -32,7 +32,7 @@ export function UpNextCard({ next, now, colourOf, onJoin, onOpen }: { next: Next
     ? `Happening now · ends ${formatCountdown(at(next.end).getTime() - now.getTime())}`
     : `Up next · ${formatCountdown(at(next.start).getTime() - now.getTime())}`;
   return (
-    <Card className="animate-slide-up" aria-label="Up next">
+    <Card className="animate-slide-up ring-accent/25" aria-label="Up next">
       <div className="flex gap-3">
         <Bar colour={colourOf(next.event.calendar_id)} />
         <div className="min-w-0 flex-1">
@@ -55,7 +55,7 @@ export function UpNextCard({ next, now, colourOf, onJoin, onOpen }: { next: Next
               <CopyLinkButton url={eventLink(next.event)!} />
             </p>
           )}
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2 phone:[&>*]:flex-1">
             {next.event.join_url && (
               <Button variant="primary" leading={<Video className="size-4" aria-hidden />} onClick={() => onJoin(next.event.join_url!)}>
                 Join
@@ -85,13 +85,13 @@ export function AttentionSection({ b }: { b: Briefing }) {
       <SectionHeader title="Needs attention" />
       <ListGroup>
         {b.conflicts.map((c) => (
-          <li key={`${c.a}-${c.b}`} className="flex items-start gap-3 px-4 py-3">
+          <li key={`${c.a}-${c.b}`} className="flex items-start gap-3 px-4 py-3 phone:flex-wrap">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-            <p className="text-body text-fg">
+            <p className="min-w-0 flex-1 text-body text-fg">
               <span className="font-medium">{title.get(c.a)}</span> overlaps <span className="font-medium">{title.get(c.b)}</span>
               <span className="text-fg-2"> · {start.get(c.b) ? formatTime(at(start.get(c.b)!)) : ""} · {formatDuration(c.overlap_minutes)}</span>
             </p>
-            <Button className="ml-auto shrink-0" variant="secondary" onClick={() => setSorting({ a: c.a, b: c.b })} aria-label={`Sort out: ${title.get(c.a)} and ${title.get(c.b)}`}>
+            <Button size="sm" className="ml-auto shrink-0 phone:w-full" variant="secondary" onClick={() => setSorting({ a: c.a, b: c.b })} aria-label={`Sort out: ${title.get(c.a)} and ${title.get(c.b)}`}>
               Sort out
             </Button>
           </li>
@@ -130,8 +130,8 @@ export function TimelineRow({ item, colourOf, dim, conflicted, onOpen, onJoin }:
   // icon and Join sit above it. (A button cannot nest inside a button, so the row itself is not one.)
   return (
     <li className="relative flex items-stretch transition-colors duration-150 ease-standard hover:bg-fill active:bg-fill-strong">
-      <div className="flex min-h-12 min-w-0 flex-1 items-stretch gap-3 px-4 py-2">
-        <span className={clsx("w-[68px] shrink-0 whitespace-nowrap pt-0.5 text-body font-medium tabular-nums", dim ? "text-fg-3" : "text-fg-2")}>{formatTime(at(item.start))}</span>
+      <div className="flex min-h-12 min-w-0 flex-1 items-stretch gap-3 px-4 py-2 phone:px-3">
+        <span className={clsx("w-[68px] shrink-0 whitespace-nowrap pt-0.5 text-body font-medium tabular-nums phone:w-[76px]", dim ? "text-fg-3" : "text-fg-2")}>{formatTime(at(item.start))}</span>
         <Bar colour={colourOf(item.event.calendar_id)} dim={dim} />
         <div className="min-w-0 flex-1">
           <button
@@ -169,8 +169,8 @@ export function TimelineRow({ item, colourOf, dim, conflicted, onOpen, onJoin }:
 
 function NowMarker({ now }: { now: Date }) {
   return (
-    <li aria-label={`Now, ${formatTime(now)}`} className="flex h-6 items-center gap-3 px-4 !border-t-0">
-      <span className="w-[68px] shrink-0 whitespace-nowrap text-caption font-semibold text-accent tabular-nums">{formatTime(now)}</span>
+    <li aria-label={`Now, ${formatTime(now)}`} className="flex h-6 items-center gap-3 px-4 phone:px-3 !border-t-0">
+      <span className="w-[68px] shrink-0 whitespace-nowrap text-caption font-semibold text-accent tabular-nums phone:w-[76px]">{formatTime(now)}</span>
       <span aria-hidden className="size-2 rounded-full bg-accent" />
       <span aria-hidden className="h-px flex-1 bg-accent" />
     </li>
@@ -226,16 +226,16 @@ export function TomorrowSection({ b, colourOf, onOpen }: { b: Briefing; colourOf
           )}
           <ul className="divide-y divide-separator">
             {all_day.map((e) => (
-              <li key={e.id} className="flex items-center gap-3 py-2">
-                <span className="w-[68px] shrink-0 text-footnote text-fg-3">All day</span>
-                <button type="button" onClick={() => onOpen(e)} className="truncate text-left text-body text-fg-2 hover:underline">{e.title}</button>
+              <li key={e.id} className="flex items-center gap-3 py-2 phone:min-h-11">
+                <span className="w-[68px] shrink-0 text-footnote text-fg-3 phone:w-[76px]">All day</span>
+                <button type="button" onClick={() => onOpen(e)} className="min-w-0 flex-1 truncate text-left text-body text-fg-2 hover:underline">{e.title}</button>
               </li>
             ))}
             {shown.map((i) => (
-              <li key={i.event.id} className="flex items-center gap-3 py-2">
-                <span className="w-[68px] shrink-0 whitespace-nowrap text-footnote text-fg-3 tabular-nums">{formatTime(at(i.start))}</span>
+              <li key={i.event.id} className="flex items-center gap-3 py-2 phone:min-h-11">
+                <span className="w-[68px] shrink-0 whitespace-nowrap text-footnote text-fg-3 tabular-nums phone:w-[76px]">{formatTime(at(i.start))}</span>
                 <Bar colour={colourOf(i.event.calendar_id)} dim />
-                <button type="button" onClick={() => onOpen(i.event)} className="truncate text-left text-body text-fg-2 hover:underline">{i.event.title}</button>
+                <button type="button" onClick={() => onOpen(i.event)} className="min-w-0 flex-1 truncate text-left text-body text-fg-2 hover:underline">{i.event.title}</button>
               </li>
             ))}
           </ul>

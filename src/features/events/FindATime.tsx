@@ -75,9 +75,9 @@ export function FindATime({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title="Find a time" description="Free stretches in your working hours, weekdays only. The target blocks one for focus time.">
-      <div className="flex flex-wrap gap-2 pb-3">
-        <Segmented label="How long" value={minutes} onValueChange={setMinutes} options={LENGTHS} />
-        <Segmented label="How far ahead" value={days} onValueChange={setDays} options={SPANS} />
+      <div className="flex flex-wrap gap-2 pb-3 phone:flex-col">
+        <Segmented fill label="How long" value={minutes} onValueChange={setMinutes} options={LENGTHS} />
+        <Segmented fill label="How far ahead" value={days} onValueChange={setDays} options={SPANS} />
       </div>
       {slots.isPending ? (
         <p className="text-body text-fg-2">Looking…</p>

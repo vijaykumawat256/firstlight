@@ -51,54 +51,56 @@ export function TimeGrid({ days, events, now, colourOf, onOpen, zones = [] }: Pr
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" role="region" aria-label={compact ? "Week" : "Day"}>
-      {/* Day headers (with the names of any other zones over their hour labels) */}
-      <div className="relative flex shrink-0 border-b border-separator" style={{ paddingLeft: gutter }}>
-        {zones.length > 0 && (
-          <div className="absolute inset-y-0 left-0 flex items-end pb-1.5" style={{ width: gutter }}>
-            {[...zones, null].map((z) => (
-              <span key={z ?? "here"} className="truncate pr-2 text-right text-caption text-fg-2" style={{ width: GUTTER }}>
-                {z ? zoneLabel(z) : "Here"}
-              </span>
-            ))}
+      {/* One shared scroller so week-view day headers, all-day events and hour columns stay aligned on narrow phones. */}
+      <div ref={scroller} className="min-h-0 flex-1 overflow-auto phone:pb-24">
+        <div className="flex flex-col" style={{ minWidth: compact ? 7 * 56 + gutter : undefined }}>
+          {/* Day headers (with the names of any other zones over their hour labels) */}
+          <div className="sticky top-0 z-20 flex shrink-0 border-b border-separator bg-bg" style={{ paddingLeft: gutter }}>
+            {zones.length > 0 && (
+              <div className="absolute inset-y-0 left-0 flex items-end pb-1.5" style={{ width: gutter }}>
+                {[...zones, null].map((z) => (
+                  <span key={z ?? "here"} className="truncate pr-2 text-right text-caption text-fg-2" style={{ width: GUTTER }}>
+                    {z ? zoneLabel(z) : "Here"}
+                  </span>
+                ))}
+              </div>
+            )}
+            {days.map((d) => {
+              const today = sameDay(d, now);
+              return (
+                <div key={d.getTime()} className="flex-1 py-1.5 text-center">
+                  <span className={clsx("text-caption font-medium", today ? "text-accent" : "text-fg-2")}>{dayName.format(d)}</span>
+                  <span className={clsx("mx-auto mt-0.5 flex size-7 items-center justify-center rounded-full text-headline font-semibold tabular-nums phone:size-8", today ? "bg-accent-fill text-accent-fg" : "text-fg")}>
+                    {d.getDate()}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-        )}
-        {days.map((d) => {
-          const today = sameDay(d, now);
-          return (
-            <div key={d.getTime()} className="flex-1 py-1.5 text-center">
-              <span className={clsx("text-caption font-medium", today ? "text-accent" : "text-fg-2")}>{dayName.format(d)}</span>
-              <span className={clsx("mx-auto mt-0.5 flex size-6 items-center justify-center rounded-full text-headline font-semibold tabular-nums", today ? "bg-accent-fill text-accent-fg" : "text-fg")}>
-                {d.getDate()}
-              </span>
-            </div>
-          );
-        })}
-      </div>
 
-      {/* All-day strip */}
-      {hasAllDay && (
-        <div className="flex shrink-0 border-b border-separator py-1" style={{ paddingLeft: gutter }}>
-          {days.map((d) => (
-            <div key={d.getTime()} className="flex min-w-0 flex-1 flex-col gap-0.5 px-0.5">
-              {allDayOn(shown, d).map((e) => (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() => onOpen(e)}
-                  className="truncate rounded-[5px] px-1.5 py-0.5 text-left text-caption font-medium text-fg"
-                  style={{ background: `color-mix(in srgb, ${calendarColour(colourOf(e.calendar_id))} 22%, transparent)` }}
-                >
-                  {e.title}
-                </button>
+          {/* All-day strip */}
+          {hasAllDay && (
+            <div className="flex shrink-0 border-b border-separator bg-bg py-1" style={{ paddingLeft: gutter }}>
+              {days.map((d) => (
+                <div key={d.getTime()} className="flex min-w-0 flex-1 flex-col gap-0.5 px-0.5">
+                  {allDayOn(shown, d).map((e) => (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => onOpen(e)}
+                      className="truncate rounded-[5px] px-1.5 py-0.5 text-left text-caption font-medium text-fg"
+                      style={{ background: `color-mix(in srgb, ${calendarColour(colourOf(e.calendar_id))} 22%, transparent)` }}
+                    >
+                      {e.title}
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* Hours */}
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overflow-x-auto">
-        <div className="relative flex" style={{ height: HOUR * 24, minWidth: compact ? 7 * 56 + gutter : undefined }}>
+          {/* Hours */}
+          <div className="relative flex" style={{ height: HOUR * 24 }}>
           {zones.map((z) => (
             <div key={z} className="relative shrink-0" style={{ width: GUTTER }} aria-hidden>
               {Array.from({ length: 24 }, (_, h) => (
@@ -165,6 +167,7 @@ export function TimeGrid({ days, events, now, colourOf, onOpen, zones = [] }: Pr
                 </div>
               );
             })}
+          </div>
           </div>
         </div>
       </div>

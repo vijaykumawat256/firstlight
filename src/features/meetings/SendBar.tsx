@@ -40,7 +40,7 @@ export function SendBar({ to, subject, body, onDone, onCancel }: { to: string[];
         </div>
       )}
       {canSend && list.length === 1 && <p className="text-footnote text-fg-2">From {list[0]!.address}</p>}
-      <div className="flex flex-wrap justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2 phone:[&>button]:flex-1">
         <Button onClick={onCancel}>Cancel</Button>
         <Button variant={canSend ? "secondary" : "primary"} onClick={() => void draft()}>
           Open in mail app

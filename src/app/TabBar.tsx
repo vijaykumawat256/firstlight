@@ -16,8 +16,8 @@ export function TabBar() {
   const view = useNav((s) => s.view);
   const go = useNav((s) => s.go);
   return (
-    <nav aria-label="Main" className="shrink-0 border-t border-separator bg-surface">
-      <ul className="mx-auto flex max-w-2xl">
+    <nav aria-label="Main" className="shrink-0 border-t border-separator bg-surface/95 backdrop-blur-md">
+      <ul className="mx-auto flex max-w-2xl px-1 py-1">
         {TABS.map((t) => {
           const current = t.view === view || (t.also ?? []).includes(view);
           const Icon = t.icon;
@@ -27,9 +27,11 @@ export function TabBar() {
                 type="button"
                 aria-current={current ? "page" : undefined}
                 onClick={() => go(t.view)}
-                className="flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-caption font-medium text-fg-2 aria-[current=page]:text-accent"
+                className="flex min-h-13 w-full flex-col items-center justify-center gap-0.5 rounded-card text-caption font-medium text-fg-2 transition-colors duration-150 ease-standard active:scale-95 aria-[current=page]:font-semibold aria-[current=page]:text-accent"
               >
-                <Icon className="size-6" strokeWidth={current ? 2.2 : 1.8} aria-hidden />
+                <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-150 ${current ? "bg-accent-soft" : ""}`}>
+                  <Icon className="size-[22px]" strokeWidth={current ? 2.25 : 1.75} aria-hidden />
+                </span>
                 {t.label}
               </button>
             </li>

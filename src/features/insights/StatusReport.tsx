@@ -30,6 +30,7 @@ export function StatusReportDialog({ initial = "daily", onClose }: { initial?: "
     <Dialog open onOpenChange={(o) => !o && onClose()} title="Write an update" description="Written from your tasks and calendar. Change anything before you share it.">
       <div className="flex flex-col gap-3 pb-2">
         <Segmented
+          fill
           label="Which update"
           value={kind}
           onValueChange={(v) => setKind(v as "daily" | "weekly")}

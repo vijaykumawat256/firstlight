@@ -70,15 +70,15 @@ export function CalendarScreen() {
       {isPhone ? (
         // A phone: the title with Today and the arrows on one line, the view switch across the full width under it;
         // a new event is the round button at the bottom.
-        <header className="flex shrink-0 flex-col gap-2 px-4 pb-2">
-          <div className="flex items-center gap-1">
-            <h1 aria-live="polite" className="min-w-0 flex-1 truncate text-headline font-semibold tracking-tight text-fg">
+        <header className="flex shrink-0 flex-col gap-2.5 px-4 pb-2.5">
+          <div className="flex items-center gap-1.5">
+            <h1 aria-live="polite" className="min-w-0 flex-1 truncate text-title font-bold tracking-tight text-fg">
               {title}
             </h1>
             <IconButton label={`Previous ${unit}`} onClick={() => step(-1)}>
               <ChevronLeft className="size-5" />
             </IconButton>
-            <Button variant="plain" size="sm" disabled={isCurrent} onClick={() => setAnchor(startOfLocalDay(new Date()))}>
+            <Button variant="secondary" size="sm" disabled={isCurrent} onClick={() => setAnchor(startOfLocalDay(new Date()))}>
               Today
             </Button>
             <IconButton label={`Next ${unit}`} onClick={() => step(1)}>

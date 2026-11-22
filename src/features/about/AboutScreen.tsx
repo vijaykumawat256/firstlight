@@ -8,6 +8,7 @@ import { Markdown } from "./markdown";
 import { ProblemReportButton } from "./ProblemReport";
 import privacyPolicy from "../../../docs/PRIVACY.md?raw";
 import termsOfUse from "../../../docs/TERMS.md?raw";
+import { isPhone } from "@/app/platform";
 
 type Tab = "help" | "privacy" | "terms" | "licences";
 
@@ -43,6 +44,43 @@ const HELP: Array<{ title: string; body: string[] }> = [
     title: "Keyboard",
     body: [
       "Everything can be used with the keyboard: Tab moves between controls, Space and Enter activate them, and Escape closes a panel. Set a global shortcut in Settings to show or hide Firstlight from any app.",
+    ],
+  },
+];
+
+/** The phone's own help: no unlock, no keyboard shortcuts; pairing, the tab bar and gestures instead. */
+const PHONE_HELP: Array<{ title: string; body: string[] }> = [
+  {
+    title: "Finding your way",
+    body: [
+      "Today shows what is left today, what is next and a look at tomorrow. Calendar, Tasks and Settings are in the bar at the bottom. The round + button adds an event.",
+      "Pull down on Today or Tasks to refresh. On a task, swipe right to tick it off, or swipe left to move it to tomorrow; tap it for everything else.",
+    ],
+  },
+  {
+    title: "Connecting calendars",
+    body: [
+      "The easiest way is iPhone Calendar (on Android, add a calendar link): it brings in every account already in your phone's settings, such as iCloud, Google and Outlook, with no sign-in. Calendar links and iCloud or Yahoo with an app password work too.",
+      "If the same meeting is in two accounts, it appears once.",
+    ],
+  },
+  {
+    title: "Your phone and your computer",
+    body: [
+      "On your computer, open Settings, Your computers, Add phone, and type the 6 digits it shows into this phone. From then on your tasks, notes and the events you add here stay in step whenever both are on the same Wi-Fi, encrypted with a code only your devices have.",
+      "Today shows when they last synced. Firstlight shares while it is open on the phone; opening it or pulling down brings in the latest.",
+    ],
+  },
+  {
+    title: "Reminders",
+    body: [
+      "Meeting heads-ups, your summaries and task reminders are handed to your phone ahead of time, so they arrive even when Firstlight is closed. Allow notifications when asked.",
+    ],
+  },
+  {
+    title: "Email and AI (both optional)",
+    body: [
+      "Email is off until you turn it on. AI summaries are off until you turn them on, and you are shown exactly what would be sent before you agree.",
     ],
   },
 ];
@@ -180,11 +218,12 @@ export function AboutScreen() {
           Settings
         </Button>
       </div>
-      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
+      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 phone:px-4 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
         <h1 className="mb-4 text-largetitle font-bold tracking-tight text-fg">About</h1>
         <div className="flex flex-col gap-5">
           <Updates />
           <Segmented
+            fill
             label="About sections"
             value={tab}
             onValueChange={(v) => setTab(v as Tab)}
@@ -197,7 +236,7 @@ export function AboutScreen() {
           />
           {tab === "help" && (
             <div className="flex flex-col gap-5">
-              {HELP.map((h) => (
+              {(isPhone ? PHONE_HELP : HELP).map((h) => (
                 <section key={h.title} aria-label={h.title} className="flex flex-col gap-1.5">
                   <h2 className="text-headline font-semibold text-fg">{h.title}</h2>
                   {h.body.map((p) => (

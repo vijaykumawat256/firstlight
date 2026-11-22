@@ -3,6 +3,7 @@ import { CalendarDays, CalendarPlus, Globe, ListPlus, Search, Sparkles } from "l
 import { useEffect, useId, useMemo, useState } from "react";
 import { api, type CalEvent } from "@/api";
 import { useNav } from "@/app/nav";
+import { isPhone } from "@/app/platform";
 import { Dialog, useToasts } from "@/design";
 import { EventDetail } from "@/features/briefing/EventDetail";
 import { formatDate, formatTime } from "@/features/briefing/format";
@@ -121,7 +122,12 @@ export function SearchHost() {
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())} title="Search" description="Find an event by name or place, type a date such as “friday” or “24 dec”, or type a new event such as “lunch with Riya friday 1pm”, or a task such as “task call the bank friday”.">
+      <Dialog
+        open={open}
+        onOpenChange={(o) => (o ? setOpen(true) : close())}
+        title="Search"
+        description={isPhone ? "Find an event, jump to a date, or type a new event or task." : "Find an event by name or place, type a date such as “friday” or “24 dec”, or type a new event such as “lunch with Riya friday 1pm”, or a task such as “task call the bank friday”."}
+      >
         {asked ? (
           <AskAnswer
             question={asked}
@@ -133,10 +139,10 @@ export function SearchHost() {
           />
         ) : (
         <div className="flex flex-col gap-3 pb-2">
-          <div className="flex items-center gap-2 rounded-card bg-fill px-3">
+          <div className="flex items-center gap-2 rounded-card bg-fill px-3 focus-within:ring-2 focus-within:ring-accent">
             <Search className="size-4 shrink-0 text-fg-2" aria-hidden />
             <input
-              autoFocus
+              autoFocus={!isPhone}
               role="combobox"
               aria-label="Search events"
               aria-expanded={rows.length > 0}
@@ -163,7 +169,7 @@ export function SearchHost() {
               placeholder="Search events, or type a date"
               autoComplete="off"
               spellCheck={false}
-              className="h-10 min-w-0 flex-1 select-text bg-transparent text-headline text-fg placeholder:text-fg-3"
+              className="h-10 min-w-0 flex-1 select-text bg-transparent text-headline text-fg placeholder:text-fg-3 focus-visible:outline-none phone:h-12"
             />
           </div>
           {events.isError && (

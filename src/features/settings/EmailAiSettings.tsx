@@ -99,7 +99,7 @@ export function EmailGroup() {
           {mailAccounts.map((a) => {
             const on = e.account_ids.includes(a.id);
             return (
-              <SettingRow key={a.id} title={a.display_name} description={on ? `Reading unread mail from ${a.provider === "google" ? "Gmail" : "Outlook"}.` : "Needs extra permission to read mail. You'll be asked in your browser."}>
+              <SettingRow key={a.id} title={a.display_name} description={on ? `Reading unread mail from ${a.provider === "google" ? "Gmail" : "Outlook"}.` : "Needs extra permission to read mail. You'll be asked in your browser."} phoneStack={!on}>
                 {on ? (
                   <Switch label={`Read mail for ${a.display_name}`} checked onCheckedChange={() => update((d) => void (d.email.account_ids = d.email.account_ids.filter((id) => id !== a.id)))} />
                 ) : (
@@ -234,6 +234,7 @@ function ImapDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChang
         }}
       >
         <Segmented
+          fill
           label="Mail provider"
           value={preset}
           onValueChange={(v) => setPreset(v as ImapPreset)}
@@ -307,7 +308,7 @@ export function AiGroup() {
             </SettingRow>
           )}
           {status.data?.has_key && (
-            <SettingRow title="API key" description={`Saved in the system keychain, for ${label}.`}>
+            <SettingRow title="API key" description={`Saved in the system keychain, for ${label}.`} phoneStack>
               <Button size="sm" variant="danger" disabled={forget.isPending} onClick={() => forget.mutate()}>
                 Remove key and turn off
               </Button>

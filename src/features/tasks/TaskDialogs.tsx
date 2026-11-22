@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { api, errorMessage, type FreeSlot, type Task, type TaskInput, type TaskRepeat } from "@/api";
+import { isPhone } from "@/app/platform";
 import { Button, Dialog, Segmented, Select, TextField, useToasts } from "@/design";
 import { formatDate, formatTime } from "@/features/briefing/format";
 import { SendBar } from "@/features/meetings/SendBar";
@@ -57,10 +58,25 @@ export function TaskForm({ task, onClose }: { task: Task; onClose: () => void })
     },
     onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
   });
+  const formId = useId();
   const minutes = d.minutes === null ? "none" : String(d.minutes);
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Change task" description="Kept only on this device.">
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Change task"
+      description="Kept only on this device."
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" type="submit" form={formId} disabled={!d.title.trim() || save.isPending}>
+            {save.isPending ? "Saving…" : "Save"}
+          </Button>
+        </>
+      }
+    >
       <form
+        id={formId}
         className="flex flex-col gap-4 pb-2"
         onSubmit={(e) => {
           e.preventDefault();
@@ -72,7 +88,7 @@ export function TaskForm({ task, onClose }: { task: Task; onClose: () => void })
             {errorMessage(save.error)}
           </p>
         )}
-        <TextField label="Task" value={d.title} maxLength={300} autoComplete="off" onChange={(e) => setD({ ...d, title: e.target.value })} autoFocus />
+        <TextField label="Task" value={d.title} maxLength={300} autoComplete="off" onChange={(e) => setD({ ...d, title: e.target.value })} autoFocus={!isPhone} />
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Due" type="date" value={d.due_date ?? ""} onChange={(e) => setD({ ...d, due_date: e.target.value || null, due_time: e.target.value ? d.due_time : null })} />
           <TextField label="Time" type="time" value={d.due_time ?? ""} disabled={!d.due_date} onChange={(e) => setD({ ...d, due_time: e.target.value || null })} />
@@ -101,7 +117,7 @@ export function TaskForm({ task, onClose }: { task: Task; onClose: () => void })
         />
         <div className="flex flex-col gap-1.5">
           <span className="text-footnote font-medium text-fg-2">How long it takes</span>
-          <Segmented label="How long it takes" value={LENGTHS.some((l) => l.value === minutes) ? minutes : "none"} onValueChange={(v) => setD({ ...d, minutes: v === "none" ? null : Number(v) })} options={LENGTHS} />
+          <Segmented fill label="How long it takes" value={LENGTHS.some((l) => l.value === minutes) ? minutes : "none"} onValueChange={(v) => setD({ ...d, minutes: v === "none" ? null : Number(v) })} options={LENGTHS} />
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor={notesId} className="text-footnote font-medium text-fg-2">
@@ -115,16 +131,10 @@ export function TaskForm({ task, onClose }: { task: Task; onClose: () => void })
             From an email: “{task.mail.subject}”{task.mail.from ? `, ${task.mail.from}` : ""}.
           </p>
         )}
-        <div className="flex justify-between gap-2">
-          <Button variant="plain" onClick={() => remove.mutate()} disabled={remove.isPending}>
+        <div className="flex justify-start">
+          <Button variant="plain" className="!text-danger hover:!bg-danger-soft" onClick={() => remove.mutate()} disabled={remove.isPending}>
             Delete
           </Button>
-          <div className="flex gap-2">
-            <Button onClick={onClose}>Cancel</Button>
-            <Button variant="primary" type="submit" disabled={!d.title.trim() || save.isPending}>
-              {save.isPending ? "Saving…" : "Save"}
-            </Button>
-          </div>
         </div>
       </form>
     </Dialog>
@@ -154,7 +164,7 @@ export function PlanTask({ task, onClose }: { task: Task; onClose: () => void })
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title="Set time aside" description={`For “${task.title}”. It is added to your calendar on this device only.`}>
       <div className="pb-3">
-        <Segmented label="How long" value={minutes} onValueChange={setMinutes} options={options} />
+        <Segmented fill label="How long" value={minutes} onValueChange={setMinutes} options={options} />
       </div>
       {slots.isPending ? (
         <p className="text-body text-fg-2">Looking…</p>
@@ -191,23 +201,30 @@ export function NoteTasks({ lines, meeting, onClose }: { lines: string[]; meetin
   });
   const count = picked.filter(Boolean).length;
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Make tasks" description="Tick the lines that are things to do. They go on your task list.">
-      <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto pb-3">
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Make tasks"
+      description="Tick the lines that are things to do. They go on your task list."
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={count === 0 || add.isPending} onClick={() => add.mutate()}>
+            {count === 1 ? "Add 1 task" : `Add ${count} tasks`}
+          </Button>
+        </>
+      }
+    >
+      <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto pb-2 phone:max-h-none">
         {lines.map((l, i) => (
           <li key={i}>
-            <label className="flex items-start gap-3 text-body text-fg">
-              <input type="checkbox" className="mt-1 size-4 accent-accent" checked={picked[i]} onChange={(e) => setPicked(picked.map((p, j) => (j === i ? e.target.checked : p)))} />
+            <label className="flex items-start gap-3 py-1 text-body text-fg phone:min-h-11 phone:items-center">
+              <input type="checkbox" className="mt-1 size-4 shrink-0 accent-accent phone:mt-0 phone:size-5" checked={picked[i]} onChange={(e) => setPicked(picked.map((p, j) => (j === i ? e.target.checked : p)))} />
               <span className="break-words">{l}</span>
             </label>
           </li>
         ))}
       </ul>
-      <div className="flex justify-end gap-2 pb-2">
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={count === 0 || add.isPending} onClick={() => add.mutate()}>
-          {count === 1 ? "Add 1 task" : `Add ${count} tasks`}
-        </Button>
-      </div>
     </Dialog>
   );
 }
@@ -294,14 +311,27 @@ export function MonthEndDialog({ existing, onClose }: { existing: string[]; onCl
     onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
   });
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Month-end reminders" description={`Tasks that come back on the last working day of every month, at 10:00. The first is ${formatDate(new Date(`${due}T00:00:00`))}.`}>
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Month-end reminders"
+      description={`Tasks that come back on the last working day of every month, at 10:00. The first is ${formatDate(new Date(`${due}T00:00:00`))}.`}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={titles.length === 0 || add.isPending} onClick={() => add.mutate()}>
+            {titles.length === 1 ? "Add 1 reminder" : `Add ${titles.length} reminders`}
+          </Button>
+        </>
+      }
+    >
       <div className="flex flex-col gap-3 pb-2">
         {offered.length > 0 ? (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-1">
             {offered.map((t) => (
               <li key={t}>
-                <label className="flex items-center gap-3 text-body text-fg">
-                  <input type="checkbox" className="size-4 accent-accent" checked={picked.includes(t)} onChange={(e) => setPicked(e.target.checked ? [...picked, t] : picked.filter((p) => p !== t))} />
+                <label className="flex items-center gap-3 py-1 text-body text-fg phone:min-h-11">
+                  <input type="checkbox" className="size-4 shrink-0 accent-accent phone:size-5" checked={picked.includes(t)} onChange={(e) => setPicked(e.target.checked ? [...picked, t] : picked.filter((p) => p !== t))} />
                   {t}
                 </label>
               </li>
@@ -311,12 +341,6 @@ export function MonthEndDialog({ existing, onClose }: { existing: string[]; onCl
           <p className="text-body text-fg-2">You have all the usual ones already.</p>
         )}
         <TextField label="Another one" value={own} maxLength={300} autoComplete="off" placeholder="Pay the team's software bills" onChange={(e) => setOwn(e.target.value)} />
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={titles.length === 0 || add.isPending} onClick={() => add.mutate()}>
-            {titles.length === 1 ? "Add 1 reminder" : `Add ${titles.length} reminders`}
-          </Button>
-        </div>
       </div>
     </Dialog>
   );

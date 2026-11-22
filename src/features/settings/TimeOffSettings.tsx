@@ -109,7 +109,7 @@ export function TimeOffSettings() {
       {st && st.clashes.length > 0 && (
         <Group title="Meetings on your days off" footer="Write to the organiser before you go, or decline in your calendar.">
           {st.clashes.map((c) => (
-            <li key={c.event_id} className="flex min-h-12 items-center gap-3 px-4 py-2">
+            <li key={c.event_id} className="flex min-h-12 items-center gap-3 px-4 py-2 phone:flex-col phone:items-start">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-headline text-fg">{c.title}</div>
                 <div className="text-footnote text-fg-2">
@@ -203,9 +203,9 @@ function OutOfOffice({ next, copy }: { next: TimeOff; copy: (text: string) => vo
         mail.map((a) => {
           const ok = allowed.includes(a.id);
           return (
-            <SettingRow key={a.id} title={a.email ?? a.display_name} description={ok ? `Turns on at the start of ${day(next.from)} and off when you're back.` : "Needs your permission once, in the browser."}>
+            <SettingRow key={a.id} title={a.email ?? a.display_name} description={ok ? `Turns on at the start of ${day(next.from)} and off when you're back.` : "Needs your permission once, in the browser."} phoneStack={ok}>
               {ok ? (
-                <div className="flex gap-1">
+                <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="plain" disabled={clear.isPending} onClick={() => clear.mutate(a.id)}>
                     Turn off
                   </Button>

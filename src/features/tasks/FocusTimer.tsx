@@ -81,8 +81,21 @@ export function StartTimer({ task, onClose }: { task: Task; onClose: () => void 
     onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
   });
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Focus timer" description={`On “${task.title}”. Summaries and task reminders wait until it ends (reminders about meetings still come), then it suggests a break.`}>
-      <div className="flex flex-col gap-4 pb-2">
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Focus timer"
+      description={`On “${task.title}”. Summaries and task reminders wait until it ends (reminders about meetings still come), then it suggests a break.`}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={start.isPending} onClick={() => start.mutate()}>
+            Start
+          </Button>
+        </>
+      }
+    >
+      <div className="pb-2">
         <Segmented
           label="How long"
           fill
@@ -95,12 +108,6 @@ export function StartTimer({ task, onClose }: { task: Task; onClose: () => void 
             { value: "90", label: "90 min" },
           ]}
         />
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={start.isPending} onClick={() => start.mutate()}>
-            Start
-          </Button>
-        </div>
       </div>
     </Dialog>
   );

@@ -30,6 +30,7 @@ export function RunningLate({ event, onClose }: { event: CalEvent; onClose: () =
     <Dialog open onOpenChange={(o) => !o && onClose()} title="Running late" description="Read the note, then send it or open it in your mail app.">
       <div className="flex flex-col gap-3 pb-2">
         <Segmented
+          fill
           label="How late"
           value={minutes}
           onValueChange={setMinutes}
@@ -41,8 +42,8 @@ export function RunningLate({ event, onClose }: { event: CalEvent; onClose: () =
           ]}
         />
         {hasGuests && (
-          <label className="flex items-center gap-2 text-body text-fg">
-            <input type="checkbox" className="size-4 accent-accent" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} />
+          <label className="flex items-center gap-3 py-1 text-body text-fg phone:min-h-11">
+            <input type="checkbox" className="size-4 shrink-0 accent-accent phone:size-5" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} />
             Tell everyone invited, not just the organiser
           </label>
         )}

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, errorMessage, type SignInApps, type SignInAppsChange } from "@/api";
+import { isPhone } from "@/app/platform";
 import { Button, Dialog, TextField, useToasts } from "@/design";
 
 const FORM_ID = "sign-in-apps-form";
@@ -70,7 +71,7 @@ function Form({ apps, focus, onDone }: { apps: SignInApps; focus?: "google" | "m
           value={google}
           onChange={(e) => setGoogle(e.target.value)}
           placeholder="1234…apps.googleusercontent.com"
-          autoFocus={focus !== "microsoft"}
+          autoFocus={!isPhone && focus !== "microsoft"}
           spellCheck={false}
           autoComplete="off"
           hint={fallback(apps.built_in_google)}
@@ -101,7 +102,7 @@ function Form({ apps, focus, onDone }: { apps: SignInApps; focus?: "google" | "m
           value={microsoft}
           onChange={(e) => setMicrosoft(e.target.value)}
           placeholder="1a2b3c4d-1234-5678-9abc-1a2b3c4d5e6f"
-          autoFocus={focus === "microsoft"}
+          autoFocus={!isPhone && focus === "microsoft"}
           spellCheck={false}
           autoComplete="off"
           hint={fallback(apps.built_in_microsoft)}

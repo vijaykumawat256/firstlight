@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
+import { isPhone } from "@/app/platform";
 import { useInviteSenders } from "@/features/events/InviteDialog";
 import { parseQuickAdd, type QuickEvent } from "@/features/events/quickAdd";
 import { formatDate, formatTime } from "@/features/briefing/format";
@@ -410,42 +411,43 @@ function FormSheet({
         )}
         {initial?.saved_to && !detach && <p className="text-footnote text-fg-2">This event is in your Calendar app, so changes you make here are made there too.</p>}
         {quickAdd && (
-          <TextField
-            label="Quick add"
-            value={line}
-            onChange={(e) => typeLine(e.target.value)}
-            maxLength={300}
-            placeholder="Lunch with Riya friday 1pm at Cafe Nero"
-            hint={
-              understood
-                ? `Understood: ${describeQuick(understood)}. Press Return to add it, or change anything below.`
-                : line.trim()
-                  ? "Add a day or a time, such as “tomorrow 3pm” or “dec 24”."
-                  : "Type it in one go and the details below fill themselves in."
-            }
-            autoComplete="off"
-            autoFocus
-          />
-        )}
-        {quickAdd && (
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-headline text-fg">Template</span>
-            <Select
-              label="Template"
-              value={template?.name ?? "none"}
-              onValueChange={(v) => (v === "none" ? setTemplate(null) : pickTemplate(v))}
-              options={[{ value: "none", label: "None" }, ...templates.map((t) => ({ value: t.name, label: `${t.name} (${t.minutes} min)` }))]}
+          <div className="flex flex-col gap-3 rounded-card bg-accent-soft/60 p-3.5 ring-1 ring-accent/15">
+            <TextField
+              label="Quick add"
+              value={line}
+              onChange={(e) => typeLine(e.target.value)}
+              maxLength={300}
+              placeholder="Lunch with Riya friday 1pm at Cafe Nero"
+              hint={
+                understood
+                  ? `Understood: ${describeQuick(understood)}. Press Return to add it, or change anything below.`
+                  : line.trim()
+                    ? "Add a day or a time, such as “tomorrow 3pm” or “dec 24”."
+                    : "Type it in one go and the details below fill themselves in."
+              }
+              className="bg-surface"
+              autoComplete="off"
+              autoFocus={!isPhone}
             />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-headline text-fg">Template</span>
+              <Select
+                label="Template"
+                value={template?.name ?? "none"}
+                onValueChange={(v) => (v === "none" ? setTemplate(null) : pickTemplate(v))}
+                options={[{ value: "none", label: "None" }, ...templates.map((t) => ({ value: t.name, label: `${t.name} (${t.minutes} min)` }))]}
+              />
+            </div>
+            {template?.agenda.trim() && <p className="text-footnote text-fg-2">Its agenda goes into your private notes for this meeting.</p>}
           </div>
         )}
-        {template?.agenda.trim() && quickAdd && <p className="text-footnote text-fg-2">Its agenda goes into your private notes for this meeting.</p>}
         <TextField
           label="Title"
           value={d.title}
           onChange={(e) => set("title", e.target.value)}
           maxLength={200}
           autoComplete="off"
-          autoFocus={!quickAdd}
+          autoFocus={!isPhone && !quickAdd}
         />
         <div className="flex items-center justify-between gap-3">
           <span className="text-headline text-fg">All day</span>

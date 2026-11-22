@@ -1,5 +1,5 @@
-import { ChevronLeft, ListChecks } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CalendarRange, ChevronLeft, Clock, FileText, ListChecks, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { TaskView } from "@/api";
 import { useNav } from "@/app/nav";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -13,6 +13,8 @@ import { FocusTimerBar, StartTimer } from "./FocusTimer";
 import { StatusReportDialog } from "@/features/insights/StatusReport";
 import { TimeReportSheet } from "@/features/insights/TimeReport";
 import { isPhone } from "@/app/platform";
+import { PullIndicator } from "@/app/PullIndicator";
+import { usePullToRefresh } from "@/app/usePullToRefresh";
 
 type Tab = TaskTab;
 
@@ -60,6 +62,9 @@ export function TasksScreen() {
   const count = (t: Tab) => (l ? l[t].length : 0);
   const shown = l ? l[tab] : [];
 
+  // Phones: pull down to bring in changes from your other devices and task lists.
+  const scroller = useRef<HTMLElement>(null);
+  const pulling = usePullToRefresh(scroller, () => api.refreshNow().then(() => qc.invalidateQueries()));
   return (
     <div className="flex h-full flex-col">
       {/* On a phone the tab bar takes you back, so there is no title strip (and no space lost to it). */}
@@ -72,7 +77,8 @@ export function TasksScreen() {
           </Button>
         </div>
       )}
-      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
+      <main ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 phone:px-4 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
+        <PullIndicator {...pulling} />
         <div className="flex flex-col gap-4">
           <header>
             <h1 className="text-display font-bold tracking-tight text-fg">Tasks</h1>
@@ -88,25 +94,25 @@ export function TasksScreen() {
           <FocusTimerBar />
           <div className="flex flex-col gap-1">
             <AddTaskField
-              autoFocus
+              autoFocus={!isPhone}
               toToday={tab !== "someday"}
               onAdded={(t) => {
                 setTab(whereTask(t).tab);
                 setFresh(t.id);
               }}
             />
-            {/* On a phone: four equal buttons in two rows instead of a scatter of links. */}
-            <div className="flex flex-wrap justify-end gap-2 phone:mt-2 phone:grid phone:grid-cols-2 phone:[&>button]:w-full">
-              <Button variant="plain" size="sm" onClick={() => setTimeReport(true)}>
+            {/* On a phone: four equal icon buttons in two rows instead of a scatter of links. */}
+            <div className="mt-1 flex flex-wrap justify-end gap-2 phone:mt-2 phone:grid phone:grid-cols-2 phone:[&>button]:w-full">
+              <Button variant="secondary" size="sm" leading={<Clock className="size-4 text-accent" aria-hidden />} onClick={() => setTimeReport(true)}>
                 My time
               </Button>
-              <Button variant="plain" size="sm" onClick={() => setWriting(true)}>
+              <Button variant="secondary" size="sm" leading={<FileText className="size-4 text-accent" aria-hidden />} onClick={() => setWriting(true)}>
                 Write update
               </Button>
-              <Button variant="plain" size="sm" onClick={() => setMonthEnd(true)}>
+              <Button variant="secondary" size="sm" leading={<CalendarRange className="size-4 text-accent" aria-hidden />} onClick={() => setMonthEnd(true)}>
                 Month-end
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setPlanDay(true)}>
+              <Button variant="primary" size="sm" leading={<Sparkles className="size-4" aria-hidden />} onClick={() => setPlanDay(true)}>
                 Plan my day
               </Button>
             </div>

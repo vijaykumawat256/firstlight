@@ -4,7 +4,7 @@ import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 /* ------------------------------------------------------------------ Card */
 
 export function Card({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={clsx("rounded-card bg-surface p-4 shadow-card", className)} {...rest} />;
+  return <div className={clsx("rounded-card bg-surface p-4 shadow-card ring-1 ring-separator", className)} {...rest} />;
 }
 
 /* ----------------------------------------------------- ListGroup / Row */
@@ -13,7 +13,7 @@ export function Card({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
 export function ListGroup({ className, ...rest }: HTMLAttributes<HTMLUListElement>) {
   return (
     <ul
-      className={clsx("divide-y divide-separator overflow-hidden rounded-card bg-surface shadow-card", className)}
+      className={clsx("divide-y divide-separator overflow-hidden rounded-card bg-surface shadow-card ring-1 ring-separator", className)}
       {...rest}
     />
   );
@@ -116,9 +116,9 @@ export function Skeleton({ className, style }: { className?: string; style?: CSS
 
 export function SectionHeader({ title, trailing }: { title: string; trailing?: ReactNode }) {
   return (
-    <div className="mb-2 flex items-baseline justify-between px-1">
-      <h2 className="text-headline font-semibold text-fg">{title}</h2>
-      {trailing && <div className="text-footnote text-fg-2">{trailing}</div>}
+    <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
+      <h2 className="text-headline font-semibold tracking-tight text-fg">{title}</h2>
+      {trailing && <div className="truncate text-footnote text-fg-2">{trailing}</div>}
     </div>
   );
 }

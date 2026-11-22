@@ -46,9 +46,9 @@ function CalendarRow({ cal, onChanged }: { cal: CalendarInfo; onChanged: () => v
           type="button"
           aria-label={`Colour for ${cal.name}`}
           onClick={() => setPicking(true)}
-          className="flex size-6 shrink-0 items-center justify-center rounded-full transition-transform duration-150 ease-standard hover:scale-110"
+          className="flex size-6 shrink-0 items-center justify-center rounded-full transition-transform duration-150 ease-standard hover:scale-110 phone:size-10"
         >
-          <span className="size-3.5 rounded-full" style={{ background: calendarColour(cal.colour) }} />
+          <span className="size-3.5 rounded-full phone:size-4" style={{ background: calendarColour(cal.colour) }} />
         </button>
       </Tooltip>
       <span className="min-w-0 flex-1 truncate text-headline font-medium text-fg">{cal.name}</span>
@@ -160,14 +160,14 @@ function AccountCard({ account, onChanged }: { account: AccountView; onChanged: 
 
   return (
     <section aria-label={account.display_name} className="flex flex-col gap-2">
-      <div className="flex items-start justify-between gap-3 px-1">
+      <div className="flex items-start justify-between gap-3 px-1 phone:flex-col phone:gap-2">
         <div className="min-w-0">
           <h2 className="truncate text-headline font-semibold text-fg">{account.display_name}</h2>
           <div className="mt-0.5 flex items-center gap-2">
             <Badge tone={account.status === "needs_attention" ? "danger" : "neutral"}>{PROVIDER_LABEL[account.provider]}</Badge>
           </div>
         </div>
-        <div className="flex shrink-0 gap-1">
+        <div className="flex shrink-0 flex-wrap gap-1">
           {isSystem && account.status === "needs_attention" && (
             <>
               <Button variant="plain" size="sm" onClick={() => void api.openPrivacySettings("calendars")}>
@@ -213,7 +213,7 @@ function AccountCard({ account, onChanged }: { account: AccountView; onChanged: 
         }
       >
         <form onSubmit={(e) => { e.preventDefault(); rename.mutate(); }}>
-          <TextField label="Name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} autoFocus />
+          <TextField label="Name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} autoFocus={!isPhone} />
         </form>
       </Dialog>
 
@@ -258,7 +258,7 @@ export function AccountsScreen() {
           </IconButton>
         </Tooltip>
       </div>
-      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
+      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 phone:px-4 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
         <h1 className="mb-6 text-largetitle font-bold tracking-tight text-fg">Accounts</h1>
         {accounts.isPending ? (
           <div className="flex flex-col gap-3" aria-busy>

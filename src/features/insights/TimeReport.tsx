@@ -69,7 +69,20 @@ export function TimeReportSheet({ onClose }: { onClose: () => void }) {
   const r = report.data;
   const maxDay = r ? Math.max(...r.by_day.map(([, m]) => m), 1) : 1;
   return (
-    <Sheet open onOpenChange={(o) => !o && onClose()} title="Where my time went" description="Meetings and focus time from your calendars. Worked out on this device.">
+    <Sheet
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Where my time went"
+      description="Meetings and focus time from your calendars. Worked out on this device."
+      footer={
+        <>
+          <Button onClick={onClose}>Close</Button>
+          <Button variant="primary" disabled={!r || r.rows.length === 0 || save.isPending} onClick={() => save.mutate()}>
+            {save.isPending ? "Saving…" : "Save as spreadsheet"}
+          </Button>
+        </>
+      }
+    >
       <div className="flex flex-col gap-4 pb-4">
         <Segmented
           label="Which days"
@@ -117,12 +130,6 @@ export function TimeReportSheet({ onClose }: { onClose: () => void }) {
             {r.by_project.length === 0 && r.rows.length > 0 && <p className="text-footnote text-fg-2">Tip: put a project in a title, like “[Acme] Weekly sync” or “#acme”, to see time per project.</p>}
           </>
         )}
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Close</Button>
-          <Button variant="primary" disabled={!r || r.rows.length === 0 || save.isPending} onClick={() => save.mutate()}>
-            {save.isPending ? "Saving…" : "Save as spreadsheet"}
-          </Button>
-        </div>
       </div>
     </Sheet>
   );
