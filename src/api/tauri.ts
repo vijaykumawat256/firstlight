@@ -125,6 +125,7 @@ export const tauriBackend: Backend = {
     return () => offs.forEach((off) => off());
   },
   shareNow: () => invoke<void>("share_now"),
+  sharingStatus: () => invoke<{ last_ok: string | null; names: string[]; problem: string | null }>("sharing_status"),
   getCalendars: () => invoke<CalendarInfo[]>("get_calendars"),
   listAccounts: () => invoke<AccountView[]>("list_accounts"),
   addIcsAccount: (name, url) => invoke<AccountView>("add_ics_account", { name, url }),

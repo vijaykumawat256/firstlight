@@ -1643,6 +1643,10 @@ export const fixtureBackend: Backend = {
     dataListeners.add(cb);
     return () => void dataListeners.delete(cb);
   },
+  async sharingStatus() {
+    if (params.has("sharetrouble")) return { last_ok: null, names: [], problem: "Can't reach your computer. Check that both are on the same Wi-Fi and Firstlight is open on it." };
+    return { last_ok: new Date(Date.now() - 10_000).toISOString(), names: ["Vijay's MacBook"], problem: null };
+  },
   async shareNow() {
     (window as unknown as { __shared?: number }).__shared = ((window as unknown as { __shared?: number }).__shared ?? 0) + 1;
   },

@@ -575,6 +575,7 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            lan_sync::sharing_status,
             lan_sync::share_now,
             pairing_cmd::pair_with_code,
             pairing_cmd::stop_pairing,

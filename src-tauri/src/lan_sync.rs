@@ -28,6 +28,21 @@ const ANNOUNCE_EVERY: Duration = Duration::from_secs(30);
 /// Often, so a change reaches the other device within seconds: a round that finds nothing new is only a local read.
 const ROUND_EVERY: Duration = Duration::from_secs(15);
 
+/// For the status line on Today: when a round last exchanged with another device, and what is wrong if it can't.
+#[derive(Default, Clone)]
+struct Health {
+    last_ok: Option<chrono::DateTime<Utc>>,
+    /// Since when no other device has been found (cleared once one is).
+    alone_since: Option<chrono::DateTime<Utc>>,
+    /// A phone's trouble reaching its paired computer.
+    push_problem: Option<String>,
+}
+static HEALTH: Mutex<Health> = Mutex::new(Health {
+    last_ok: None,
+    alone_since: None,
+    push_problem: None,
+});
+
 /// Set when a phone has just handed over its changes, so they are merged at once instead of at the next round.
 static KICK: AtomicBool = AtomicBool::new(false);
 
@@ -81,6 +96,14 @@ fn round(store: &mut Store, lan: &LanFiles, key: &[u8; 32], app: &AppHandle) {
     static UNREADABLE: Mutex<usize> = Mutex::new(0);
     match folder_sync::sync(store, lan, key, &computer_name(), Utc::now()) {
         Ok(r) => {
+            if let Ok(mut h) = HEALTH.lock() {
+                if !r.peers.is_empty() && r.unreadable == 0 {
+                    h.last_ok = Some(Utc::now());
+                    h.alone_since = None;
+                } else if r.peers.is_empty() && h.alone_since.is_none() {
+                    h.alone_since = Some(Utc::now());
+                }
+            }
             if let Ok(mut before) = UNREADABLE.lock()
                 && *before != r.unreadable
             {
@@ -277,6 +300,9 @@ pub async fn share_now() -> CmdResult<()> {
 /// Logs a phone's trouble reaching its computer once when it starts ("" = reached again).
 fn push_trouble(problem: &str) {
     static LAST: Mutex<String> = Mutex::new(String::new());
+    if let Ok(mut h) = HEALTH.lock() {
+        h.push_problem = (!problem.is_empty()).then(|| problem.to_string());
+    }
     if let Ok(mut last) = LAST.lock()
         && *last != problem
     {
@@ -343,6 +369,53 @@ pub async fn disable_lan_sync(
     }
     let _ = app.emit("settings-changed", ());
     Ok(s)
+}
+
+/// What Today's status line shows about sharing on the network.
+#[derive(serde::Serialize)]
+pub struct SharingStatus {
+    /// When changes were last exchanged with another device (RFC 3339), if ever since the app started.
+    pub last_ok: Option<String>,
+    /// The other devices' names, from the last round.
+    pub names: Vec<String>,
+    /// What is wrong, in plain words, when nothing has been exchanged for a while.
+    pub problem: Option<String>,
+}
+
+/// Today's status line. Says there is a problem only after a while without contact, so a device that is just
+/// starting up isn't reported as unreachable.
+#[tauri::command]
+pub async fn sharing_status() -> CmdResult<SharingStatus> {
+    let h = HEALTH.lock().map(|h| h.clone()).unwrap_or_default();
+    let names: Vec<String> = LAST
+        .lock()
+        .ok()
+        .and_then(|l| {
+            l.as_ref()
+                .map(|(_, r)| r.peers.iter().map(|p| p.name.clone()).collect())
+        })
+        .unwrap_or_default();
+    let now = Utc::now();
+    let stale = |t: Option<chrono::DateTime<Utc>>| {
+        t.is_none_or(|t| now - t > chrono::Duration::seconds(90))
+    };
+    let problem = if !stale(h.last_ok) {
+        None
+    } else if h.push_problem.is_some() {
+        Some("Can't reach your computer. Check that both are on the same Wi-Fi and Firstlight is open on it.".to_string())
+    } else if h
+        .alone_since
+        .is_some_and(|t| now - t > chrono::Duration::seconds(90))
+    {
+        Some("No other device found on this network yet. Open Firstlight on your other device, on the same Wi-Fi.".to_string())
+    } else {
+        None
+    };
+    Ok(SharingStatus {
+        last_ok: h.last_ok.map(|t| t.to_rfc3339()),
+        names,
+        problem,
+    })
 }
 
 /// The devices seen on this network in the last round (empty until one is found).

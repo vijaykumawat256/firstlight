@@ -81,6 +81,8 @@ export interface Backend {
   onDataChanged(callback: () => void): Promise<() => void>;
   /** Shares with the other devices on the network now (when the app comes back to the front). */
   shareNow(): Promise<void>;
+  /** Today's status line: when this device last synced with another on the network, or what is wrong. */
+  sharingStatus(): Promise<{ last_ok: string | null; names: string[]; problem: string | null }>;
   /** Today and tomorrow, worked out by the briefing engine. */
   getBriefing(): Promise<Briefing>;
   /** The next seven days (from tomorrow): load per day, busiest and lightest, early starts, a block to focus. */
