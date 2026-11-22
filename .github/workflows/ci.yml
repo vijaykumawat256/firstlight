@@ -1,12 +1,27 @@
 name: CI
 
+# Kept cheap on purpose: on a private repository GitHub counts a macOS minute as 10 and a Windows minute as 2.
+# - Changes that only touch documentation don't run anything.
+# - The frontend checks and the browser tests (which use the browser stand-in, not the real app) run on Linux (1x).
+# - macOS and Windows run only the Rust checks, which is where the code differs per system.
+# - The browser tests on Windows run for release tags, or when started by hand (Actions, CI, Run workflow).
+# - A newer push cancels a run still going for the same branch.
+
 on:
   push:
     branches: [main]
+    tags: ["v*"]
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
   pull_request:
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  check:
+  rust:
     strategy:
       fail-fast: false
       matrix:
@@ -14,23 +29,41 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 24, cache: npm }
       - uses: dtolnay/rust-toolchain@stable
         with: { components: "rustfmt, clippy" }
       - uses: Swatinem/rust-cache@v2
-
-      - run: npm ci
-      - name: Frontend checks
-        run: |
-          npm run typecheck
-          npm run lint
-          npm run test
       - name: Rust checks
         run: |
           cargo fmt --check
           cargo clippy --workspace --all-targets -- -D warnings
           cargo test --workspace
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - name: Types, lint, unit tests
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+      - name: Browser tests
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
+
+  browser-windows:
+    # Windows-only differences the browser tests have caught before (clipboard line endings), checked before a release.
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
       - name: Browser tests
         run: |
           npx playwright install chromium

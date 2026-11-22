@@ -20,7 +20,8 @@ free. **Private by design:** no server, no account, no analytics. Everything sta
   Firstlight talks only to the services you connect. Every feature that sends anything is off until you turn it on.
 - **Works with locked-down work PCs.** It reads classic Outlook and the Mac's Calendar app directly, with no sign-in,
   so it works where IT blocks outside apps.
-- **Mac and Windows alike**, and it can keep your tasks and notes in step between them.
+- **Mac and Windows alike**, and it keeps your tasks and notes in step between them, through your own cloud storage
+  or straight over your home or office network.
 
 ## What it does
 
@@ -49,8 +50,9 @@ free. **Private by design:** no server, no account, no analytics. Everything sta
   iCloud, Outlook on Windows).
 - AI: a smarter summary of your day, questions about your calendar, and help planning, with the AI service and key you
   choose. You see the exact text that would be sent before you agree.
-- Sharing between your computers through a folder you already sync (iCloud Drive, OneDrive, Dropbox, Google Drive),
-  encrypted with a code only your computers have.
+- Sharing between your computers, encrypted with a code only your devices have: through a folder you already sync
+  (iCloud Drive, OneDrive, Dropbox, Google Drive), through a hidden app folder in your Google Drive or OneDrive (no
+  desktop app needed), or directly between devices on the same network with no cloud at all.
 
 **Looks**
 - Follows your system's light or dark mode, or choose one of 13 themes, 14 fonts, four text sizes and your accent colour.

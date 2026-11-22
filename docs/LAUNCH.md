@@ -18,6 +18,7 @@ what to set up and where it goes. Items 6–12 are built into the app and the re
 | 10 | Problem reports you receive | Built (About, Report a problem); needs the support address (section 5) |
 | 11 | Security review | Internal pass done (`docs/SECURITY_REVIEW.md`); an outside review is still advised before a public launch |
 | 12 | Outlook mail digest on Windows | See `CLAUDE.md`, "Outlook mail on Windows" |
+| + | Sharing through Google Drive / OneDrive app folders, and on the same network | Built and tested with mock servers and loopback; not yet run with real accounts or between two real computers |
 
 ## 1. Real Google and Microsoft accounts (the biggest unknown)
 
@@ -112,3 +113,18 @@ can't download from a **private** repository, so:
 - **Price (a suggestion):** free for calendars and tasks; a one-time or yearly "Pro" for mail, AI, sharing between
   computers and the time report. A server-free app has almost no running costs, so a one-time price is realistic.
   Licence checks would need building; leave it free during the beta.
+
+## Bluetooth sharing: considered, not built (2026-11-22)
+
+Asked for alongside same-network sharing. Not built, for these reasons:
+
+- **Two computers can't easily talk over Bluetooth.** One side has to act as a Bluetooth LE "peripheral" (a small
+  server). The Rust Bluetooth library (btleplug) only does the other role, so it would need about a thousand lines of
+  native code per system (CoreBluetooth's peripheral manager on Mac, WinRT's GATT service provider on Windows).
+- **It couldn't be tested here.** That needs two Bluetooth computers side by side, so it would ship unverified, and
+  Bluetooth is notoriously uneven across adapters and drivers; many desktop PCs have none at all.
+- **Same-network sharing covers the real case.** A laptop and a desktop at home or in the office are on the same
+  Wi-Fi almost always; a phone at home is too.
+- **Where Bluetooth does make sense: the phone companion app.** Phones are good Bluetooth peripherals, so the desktop
+  (which btleplug supports as the other side) could find a phone nearby and swap the same encrypted snapshots, with
+  no network at all. That belongs in the phone app's design document.
