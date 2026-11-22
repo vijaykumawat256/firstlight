@@ -21,6 +21,8 @@ mod notifier;
 #[cfg(windows)]
 mod outlook_win;
 mod pairing_cmd;
+#[cfg(mobile)]
+mod phone_notify;
 mod providers;
 mod reminders;
 mod scheduler;

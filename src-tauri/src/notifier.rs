@@ -105,6 +105,9 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
             };
             let system_24h = system_uses_24h();
             let mut refreshed_on = None;
+            // Phones: when notifications were last handed to the phone's own system (see phone_notify).
+            #[cfg(mobile)]
+            let mut planned_at: Option<std::time::Instant> = None;
             // Give the first sync a moment so we don't announce from stale data at launch.
             std::thread::sleep(StdDuration::from_secs(8));
             loop {
@@ -183,6 +186,20 @@ pub fn spawn(app: AppHandle, db_path: PathBuf, key: Redacted) {
                                 .flatten()
                                 .is_some();
                         let off_today = settings.day.off_on(today).is_some();
+                        // Phones: hand the next hours' notifications to the phone, so they come even when the app is
+                        // closed. Every 10 minutes; what changes while the app is open is still shown below.
+                        #[cfg(mobile)]
+                        if planned_at.is_none_or(|t| t.elapsed() >= StdDuration::from_secs(600)) {
+                            planned_at = Some(std::time::Instant::now());
+                            let mut for_plan = sent.clone();
+                            for id in crate::phone_notify::scheduled_ids() {
+                                for_plan.remove(&id);
+                            }
+                            let p = crate::phone_notify::plan(
+                                &store, &events, now, tz, &ns, &bs, &rules, &settings.day, &for_plan,
+                            );
+                            crate::phone_notify::apply(&app, &store, &p, now);
+                        }
                         for r in
                             firstlight_core::local::due_reminders(&store, now).unwrap_or_default()
                         {
