@@ -5,6 +5,7 @@ import { api } from "@/api";
 import { useNav } from "@/app/nav";
 import { Button, Card, Segmented, Switch, useToasts } from "@/design";
 import { useSettings } from "@/features/settings/useSettings";
+import { isPhone } from "@/app/platform";
 
 const KEY = "fl-setup";
 type Steps = { fresh?: boolean; when?: boolean; hours?: boolean; hidden?: boolean };
@@ -63,7 +64,8 @@ export function GettingStarted() {
     setSteps(next);
     write(next);
   };
-  if (!steps.fresh || steps.hidden || !s || autostart.isPending) return null;
+  // Its three steps (open at sign-in, on unlock, working hours) are about a computer.
+  if (isPhone || !steps.fresh || steps.hidden || !s || autostart.isPending) return null;
   const loginOn = autostart.data === true;
   const done = [loginOn, !!steps.when, !!steps.hours];
   if (done.every(Boolean)) return null;

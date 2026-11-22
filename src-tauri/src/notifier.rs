@@ -83,6 +83,9 @@ fn set_tray_text(app: &AppHandle, text: Option<&str>) {
         }
         *last = owned.clone();
     }
+    #[cfg(mobile)]
+    let _ = app;
+    #[cfg(desktop)]
     if let Some(tray) = app.tray_by_id("main") {
         let _ = tray.set_title(owned.as_deref());
         let _ = tray.set_tooltip(Some(owned.as_deref().unwrap_or("Firstlight")));

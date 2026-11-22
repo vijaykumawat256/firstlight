@@ -510,6 +510,21 @@ body {
   background: transparent;
 }
 
+/* iPhone and iPad: nothing shows through the page, and the content keeps clear of the notch, the rounded corners
+   and the home bar. The desktop title bar rows leave room for the Mac's window buttons, which a phone doesn't have. */
+:root[data-platform="ios"] body,
+:root[data-shell="tauri"][data-platform="ios"]:not([data-theme]) body {
+  background: var(--bg);
+}
+:root[data-platform="ios"] #root {
+  height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  box-sizing: border-box;
+}
+:root[data-platform="ios"] [data-tauri-drag-region].pl-20 {
+  padding-left: 0.75rem;
+}
+
 /* The compact up-next panel floats in its own transparent window: only its card is painted. */
 :root[data-view="upnext"] body,
 :root[data-view="capture"] body {

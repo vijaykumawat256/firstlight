@@ -14,6 +14,7 @@ import { AiGroup, EmailGroup, SendingGroup, TaskSyncGroup } from "./EmailAiSetti
 import { COMMON_ZONES, zoneLabel } from "@/features/calendar/zones";
 import { useDayStatus } from "@/features/tasks/DayCards";
 import { useSettings } from "./useSettings";
+import { isPhone } from "@/app/platform";
 
 const ACCENTS = ["system", ...CALENDAR_COLOURS.filter((c) => !["blue", "yellow", "brown"].includes(c))];
 
@@ -51,6 +52,12 @@ const HOME: HomeItem[][] = [
     { view: "about", title: "About Firstlight", description: "Version, help, privacy policy and licences", icon: Info },
   ],
 ];
+/** A phone has no unlock event, start at login, Dock or shortcuts: those pages and rows aren't offered there. */
+const PHONE_HIDDEN: Section[] = ["appears"];
+const homeFor = (phone: boolean) =>
+  phone
+    ? HOME.map((c) => c.filter((i) => !i.section || !PHONE_HIDDEN.includes(i.section)).map((i) => (i.section === "general" ? { ...i, description: "Task sync, templates and refreshing" } : i)))
+    : HOME;
 const titleOf = (section: Section) => HOME.flat().find((i) => i.section === section)?.title ?? "Settings";
 
 export function SettingsScreen() {
@@ -148,7 +155,7 @@ export function SettingsScreen() {
           <>
         {section === null && (
           <div className="flex flex-col gap-5">
-            {HOME.map((cluster) => (
+            {homeFor(isPhone).map((cluster) => (
               <ListGroup key={cluster.map((i) => i.title).join()}>
                 {cluster.map((item) => (
                   <NavRow key={item.title} icon={item.icon} title={item.title} description={item.description} onClick={() => (item.view ? go(item.view) : setSection(item.section ?? null))} />
@@ -174,9 +181,11 @@ export function SettingsScreen() {
               )}
             </Group>
             <Group title="Startup">
-              <SettingRow title="Start at login" description="Open Firstlight quietly when you sign in.">
-                <Switch label="Start at login" checked={autostart.data ?? false} disabled={autostart.isPending} onCheckedChange={(v) => toggleAutostart.mutate(v)} />
-              </SettingRow>
+              {!isPhone && (
+                <SettingRow title="Start at login" description="Open Firstlight quietly when you sign in.">
+                  <Switch label="Start at login" checked={autostart.data ?? false} disabled={autostart.isPending} onCheckedChange={(v) => toggleAutostart.mutate(v)} />
+                </SettingRow>
+              )}
               <SettingRow title="Opens to">
                 <Select
                   label="Opens to"
@@ -190,6 +199,8 @@ export function SettingsScreen() {
                   ]}
                 />
               </SettingRow>
+              {!isPhone && (
+              <>
               <SettingRow title="Show in the Dock or taskbar" description="Off keeps Firstlight in the menu bar or system tray only. You can always open it from there or with your shortcut.">
                 <Switch label="Show in the Dock or taskbar" checked={s.general.show_in_dock} onCheckedChange={(v) => update((d) => void (d.general.show_in_dock = v))} />
               </SettingRow>
@@ -205,6 +216,8 @@ export function SettingsScreen() {
               <SettingRow title="Next meeting in the menu bar" description="Shows its name and a countdown next to the icon. Anyone who can see your screen can read it.">
                 <Switch label="Show the next meeting in the menu bar" checked={s.general.tray_next_meeting} onCheckedChange={(v) => update((d) => void (d.general.tray_next_meeting = v))} />
               </SettingRow>
+              </>
+              )}
             </Group>
 
             <Group title="Sync">
@@ -213,6 +226,8 @@ export function SettingsScreen() {
               </SettingRow>
             </Group>
 
+            {/* The App Store updates the phone app. */}
+            {!isPhone && (
             <Group title="Updates">
               <SettingRow title="Check for updates" description="About once a day. Sends only the app's version and your operating system.">
                 <Switch label="Check for updates automatically" checked={s.general.check_for_updates} onCheckedChange={(v) => update((d) => void (d.general.check_for_updates = v))} />
@@ -231,6 +246,7 @@ export function SettingsScreen() {
                 </SettingRow>
               )}
             </Group>
+            )}
           </div>
         )}
         {section === "appearance" && (

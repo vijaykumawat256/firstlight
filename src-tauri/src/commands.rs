@@ -24,6 +24,7 @@ use firstlight_core::store::Store;
 use firstlight_core::sync::{default_window, sync_account};
 use firstlight_core::{Error, SyncReport};
 use tauri::{AppHandle, Emitter, State};
+#[cfg(desktop)]
 use tauri_plugin_autostart::ManagerExt;
 
 pub(crate) type CmdResult<T> = Result<T, String>;
@@ -1068,6 +1069,21 @@ pub async fn refresh_now(state: State<'_, AppState>) -> CmdResult<()> {
 
 // ---- shell settings ------------------------------------------------------------
 
+// A phone has no "open at sign-in": always off there, and turning it on does nothing.
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn get_autostart() -> CmdResult<bool> {
+    Ok(false)
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn set_autostart(enabled: bool) -> CmdResult<()> {
+    let _ = enabled;
+    Ok(())
+}
+
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn get_autostart(app: AppHandle) -> CmdResult<bool> {
     app.autolaunch()
@@ -1075,6 +1091,7 @@ pub async fn get_autostart(app: AppHandle) -> CmdResult<bool> {
         .map_err(internal("reading autostart"))
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn set_autostart(app: AppHandle, enabled: bool) -> CmdResult<()> {
     let launcher = app.autolaunch();
@@ -1688,7 +1705,6 @@ pub async fn import_settings(
 /// The caller must have asked the user to confirm.
 #[tauri::command]
 pub async fn erase_all_data(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
-    use tauri_plugin_autostart::ManagerExt;
     let report = {
         let store = lock_store(&state)?;
         firstlight_core::erase::erase_everything(&store, state.deps.secrets.as_ref())
@@ -1699,6 +1715,7 @@ pub async fn erase_all_data(app: AppHandle, state: State<'_, AppState>) -> CmdRe
         report.accounts,
         report.credentials
     );
+    #[cfg(desktop)]
     let _ = app.autolaunch().disable();
     let _ = crate::apply_shortcut(&app, None, None, None);
     let _ = app.emit("settings-changed", ());

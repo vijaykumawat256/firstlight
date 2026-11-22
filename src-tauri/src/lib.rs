@@ -36,15 +36,19 @@ use providers::Deps;
 use scheduler::{SyncHandle, Trigger};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+#[cfg(desktop)]
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
+#[cfg(desktop)]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+#[cfg(desktop)]
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
 const KEYCHAIN_SERVICE: &str = "com.firstlight.desktop";
 const MAIN_WINDOW: &str = "main";
 const UP_NEXT_WINDOW: &str = "upnext";
 /// The small panel hides itself after this long if the user ignores it.
+#[cfg(desktop)]
 const UP_NEXT_SECONDS: u64 = 14;
 
 pub(crate) struct AppState {
@@ -76,6 +80,7 @@ pub(crate) fn local_tz() -> Tz {
 
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
+        #[cfg(desktop)]
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
@@ -120,13 +125,17 @@ pub(crate) fn apply_dock(app: &AppHandle, show: bool) {
             let _ = handle.set_activation_policy(policy);
         });
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(all(desktop, not(target_os = "macos")))]
     if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
         let _ = w.set_skip_taskbar(!show);
     }
+    // A phone has no Dock or taskbar setting.
+    #[cfg(mobile)]
+    let _ = (app, show);
 }
 
 /// Shows the main window, or hides it if it is already in front. Used by the global shortcut.
+#[cfg(desktop)]
 fn toggle_main(app: &AppHandle) {
     match app.get_webview_window(MAIN_WINDOW) {
         Some(w) if w.is_visible().unwrap_or(false) && w.is_focused().unwrap_or(false) => {
@@ -138,6 +147,18 @@ fn toggle_main(app: &AppHandle) {
 
 /// Registers (or clears) the global shortcuts: one shows or hides the briefing, the other joins the next
 /// meeting. Returns a plain-language error if the system refuses either.
+/// A phone has no system-wide shortcuts: nothing to register.
+#[cfg(mobile)]
+pub(crate) fn apply_shortcut(
+    _app: &AppHandle,
+    _show: Option<&str>,
+    _join: Option<&str>,
+    _capture: Option<&str>,
+) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(desktop)]
 pub(crate) fn apply_shortcut(
     app: &AppHandle,
     show: Option<&str>,
@@ -179,6 +200,7 @@ pub(crate) fn apply_shortcut(
 const CAPTURE_WINDOW: &str = "capture";
 
 /// Shows the quick capture box in the middle of the screen, over whatever app is in front, creating it the first time.
+#[cfg(desktop)]
 pub(crate) fn show_capture(app: &AppHandle) {
     use tauri::{WebviewUrl, WebviewWindowBuilder};
     if let Some(win) = app.get_webview_window(CAPTURE_WINDOW) {
@@ -223,6 +245,7 @@ pub(crate) fn hide_capture(app: &AppHandle) {
 }
 
 /// Opens the video link of the meeting that is starting soon or already running, or says there is none.
+#[cfg(desktop)]
 fn join_next_meeting(app: &AppHandle) {
     use tauri_plugin_notification::NotificationExt;
     use tauri_plugin_opener::OpenerExt;
@@ -269,7 +292,12 @@ fn join_next_meeting(app: &AppHandle) {
     }
 }
 
+/// A phone has no floating panels: the notification heads-up does this job there.
+#[cfg(mobile)]
+fn show_up_next(_app: &AppHandle) {}
+
 /// Shows the small "up next" panel in the top-right corner, creating it the first time.
+#[cfg(desktop)]
 fn show_up_next(app: &AppHandle) {
     use tauri::{LogicalPosition, WebviewUrl, WebviewWindowBuilder};
     let (w, h) = (360.0, 148.0);
@@ -399,6 +427,7 @@ fn on_unlock(app: &AppHandle) {
     }
 }
 
+#[cfg(desktop)]
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show Briefing", true, None::<&str>)?;
     let at_login = CheckMenuItem::with_id(
@@ -492,17 +521,19 @@ async fn tokio_sleep(d: std::time::Duration) {
     let _ = tauri::async_runtime::spawn_blocking(move || std::thread::sleep(d)).await;
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(log::LevelFilter::Info)
-                .build(),
-        )
-        // A second launch just brings the existing window forward.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            show_main(app)
-        }))
+    let builder = tauri::Builder::default().plugin(
+        tauri_plugin_log::Builder::new()
+            .level(log::LevelFilter::Info)
+            .build(),
+    );
+    // A second launch just brings the existing window forward.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        show_main(app)
+    }));
+    let builder = builder
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
                 .on_navigation(|_webview, url| navigation_allowed(url))
@@ -514,13 +545,17 @@ pub fn run() {
     #[cfg(feature = "updater")]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
-    builder
-        .plugin(tauri_plugin_notification::init())
+    // Desktop only: system-wide shortcuts and opening at sign-in.
+    #[cfg(desktop)]
+    let builder = builder
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
-        ))
+        ));
+
+    builder
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::get_events,
             commands::get_week_ahead,
@@ -820,6 +855,7 @@ pub fn run() {
             }
             spawn_update_checks(app.handle().clone());
             notifier::spawn(app.handle().clone(), db_path_for_notifier, key_for_notifier);
+            #[cfg(desktop)]
             build_tray(app.handle())?;
 
             // Unlock: refresh calendars, then apply the rules (first unlock of the day, up-next, quiet hours...).
