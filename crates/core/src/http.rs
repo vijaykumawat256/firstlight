@@ -148,7 +148,11 @@ impl ReqwestClient {
                 attempt.follow()
             }
         });
-        let client = reqwest::blocking::Client::builder()
+        let builder = reqwest::blocking::Client::builder();
+        // Android: the certificate check is set up here (see `tls`); elsewhere reqwest asks the system itself.
+        #[cfg(target_os = "android")]
+        let builder = builder.tls_backend_preconfigured(crate::tls::client_config()?);
+        let client = builder
             .https_only(transport == Transport::HttpsOnly)
             .redirect(policy)
             .timeout(timeout)

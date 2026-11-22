@@ -24,5 +24,9 @@ sha2 = "0.11.1"
 thiserror = "2.0.21"
 chacha20poly1305 = "0.10.1"
 
+# Android checks certificates against this list (see src/tls.rs).
+[target.'cfg(target_os = "android")'.dependencies]
+webpki-roots = "1"
+
 [dev-dependencies]
 uuid = { version = "1.29.2", features = ["v4"] }

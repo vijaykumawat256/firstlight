@@ -27,6 +27,7 @@ pub mod secrets;
 pub mod settings;
 pub mod store;
 pub mod sync;
+pub mod tls;
 pub mod todo;
 pub mod updates;
 

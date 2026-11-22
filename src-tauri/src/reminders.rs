@@ -11,7 +11,7 @@ use firstlight_core::{Error, Result};
 
 /// The id under which Reminders sits in `settings.tasks.sync_accounts` (there is no account record for it).
 pub(crate) const ID: &str = "apple-reminders";
-pub(crate) const AVAILABLE: bool = cfg!(target_os = "macos");
+pub(crate) const AVAILABLE: bool = cfg!(any(target_os = "macos", target_os = "ios"));
 
 /// Whether Reminders access is granted (without asking).
 pub(crate) fn granted() -> bool {
@@ -43,7 +43,7 @@ impl TaskService for RemindersService {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod imp {
     use super::*;
     use block2::{DynBlock, RcBlock};
@@ -241,7 +241,7 @@ mod imp {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 mod imp {
     use super::*;
     pub(super) fn granted() -> bool {
@@ -267,7 +267,7 @@ mod imp {
     }
 }
 
-#[cfg(all(test, target_os = "macos"))]
+#[cfg(all(test, any(target_os = "macos", target_os = "ios")))]
 mod tests {
     use super::*;
 

@@ -1390,6 +1390,12 @@ pub async fn add_system_account(
 #[tauri::command]
 pub async fn open_privacy_settings(app: AppHandle, pane: String) -> CmdResult<()> {
     use tauri_plugin_opener::OpenerExt;
+    // A phone has one place for an app's permissions: its own page in the Settings app.
+    #[cfg(target_os = "ios")]
+    let _ = pane;
+    #[cfg(target_os = "ios")]
+    let url = "app-settings:";
+    #[cfg(not(target_os = "ios"))]
     let url = match pane.as_str() {
         "calendars" => "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars",
         "automation" => {

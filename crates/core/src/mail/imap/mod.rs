@@ -171,7 +171,6 @@ pub struct TlsConnect;
 
 impl Connect for TlsConnect {
     fn connect(&self, host: &str) -> Result<Box<dyn Io>> {
-        use rustls_platform_verifier::BuilderVerifierExt;
         if !(ImapPreset::Yahoo.host() == Some(host)
             || ImapPreset::Icloud.host() == Some(host)
             || valid_host(host))
@@ -188,10 +187,7 @@ impl Connect for TlsConnect {
         let _ = tcp.set_read_timeout(Some(IO_TIMEOUT));
         let _ = tcp.set_write_timeout(Some(IO_TIMEOUT));
         let _ = tcp.set_nodelay(true);
-        let config = rustls::ClientConfig::builder()
-            .with_platform_verifier()
-            .map_err(|_| Error::Provider("could not set up secure connections".into()))?
-            .with_no_client_auth();
+        let config = crate::tls::client_config()?;
         let name = rustls::pki_types::ServerName::try_from(host.to_string())
             .map_err(|_| Error::Invalid("bad server name"))?;
         let conn = rustls::ClientConnection::new(Arc::new(config), name)

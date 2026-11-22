@@ -17,7 +17,6 @@ chrono = { version = "0.4.45", features = ["serde"] }
 chrono-tz = "0.10.4"
 firstlight-core = { path = "../crates/core" }
 iana-time-zone = "0.1.65"
-keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native"] }
 log = "0.4.35"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -33,6 +32,10 @@ tauri-plugin-autostart = "2.7.0"
 tauri-plugin-global-shortcut = "2.4.1"
 tauri-plugin-single-instance = "2.5.5"
 
+# The system keychain on Mac, iPhone and Windows. Android has none this crate can reach (see src/android_secrets.rs).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-event-kit = { version = "0.3", default-features = false, features = ["std", "block2", "EKEventStore", "EKEvent", "EKCalendar", "EKCalendarItem", "EKParticipant", "EKSource", "EKObject", "EKTypes", "EKRecurrenceRule", "EKRecurrenceEnd", "EKAlarm", "EKEventStore", "EKReminder"] }
 objc2 = "0.6"
@@ -42,6 +45,13 @@ core-graphics = "0.25"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace", "NSResponder", "NSRunningApplication"] }
 objc2-map-kit = { version = "0.3", default-features = false, features = ["std", "block2", "MKDirections", "MKDirectionsRequest", "MKDirectionsResponse", "MKDirectionsTypes", "MKMapItem", "MKLocalSearch", "MKLocalSearchRequest", "MKLocalSearchResponse"] }
 objc2-foundation = { version = "0.3", features = ["NSNotification", "NSString", "NSOperation", "NSDistributedNotificationCenter", "block2", "NSArray", "NSDate", "NSError", "NSPredicate", "NSTimeZone", "NSURL", "NSObject", "NSEnumerator", "NSSet", "NSValue", "NSAutoreleasePool", "NSCalendar"] }
+
+# The iPhone's own Calendar and Reminders, through the same EventKit code as the Mac.
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2-event-kit = { version = "0.3", default-features = false, features = ["std", "block2", "EKEventStore", "EKEvent", "EKCalendar", "EKCalendarItem", "EKParticipant", "EKSource", "EKObject", "EKTypes", "EKRecurrenceRule", "EKRecurrenceEnd", "EKAlarm", "EKEventStore", "EKReminder"] }
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSNotification", "NSString", "NSOperation", "block2", "NSArray", "NSDate", "NSError", "NSPredicate", "NSTimeZone", "NSURL", "NSObject", "NSEnumerator", "NSSet", "NSValue", "NSAutoreleasePool", "NSCalendar"] }
 
 [target."cfg(windows)".dependencies]
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_RemoteDesktop", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

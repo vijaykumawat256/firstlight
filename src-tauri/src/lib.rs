@@ -2,6 +2,8 @@
 //! small set of commands the UI is allowed to call. All calendar logic lives in
 //! `firstlight-core`.
 
+#[cfg(target_os = "android")]
+mod android_secrets;
 mod backups;
 mod commands;
 mod crash_reports;
@@ -10,6 +12,7 @@ mod dnd;
 mod eventkit;
 mod folder_sync_cmd;
 mod fullscreen;
+#[cfg(not(target_os = "android"))]
 mod keychain;
 mod lan_sync;
 mod mail_ai;
@@ -533,6 +536,9 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
         show_main(app)
     }));
+    // Android has no keychain the `keyring` crate can reach: secrets go to the Android Keystore through this.
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(android_secrets::init());
     let builder = builder
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
@@ -706,8 +712,14 @@ pub fn run() {
             let profile = std::env::var("FIRSTLIGHT_PROFILE")
                 .ok()
                 .and_then(|p| firstlight_core::profile::validate(&p));
-            let keychain = keychain::KeychainStore::new(
-                firstlight_core::profile::keychain_service(KEYCHAIN_SERVICE, profile.as_deref()),
+            let service =
+                firstlight_core::profile::keychain_service(KEYCHAIN_SERVICE, profile.as_deref());
+            #[cfg(not(target_os = "android"))]
+            let keychain = keychain::KeychainStore::new(service);
+            #[cfg(target_os = "android")]
+            let keychain = android_secrets::AndroidSecretStore::new(
+                app.state::<android_secrets::Handle>().0.clone(),
+                service,
             );
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -717,6 +729,8 @@ pub fn run() {
             // An installation from before the rename (the app was called Daybrief) keeps its data: the database
             // and its secrets are moved under the current names, checked, and only then removed from the old
             // place. If that cannot be done now, nothing old is touched and it is tried again at the next start.
+            // (Never on Android: there was no Daybrief for phones.)
+            #[cfg(not(target_os = "android"))]
             if let Some(parent) = dir.parent() {
                 use firstlight_core::legacy;
                 let paths = legacy::Paths {

@@ -72,11 +72,7 @@ pub struct TlsTransport {
 }
 
 fn tls_over(tcp: TcpStream, host: &str) -> Result<Box<dyn Io>> {
-    use rustls_platform_verifier::BuilderVerifierExt;
-    let config = rustls::ClientConfig::builder()
-        .with_platform_verifier()
-        .map_err(|_| Error::Provider("could not set up secure connections".into()))?
-        .with_no_client_auth();
+    let config = crate::tls::client_config()?;
     let name = rustls::pki_types::ServerName::try_from(host.to_string())
         .map_err(|_| Error::Invalid("bad server name"))?;
     let conn = rustls::ClientConnection::new(Arc::new(config), name)

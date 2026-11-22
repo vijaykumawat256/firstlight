@@ -4,13 +4,13 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { isTauri } from "./api";
 import { FONTS, applyTheme, useTheme } from "./design";
-import { isPhone } from "./app/platform";
+import { isAndroid, isPhone } from "./app/platform";
 
 if (isTauri) document.documentElement.setAttribute("data-shell", "tauri");
 // Only macOS gets the see-through window (vibrancy); Windows gets an ordinary solid one.
 if (isTauri && /Windows/i.test(navigator.userAgent)) document.documentElement.setAttribute("data-platform", "windows");
-// The iPhone and iPad app: a solid page that keeps clear of the notch and the home bar.
-if (isPhone) document.documentElement.setAttribute("data-platform", "ios");
+// The phone apps: a solid page that keeps clear of the notch, the status bar and the home bar.
+if (isPhone) document.documentElement.setAttribute("data-platform", isAndroid ? "android" : "ios");
 if (window.location.hash === "#/upnext") document.documentElement.setAttribute("data-view", "upnext");
 if (window.location.hash === "#/capture") document.documentElement.setAttribute("data-view", "capture");
 applyTheme(useTheme.getState().choice);
