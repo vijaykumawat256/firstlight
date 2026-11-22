@@ -1,4 +1,4 @@
-# Firstlight for iPhone and iPad
+# Firstlight for phones: iPhone, iPad and Android
 
 *Started 22 November 2026, at the user's request ("yes please make for ios"). This changes an earlier decision: CLAUDE.md
 and docs/PHASE7_DESIGN.md said a phone version would be the web build and that nothing native for phones was planned.
@@ -22,11 +22,11 @@ app is something you open, plus notifications (and later a widget). "Appears whe
 | 3 | The page on a phone: `data-platform="ios"` (`src/app/platform.ts`, `?phone` in the browser), solid background, clear of the notch and home bar, desktop-only settings hidden (start at login, Dock, shortcuts, menu bar, updates, "When it appears"; the set-up card) | Done |
 | 4 | Runs in the iPhone simulator and on a real iPhone 15 (installed and launched 22 Nov 2026): first run 22 Nov 2026 on an iPhone 18 Pro (iOS 27.2) simulator; the encrypted database, the keychain and the daily backup worked, and the welcome screen drew clear of the status bar. Adding a calendar there not yet tried | Done |
 | 5 | Sign-in with Google and Microsoft the iOS way (see below) | To do |
-| 6 | The iPhone's own Calendar and Reminders (EventKit exists on iOS; the Mac code is `cfg(target_os = "macos")` today) | To do |
+| 6 | The iPhone's own Calendar and Reminders: the Mac's EventKit code now compiles for iOS too (`cfg(any(macos, ios))`); not yet run on a phone. Android's calendar (CalendarContract) needs a small Kotlin part | iPhone built; Android to do |
 | 7 | Notifications scheduled ahead (heads-ups, task reminders), since the app is not running all the time | To do |
 | 8 | Refresh in the background (`BGAppRefreshTask`) and when the app comes to the front | To do |
 | 9 | Phone layout pass: touch sizes (44 pt), bottom navigation, sheets, swipe actions; iPad width | To do |
-| 10 | Same-network sharing on iOS (see below) | To do |
+| 10 | Pairing and same-network sharing on phones: the computer shows a QR code (`pairing_code`: sync code, device id, home-network addresses; `folder_sync::pairing`), the phone scans it (`tauri-plugin-barcode-scanner`, phones only) or takes the pasted text (`pair_with_computer`), keeps the addresses in `settings.tasks.lan_peers`, and announcements also go directly to them and to every device heard, which needs no multicast permission. Browser-tested; not yet run between a real phone and computer | Built |
 | 11 | Home-screen widget (next meeting, today's tasks) | Later |
 | 12 | TestFlight, App Store listing, privacy label | Needs the user's Apple Developer account |
 
@@ -65,3 +65,16 @@ app is something you open, plus notifications (and later a widget). "Appears whe
   (`xcrun devicectl list devices` shows the udid). Keep the team id out of the committed project file. With a free
   team the app stops opening after 7 days; build and install again. Or: connect it, open `src-tauri/gen/apple/firstlight.xcodeproj` in Xcode, choose your team under
   Signing & Capabilities, and run.
+
+## Android (Google, Samsung and other phones)
+
+- Same app, `src-tauri/gen/android` (kept in git), `tauri.android.conf.json` (same identifier, Android 8+). Build with
+  `scripts/android-env.sh npx tauri android build --apk --target aarch64` (the script sets the NDK tools the bundled
+  OpenSSL needs). `scripts/mobile-check.sh` type-checks both phones.
+- Secrets: the `keyring` crate has no Android backend and silently kept secrets in memory (the database key would be
+  lost at each restart). `src-tauri/src/android_secrets.rs` + `SecretsPlugin.kt` keep them AES-GCM sealed under a key in
+  the Android Keystore. Verified on an emulator: the database opened again after the app was stopped and restarted.
+- Certificates: Android's own checker is only reachable from Java, so `firstlight_core::tls` uses the bundled Mozilla
+  list there (`webpki-roots`); everywhere else the system checks them as before.
+- No Google backup or device-to-device copy of the app's data (`allowBackup=false`, `data_extraction_rules.xml`).
+- Ran on a Pixel 6 emulator (Android 15): welcome screen, encrypted database, backup. Not yet on a real phone.
