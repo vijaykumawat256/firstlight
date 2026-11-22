@@ -54,3 +54,34 @@ test("a typed folder works on Windows, and a bad path is explained", async ({ pa
   await page.getByRole("button", { name: "Start sharing" }).click();
   await expect(page.getByText("Sharing between your computers is on").first()).toBeVisible();
 });
+
+test("without a synced folder, the files can live in a Google account's own storage", async ({ page }) => {
+  await open(page);
+  await page.getByRole("radio", { name: "Cloud account" }).click();
+  await expect(page.getByText("Connect a Google or Microsoft account first")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start sharing" })).toBeDisabled();
+
+  await open(page, "?withgoogle");
+  await page.getByRole("radio", { name: "Cloud account" }).click();
+  await expect(page.getByText("it can't see your other files")).toBeVisible();
+  await page.getByRole("radio", { name: /^Google Drive/ }).check();
+  await settle(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.getByRole("button", { name: "Start sharing" }).click();
+  await expect(page.getByText("Sharing between your computers is on").first()).toBeVisible();
+  await expect(page.getByText(/^Google Drive of /)).toBeVisible();
+  await expect(page.getByText(/^FL1-/)).toBeVisible();
+  await page.getByRole("button", { name: "Stop sharing" }).click();
+  await expect(page.getByRole("button", { name: "Start sharing" })).toBeVisible();
+});
+
+test("joining cloud storage that another computer already uses asks for its code", async ({ page }) => {
+  await open(page, "?withgoogle&peerfolder");
+  await page.getByRole("radio", { name: "Cloud account" }).click();
+  await page.getByRole("radio", { name: /^Google Drive/ }).check();
+  await page.getByRole("button", { name: "Start sharing" }).click();
+  await expect(page.getByRole("alert")).toContainText("Type the sync code shown on that computer");
+  await page.getByLabel(/Sync code/).fill("FL1-ABCD-EFGH");
+  await page.getByRole("button", { name: "Start sharing" }).click();
+  await expect(page.getByText("Sharing between your computers is on").first()).toBeVisible();
+});

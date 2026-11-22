@@ -96,8 +96,8 @@ fn two_computers_share_tasks_notes_events_and_days_off_and_deletions_follow() {
     }];
     mac.save_settings(&s).unwrap();
 
-    sync(&mut mac, &dir, &key, "Mac", now).unwrap();
-    let r = sync(&mut pc, &dir, &key, "PC", now).unwrap();
+    sync(&mut mac, &FolderFiles::new(&dir), &key, "Mac", now).unwrap();
+    let r = sync(&mut pc, &FolderFiles::new(&dir), &key, "PC", now).unwrap();
     assert!(r.applied >= 4, "{r:?}");
     assert_eq!(r.peers[0].name, "Mac");
     assert_eq!(
@@ -119,17 +119,17 @@ fn two_computers_share_tasks_notes_events_and_days_off_and_deletions_follow() {
     crate::todo::set_done(&pc, &bank.id, true, NY, later).unwrap();
     let milk = crate::todo::add(&pc, &task("Buy milk"), NY, later).unwrap();
     mac.set_meeting_note("design review", None, later).unwrap();
-    sync(&mut pc, &dir, &key, "PC", later).unwrap();
-    sync(&mut mac, &dir, &key, "Mac", later).unwrap();
-    sync(&mut pc, &dir, &key, "PC", later).unwrap();
+    sync(&mut pc, &FolderFiles::new(&dir), &key, "PC", later).unwrap();
+    sync(&mut mac, &FolderFiles::new(&dir), &key, "Mac", later).unwrap();
+    sync(&mut pc, &FolderFiles::new(&dir), &key, "PC", later).unwrap();
     assert!(crate::todo::get(&mac, &bank.id).unwrap().done_at.is_some());
     assert_eq!(crate::todo::get(&mac, &milk.id).unwrap().title, "Buy milk");
     assert!(pc.get_meeting_note("design review").unwrap().is_none());
 
     // A deleted task goes everywhere.
     crate::todo::delete(&mac, &milk.id).unwrap();
-    sync(&mut mac, &dir, &key, "Mac", later).unwrap();
-    sync(&mut pc, &dir, &key, "PC", later).unwrap();
+    sync(&mut mac, &FolderFiles::new(&dir), &key, "Mac", later).unwrap();
+    sync(&mut pc, &FolderFiles::new(&dir), &key, "PC", later).unwrap();
     assert!(crate::todo::get(&pc, &milk.id).is_err());
 
     // Nothing changed: our file is not written again.
@@ -138,7 +138,7 @@ fn two_computers_share_tasks_notes_events_and_days_off_and_deletions_follow() {
         .join(format!("{}.flsync", device_id(&mac).unwrap()));
     let before = std::fs::metadata(&own).unwrap().modified().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(20));
-    sync(&mut mac, &dir, &key, "Mac", later).unwrap();
+    sync(&mut mac, &FolderFiles::new(&dir), &key, "Mac", later).unwrap();
     assert_eq!(std::fs::metadata(&own).unwrap().modified().unwrap(), before);
     assert_eq!(
         std::fs::read_dir(dir.join("Firstlight")).unwrap().count(),
@@ -155,10 +155,18 @@ fn a_file_made_with_another_code_is_reported_and_changes_nothing() {
     let (mut a, mut b) = (store(), store());
     let now = t("2026-11-19T15:00:00Z");
     crate::todo::add(&b, &task("Secret"), NY, now).unwrap();
-    sync(&mut b, &dir, &theirs, "Stranger", now).unwrap();
-    assert!(needs_code(&dir, Some(&mine), &device_id(&a).unwrap()));
-    assert!(!needs_code(&dir, Some(&theirs), &device_id(&a).unwrap()));
-    let r = sync(&mut a, &dir, &mine, "Mine", now).unwrap();
+    sync(&mut b, &FolderFiles::new(&dir), &theirs, "Stranger", now).unwrap();
+    assert!(needs_code(
+        &FolderFiles::new(&dir),
+        Some(&mine),
+        &device_id(&a).unwrap()
+    ));
+    assert!(!needs_code(
+        &FolderFiles::new(&dir),
+        Some(&theirs),
+        &device_id(&a).unwrap()
+    ));
+    let r = sync(&mut a, &FolderFiles::new(&dir), &mine, "Mine", now).unwrap();
     assert_eq!((r.unreadable, r.applied), (1, 0));
     assert!(crate::todo::all(&a).unwrap().is_empty());
     let _ = std::fs::remove_dir_all(&dir);
@@ -206,4 +214,81 @@ fn records_from_another_computer_get_the_same_checks_as_typed_ones() {
         rec(serde_json::to_string(&task).unwrap()),
     )];
     assert_eq!(apply_changes(&mut here, &ok, now).unwrap(), 1);
+}
+
+/// Files kept in memory, counting reads: stands in for any place (folder, Google Drive, OneDrive).
+#[derive(Default)]
+struct MemFiles {
+    files: std::sync::Mutex<std::collections::BTreeMap<String, (Vec<u8>, u32)>>,
+    reads: std::sync::atomic::AtomicUsize,
+}
+
+impl SyncFiles for MemFiles {
+    fn list(&self) -> Result<Vec<RemoteFile>> {
+        Ok(self
+            .files
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(d, (b, v))| RemoteFile {
+                device: d.clone(),
+                size: b.len() as u64,
+                stamp: v.to_string(),
+            })
+            .collect())
+    }
+    fn read(&self, device: &str) -> Result<Vec<u8>> {
+        self.reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(self.files.lock().unwrap()[device].0.clone())
+    }
+    fn write(&self, device: &str, data: &[u8]) -> Result<()> {
+        let mut f = self.files.lock().unwrap();
+        let v = f.get(device).map_or(0, |(_, v)| v + 1);
+        f.insert(device.to_string(), (data.to_vec(), v));
+        Ok(())
+    }
+}
+
+#[test]
+fn any_place_works_and_an_unchanged_file_is_not_downloaded_again() {
+    let place = MemFiles::default();
+    let (_, key) = new_code().unwrap();
+    let (mut laptop, mut phone) = (store(), store());
+    let now = t("2026-11-22T10:00:00Z");
+    crate::todo::add(&laptop, &task("Book flights"), NY, now).unwrap();
+    sync(&mut laptop, &place, &key, "Laptop", now).unwrap();
+    let r = sync(&mut phone, &place, &key, "Phone", now).unwrap();
+    assert_eq!(r.applied, 1);
+    assert_eq!(crate::todo::all(&phone).unwrap()[0].title, "Book flights");
+    sync(&mut laptop, &place, &key, "Laptop", now).unwrap();
+
+    // Nothing changed anywhere: the laptop lists, sees the same stamps, reads nothing and still reports the phone.
+    let before = place.reads.load(std::sync::atomic::Ordering::SeqCst);
+    let r = sync(&mut laptop, &place, &key, "Laptop", now).unwrap();
+    assert_eq!(
+        place.reads.load(std::sync::atomic::Ordering::SeqCst),
+        before
+    );
+    assert_eq!(r.peers.len(), 1);
+    assert_eq!(r.peers[0].name, "Phone");
+
+    // A change on the phone is read once.
+    crate::todo::add(&phone, &task("Pack"), NY, now).unwrap();
+    sync(&mut phone, &place, &key, "Phone", now).unwrap();
+    let r = sync(&mut laptop, &place, &key, "Laptop", now).unwrap();
+    assert_eq!(r.applied, 1);
+    assert_eq!(
+        place.reads.load(std::sync::atomic::Ordering::SeqCst),
+        before + 1
+    );
+
+    // Moving to another place forgets what was read and written, so everything is read and written again there.
+    forget_place(&laptop).unwrap();
+    let other = MemFiles::default();
+    sync(&mut laptop, &other, &key, "Laptop", now).unwrap();
+    assert_eq!(
+        other.list().unwrap().len(),
+        1,
+        "the laptop's file is written to the new place"
+    );
 }

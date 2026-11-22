@@ -532,6 +532,8 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            folder_sync_cmd::disable_cloud_sync,
+            folder_sync_cmd::enable_cloud_sync,
             sign_in_apps::set_sign_in_apps,
             sign_in_apps::get_sign_in_apps,
             mail_ai::enable_outlook_mail,

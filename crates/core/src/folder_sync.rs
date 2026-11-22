@@ -320,10 +320,6 @@ pub struct Report {
     pub unreadable: usize,
 }
 
-fn folder(base: &Path) -> PathBuf {
-    base.join(SUBFOLDER)
-}
-
 /// The same limits as a task typed here (title, notes, the size of the list), for one from another computer.
 fn task_within_limits(store: &Store, t: &Task) -> bool {
     use crate::tasks::{MAX_NOTES, MAX_TASKS, MAX_TITLE};
@@ -342,58 +338,159 @@ fn task_within_limits(store: &Store, t: &Task) -> bool {
     fits && room
 }
 
-/// Whether the folder already holds a file this key cannot open (someone else's code, or this computer is joining).
-pub fn needs_code(base: &Path, key: Option<&[u8; 32]>, own: &str) -> bool {
-    let Ok(entries) = std::fs::read_dir(folder(base)) else {
+/// One device's file where the files are kept: its device id (the file name without `.flsync`), its size, and a
+/// stamp that changes whenever the file does (so an unchanged file is not downloaded again).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteFile {
+    pub device: String,
+    pub size: u64,
+    pub stamp: String,
+}
+
+/// Where the files are kept: a synced folder on this computer ([`FolderFiles`]), or an app folder in the person's own
+/// Google Drive or OneDrive (`folder_sync::cloud`). The rules and the encryption are the same for all of them.
+pub trait SyncFiles: Send + Sync {
+    /// Every `.flsync` file there.
+    fn list(&self) -> Result<Vec<RemoteFile>>;
+    fn read(&self, device: &str) -> Result<Vec<u8>>;
+    /// Creates or replaces this device's file.
+    fn write(&self, device: &str, data: &[u8]) -> Result<()>;
+}
+
+/// A device id as used in file names: what [`device_id`] makes (hex). Anything else in the folder is not ours.
+pub fn valid_device(d: &str) -> bool {
+    !d.is_empty() && d.len() <= 64 && d.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+pub fn file_name(device: &str) -> String {
+    format!("{device}.{EXT}")
+}
+
+/// The device id in a file name, if it is one of ours.
+pub fn device_of(name: &str) -> Option<&str> {
+    name.strip_suffix(&format!(".{EXT}"))
+        .filter(|d| valid_device(d))
+}
+
+/// Files in `<folder>/Firstlight/` of a folder the person already syncs (iCloud Drive, OneDrive, Dropbox, ...).
+pub struct FolderFiles {
+    dir: PathBuf,
+}
+
+impl FolderFiles {
+    pub fn new(base: &Path) -> Self {
+        Self {
+            dir: base.join(SUBFOLDER),
+        }
+    }
+}
+
+impl SyncFiles for FolderFiles {
+    fn list(&self) -> Result<Vec<RemoteFile>> {
+        let Ok(entries) = std::fs::read_dir(&self.dir) else {
+            return Ok(vec![]);
+        };
+        Ok(entries
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let name = e.file_name().to_str()?.to_string();
+                let device = device_of(&name)?.to_string();
+                let meta = e.metadata().ok().filter(|m| m.is_file())?;
+                let mtime = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_nanos());
+                Some(RemoteFile {
+                    device,
+                    size: meta.len(),
+                    stamp: format!("{mtime}:{}", meta.len()),
+                })
+            })
+            .collect())
+    }
+
+    fn read(&self, device: &str) -> Result<Vec<u8>> {
+        std::fs::read(self.dir.join(file_name(device)))
+            .map_err(|_| Error::Invalid("Couldn't read that folder."))
+    }
+
+    fn write(&self, device: &str, data: &[u8]) -> Result<()> {
+        std::fs::create_dir_all(&self.dir)
+            .map_err(|_| Error::Invalid("Couldn't use that folder. Check it still exists."))?;
+        let tmp = self.dir.join(format!(".{device}.tmp"));
+        std::fs::write(&tmp, data)
+            .and_then(|_| std::fs::rename(&tmp, self.dir.join(file_name(device))))
+            .map_err(|_| Error::Invalid("Couldn't write to that folder."))
+    }
+}
+
+/// Whether the place already holds a file this key cannot open (someone else's code, or this device is joining).
+pub fn needs_code(files: &dyn SyncFiles, key: Option<&[u8; 32]>, own: &str) -> bool {
+    let Ok(list) = files.list() else {
         return false;
     };
-    entries
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == EXT))
-        .filter(|p| p.file_stem().is_some_and(|s| s != own))
-        .any(|p| {
-            if std::fs::metadata(&p).map_or(true, |m| m.len() > MAX_FILE) {
-                return false;
-            }
-            let Ok(data) = std::fs::read(&p) else {
+    list.iter()
+        .filter(|f| f.device != own && f.size <= MAX_FILE)
+        .any(|f| {
+            let Ok(data) = files.read(&f.device) else {
                 return false;
             };
             key.is_none_or(|k| open(k, &data).is_err())
         })
 }
 
-/// One round: read every other computer's file, merge it in, then write ours if it changed.
+/// What was last read from another device: its file's stamp, and what to report while it is unchanged.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Seen {
+    stamp: String,
+    name: String,
+    written_at: DateTime<Utc>,
+}
+
+/// Forgets which files were already read and what was written, so the next round reads everything and writes again
+/// (after moving to another place to keep the files).
+pub fn forget_place(store: &Store) -> Result<()> {
+    store.delete_setting(WRITTEN_KEY)?;
+    for key in store.setting_keys_with_prefix(SEEN_PREFIX)? {
+        store.delete_setting(&key)?;
+    }
+    Ok(())
+}
+
+const SEEN_PREFIX: &str = "folder_sync_seen:";
+
+/// One round: read every other device's file that changed, merge it in, then write ours if it changed.
 pub fn sync(
     store: &mut Store,
-    base: &Path,
+    files: &dyn SyncFiles,
     key: &[u8; 32],
     name: &str,
     now: DateTime<Utc>,
 ) -> Result<Report> {
-    let dir = folder(base);
-    std::fs::create_dir_all(&dir)
-        .map_err(|_| Error::Invalid("Couldn't use that folder. Check it still exists."))?;
     let me = device_id(store)?;
     let mut local = local_records(store)?;
     let mut report = Report::default();
-    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
-        .map_err(|_| Error::Invalid("Couldn't read that folder."))?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| {
-            p.extension().is_some_and(|x| x == EXT)
-                && p.file_stem().is_some_and(|s| s != me.as_str())
-        })
-        .collect();
-    files.sort();
-    for path in files {
-        let ok_size = std::fs::metadata(&path)
-            .map(|m| m.len() <= MAX_FILE)
-            .unwrap_or(false);
-        let snap = ok_size
-            .then(|| std::fs::read(&path).ok())
+    let mut list = files.list()?;
+    list.sort_by(|a, b| a.device.cmp(&b.device));
+    let own_present = list.iter().any(|f| f.device == me);
+    for f in list.iter().filter(|f| f.device != me) {
+        let seen_key = format!("{SEEN_PREFIX}{}", f.device);
+        let seen: Option<Seen> = store
+            .get_setting(&seen_key)?
+            .and_then(|v| serde_json::from_value(v).ok());
+        if let Some(s) = seen.filter(|s| s.stamp == f.stamp) {
+            // Unchanged since it was last merged: nothing new there.
+            report.peers.push(Peer {
+                name: s.name,
+                written_at: s.written_at,
+            });
+            continue;
+        }
+        let snap = (f.size <= MAX_FILE)
+            .then(|| files.read(&f.device).ok())
             .flatten()
+            .filter(|data| data.len() as u64 <= MAX_FILE)
             .and_then(|data| open(key, &data).ok())
             .and_then(|plain| serde_json::from_slice::<Snapshot>(&plain).ok());
         let Some(snap) = snap else {
@@ -401,14 +498,14 @@ pub fn sync(
             continue;
         };
         let base_key = format!("folder_sync_base:{}", snap.device);
-        // A computer read for the first time is compared with what this one last put in the folder: a record we
-        // published and have since deleted stays deleted, instead of coming back from their copy of it.
-        let seen: foldersync::Base = store
+        // A device read for the first time is compared with what this one last published: a record we published and
+        // have since deleted stays deleted, instead of coming back from their copy of it.
+        let base: foldersync::Base = store
             .get_setting(&base_key)?
             .or(store.get_setting(PUBLISHED_KEY)?)
             .and_then(|v| serde_json::from_value(v).ok())
             .unwrap_or_default();
-        let changes = foldersync::merge(&local, &snap.records, &seen);
+        let changes = foldersync::merge(&local, &snap.records, &base);
         if !changes.is_empty() {
             report.applied += apply_changes(store, &changes, now)?;
             // What the database holds now (a record it refused stays as it was).
@@ -418,8 +515,18 @@ pub fn sync(
             &base_key,
             &serde_json::to_value(foldersync::base_of(&snap.records)).unwrap_or_default(),
         )?;
+        let peer_name: String = snap.name.chars().take(80).collect();
+        store.set_setting(
+            &seen_key,
+            &serde_json::to_value(Seen {
+                stamp: f.stamp.clone(),
+                name: peer_name.clone(),
+                written_at: snap.written_at,
+            })
+            .unwrap_or_default(),
+        )?;
         report.peers.push(Peer {
-            name: snap.name.chars().take(80).collect(),
+            name: peer_name,
             written_at: snap.written_at,
         });
     }
@@ -430,8 +537,7 @@ pub fn sync(
     let last = store
         .get_setting(WRITTEN_KEY)?
         .and_then(|v| v.as_str().map(str::to_string));
-    let own_path = dir.join(format!("{me}.{EXT}"));
-    if last.as_deref() != Some(print.as_str()) || !own_path.exists() {
+    if last.as_deref() != Some(print.as_str()) || !own_present {
         let snap = Snapshot {
             device: me.clone(),
             name: name.chars().take(80).collect(),
@@ -440,11 +546,7 @@ pub fn sync(
         };
         let plain = serde_json::to_vec(&snap)
             .map_err(|_| Error::Invalid("Couldn't write the sync file."))?;
-        let sealed = seal(key, &plain)?;
-        let tmp = dir.join(format!(".{me}.tmp"));
-        std::fs::write(&tmp, sealed)
-            .and_then(|_| std::fs::rename(&tmp, &own_path))
-            .map_err(|_| Error::Invalid("Couldn't write to that folder."))?;
+        files.write(&me, &seal(key, &plain)?)?;
         store.set_setting(WRITTEN_KEY, &serde_json::Value::String(print))?;
         store.set_setting(
             PUBLISHED_KEY,
@@ -453,6 +555,8 @@ pub fn sync(
     }
     Ok(report)
 }
+
+pub mod cloud;
 
 #[cfg(test)]
 mod tests;

@@ -227,6 +227,21 @@ impl Store {
         Ok(())
     }
 
+    pub fn delete_setting(&self, key: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM settings WHERE key = ?1", [key])?;
+        Ok(())
+    }
+
+    /// Keys of the settings table that start with `prefix` (a plain prefix, no wildcards).
+    pub fn setting_keys_with_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        let mut st = self
+            .conn
+            .prepare("SELECT key FROM settings WHERE substr(key, 1, length(?1)) = ?1")?;
+        let rows = st.query_map([prefix], |r| r.get::<_, String>(0))?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
     // ---- briefing log ---------------------------------------------------
 
     /// Records that something happened (`kind` is a short code such as "unlock"). Drives the

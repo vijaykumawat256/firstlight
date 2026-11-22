@@ -154,6 +154,10 @@ pub struct TaskSyncSettings {
     /// computer only: changed only by `enable_folder_sync` / `disable_folder_sync`; never by a save or a settings
     /// file (import clears it). The key is in the keychain, never here.
     pub folder_sync: Option<String>,
+    /// Or, instead of a folder: the Google or Microsoft account whose own cloud storage (Google Drive's hidden app
+    /// folder, OneDrive's app folder) holds the files. This computer only, like `folder_sync`: changed only by
+    /// `enable_cloud_sync` / `disable_cloud_sync`; import clears it; removing the account clears it.
+    pub cloud_sync: Option<String>,
 }
 
 /// Choices about what Firstlight does on its own and what it keeps.
@@ -906,6 +910,7 @@ impl AppSettings {
         imported.email.autoreply_accounts.clear();
         imported.tasks.sync_accounts.clear();
         imported.tasks.folder_sync = None;
+        imported.tasks.cloud_sync = None;
         imported.ai.consented = None;
         imported.ai.consented_host = None;
         imported.ai.plan_consented = None;

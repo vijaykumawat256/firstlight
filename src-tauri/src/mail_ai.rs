@@ -1220,6 +1220,12 @@ pub(crate) fn scopes_held(settings: &AppSettings, account: &Account) -> Vec<&'st
         });
     }
     out.extend(crate::task_sync::scopes_held(settings, account));
+    if settings.tasks.cloud_sync.as_deref() == Some(account.id.as_str()) {
+        out.push(match account.provider {
+            ProviderKind::Google => firstlight_core::folder_sync::cloud::GOOGLE_SCOPE,
+            _ => firstlight_core::folder_sync::cloud::MICROSOFT_SCOPE,
+        });
+    }
     out
 }
 

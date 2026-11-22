@@ -118,6 +118,9 @@ export interface Backend {
   folderSyncChoices(): Promise<{ label: string; path: string }[]>;
   enableFolderSync(folder: string, code: string | null): Promise<{ settings: AppSettings; code: string; report: FolderSyncReport }>;
   disableFolderSync(): Promise<AppSettings>;
+  /** Shares through a Google or Microsoft account's own cloud storage (an app-only folder) instead of a folder. */
+  enableCloudSync(accountId: string, code: string | null): Promise<{ settings: AppSettings; code: string; report: FolderSyncReport }>;
+  disableCloudSync(): Promise<AppSettings>;
   /** Your own Google / Microsoft sign-in app, if set, and whether this build has its own. */
   getSignInApps(): Promise<SignInApps>;
   /** Checks and saves your own sign-in app; used at once (no restart). */

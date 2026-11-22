@@ -358,6 +358,9 @@ pub async fn remove_account(state: State<'_, AppState>, id: String) -> CmdResult
         .map_err(internal("removing the account"))?;
     let mut s = store.load_settings();
     s.tasks.sync_accounts.retain(|a| a != &id);
+    if s.tasks.cloud_sync.as_deref() == Some(id.as_str()) {
+        s.tasks.cloud_sync = None;
+    }
     s.email.send_accounts.retain(|a| a != &id);
     s.email.autoreply_accounts.retain(|a| a != &id);
     store.save_settings(&s).map_err(internal("saving settings"))

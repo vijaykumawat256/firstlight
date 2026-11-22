@@ -48,6 +48,8 @@ fn main() {
             "disable_task_sync",
             "sync_tasks_now",
             "get_week_review",
+            "disable_cloud_sync",
+            "enable_cloud_sync",
             "set_sign_in_apps",
             "get_sign_in_apps",
             "enable_outlook_mail",

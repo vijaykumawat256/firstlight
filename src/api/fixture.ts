@@ -206,7 +206,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   privacy: { crash_reports: false },
   day: { task_reminders: true, wrap_up: true, wrap_up_hour: 17, wrap_up_minute: 30, break_nudge: false, break_after_minutes: 150, lunch_check: true, lunch_from_hour: 12, lunch_to_hour: 14, lunch_minutes: 30, stop_work: false, follow_ups: true, travel_minutes: params.has("travel") ? 90 : 0, weekly_review: true, travel_maps: false, travel_from: "", waiting_nudge_days: 3, dnd_meetings: false, time_off: [] },
   templates: [],
-  tasks: { sync_accounts: [], folder_sync: null },
+  tasks: { sync_accounts: [], folder_sync: null, cloud_sync: null },
 };
 let settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
 if (["week", "day", "month"].includes(params.get("defaultview") ?? "")) settings.general.default_view = params.get("defaultview") as "day" | "week" | "month";
@@ -1077,7 +1077,7 @@ export const fixtureBackend: Backend = {
     // ?peerfolder: the folder already holds another computer's file; joining needs its code.
     if (params.has("peerfolder") && !code) throw new Error("That folder already has Firstlight data from another computer. Type the sync code shown on that computer.");
     if (code && !/^FL1-/i.test(code.trim())) throw new Error("That sync code isn't right. Copy it again from the other computer.");
-    settings = { ...settings, tasks: { ...settings.tasks, folder_sync: folder.trim() } };
+    settings = { ...settings, tasks: { ...settings.tasks, folder_sync: folder.trim(), cloud_sync: null } };
     folderCode = code?.trim().toUpperCase() || folderCode || "FL1-ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-QR";
     const report = await this.syncFolderNow();
     settingsListeners.forEach((l) => l());
@@ -1085,6 +1085,24 @@ export const fixtureBackend: Backend = {
   },
   async disableFolderSync() {
     settings = { ...settings, tasks: { ...settings.tasks, folder_sync: null } };
+    settingsListeners.forEach((l) => l());
+    return structuredClone(settings);
+  },
+  async enableCloudSync(accountId: string, code: string | null) {
+    await sleep(300);
+    const account = accounts.find((a) => a.id === accountId);
+    if (!account || (account.provider !== "google" && account.provider !== "microsoft")) throw new Error("Only a Google or Microsoft account can keep the files.");
+    if (params.has("clouddenied")) throw new Error("The sign-in was refused. Please try again.");
+    if (params.has("peerfolder") && !code) throw new Error("That account's storage already has Firstlight data from another computer. Type the sync code shown on that computer.");
+    if (code && !/^FL1-/i.test(code.trim())) throw new Error("That sync code isn't right. Copy it again from the other computer.");
+    settings = { ...settings, tasks: { ...settings.tasks, cloud_sync: accountId, folder_sync: null } };
+    folderCode = code?.trim().toUpperCase() || folderCode || "FL1-ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-QR";
+    const report = await this.syncFolderNow();
+    settingsListeners.forEach((l) => l());
+    return { settings: structuredClone(settings), code: folderCode, report };
+  },
+  async disableCloudSync() {
+    settings = { ...settings, tasks: { ...settings.tasks, cloud_sync: null } };
     settingsListeners.forEach((l) => l());
     return structuredClone(settings);
   },
@@ -1128,7 +1146,7 @@ export const fixtureBackend: Backend = {
     return folderCode;
   },
   async syncFolderNow() {
-    if (!settings.tasks.folder_sync) throw new Error("Sharing between computers is off.");
+    if (!settings.tasks.folder_sync && !settings.tasks.cloud_sync) throw new Error("Sharing between computers is off.");
     if (!params.has("peerfolder")) return { applied: 0, peers: [], unreadable: 0 };
     let applied = 0;
     if (!tasks.some((t) => t.title === "Prepare the slides")) {

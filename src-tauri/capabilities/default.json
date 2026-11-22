@@ -28,6 +28,8 @@
     "allow-disable-task-sync",
     "allow-sync-tasks-now",
     "allow-get-week-review",
+    "allow-disable-cloud-sync",
+    "allow-enable-cloud-sync",
     "allow-set-sign-in-apps",
     "allow-get-sign-in-apps",
     "allow-enable-outlook-mail",

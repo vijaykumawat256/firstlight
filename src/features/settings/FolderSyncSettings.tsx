@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Laptop } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage, type FolderSyncReport } from "@/api";
-import { Button, TextField, useToasts } from "@/design";
+import { Button, Segmented, TextField, useToasts } from "@/design";
 import { timeAgo } from "@/features/accounts/time";
 import { Group, SettingRow } from "./controls";
 import { useSettings } from "./useSettings";
@@ -16,7 +16,12 @@ export function FolderSyncSettings() {
   const qc = useQueryClient();
   const { settings: s } = useSettings();
   const choices = useQuery({ queryKey: ["folder-choices"], queryFn: () => api.folderSyncChoices(), staleTime: 60_000 });
-  const code = useQuery({ queryKey: ["folder-code", s?.tasks.folder_sync], queryFn: () => api.folderSyncCode(), enabled: !!s?.tasks.folder_sync });
+  const sharing = s?.tasks.folder_sync ?? s?.tasks.cloud_sync ?? null;
+  const code = useQuery({ queryKey: ["folder-code", sharing], queryFn: () => api.folderSyncCode(), enabled: !!sharing });
+  const accounts = useQuery({ queryKey: ["accounts"], queryFn: () => api.listAccounts() });
+  const cloudAccounts = (accounts.data ?? []).filter((a) => a.provider === "google" || a.provider === "microsoft");
+  const [where, setWhere] = useState<"folder" | "cloud">("folder");
+  const [cloudAccount, setCloudAccount] = useState("");
   const [folder, setFolder] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [last, setLast] = useState<FolderSyncReport | null>(null);
@@ -25,7 +30,7 @@ export function FolderSyncSettings() {
     void qc.invalidateQueries();
   };
   const start = useMutation({
-    mutationFn: () => api.enableFolderSync(folder, joinCode.trim() || null),
+    mutationFn: () => (where === "cloud" ? api.enableCloudSync(cloudAccount, joinCode.trim() || null) : api.enableFolderSync(folder, joinCode.trim() || null)),
     onSuccess: (r) => {
       qc.setQueryData(["settings"], r.settings);
       done(r.report);
@@ -41,7 +46,7 @@ export function FolderSyncSettings() {
     onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
   });
   const stop = useMutation({
-    mutationFn: () => api.disableFolderSync(),
+    mutationFn: () => (s?.tasks.cloud_sync ? api.disableCloudSync() : api.disableFolderSync()),
     onSuccess: (saved) => {
       qc.setQueryData(["settings"], saved);
       setLast(null);
@@ -49,27 +54,57 @@ export function FolderSyncSettings() {
     },
   });
   if (!s) return null;
-  const on = s.tasks.folder_sync;
+  const storeName = (provider: string) => (provider === "google" ? "Google Drive" : "OneDrive");
+  const cloudOn = s.tasks.cloud_sync ? cloudAccounts.find((a) => a.id === s.tasks.cloud_sync) : undefined;
+  const on = s.tasks.folder_sync ?? (s.tasks.cloud_sync ? (cloudOn ? `${storeName(cloudOn.provider)} of ${cloudOn.email ?? cloudOn.display_name}` : "Your cloud storage") : null);
   if (!on) {
     const list = choices.data ?? [];
     return (
       <div className="flex flex-col gap-7">
-        <Group title="Share between your computers" footer="Your tasks, meeting notes, events you made here, templates and days off. Each computer keeps an encrypted file in the folder; only your computers have the code to open them. No server and no account.">
+        <Group title="Share between your computers" footer="Your tasks, meeting notes, events you made here, templates and days off. Each computer keeps an encrypted file there; only your computers have the code to open them. Use the same place on every computer. No server of ours, no new account.">
           <li className="flex flex-col gap-3 px-4 py-3">
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-1 text-footnote font-medium text-fg-2">A folder you already sync (the same one on every computer)</legend>
-              {list.length === 0 && <p className="text-footnote text-fg-2">No iCloud Drive, OneDrive, Dropbox or Google Drive folder found. Type the folder's full path below.</p>}
-              {list.map((c) => (
-                <label key={c.path} className="flex items-center gap-3 text-body text-fg">
-                  <input type="radio" name="folder" className="size-4 accent-accent" checked={folder === c.path} onChange={() => setFolder(c.path)} />
-                  <span className="min-w-0">
-                    <span className="block">{c.label}</span>
-                    <span className="block truncate text-footnote text-fg-2">{c.path}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            <TextField label="Or another folder" value={list.some((c) => c.path === folder) ? "" : folder} placeholder={list[0]?.path ?? "/Users/you/Dropbox"} autoComplete="off" onChange={(e) => setFolder(e.target.value)} />
+            <Segmented
+              label="Where to keep the files"
+              value={where}
+              onValueChange={(v) => v && setWhere(v as "folder" | "cloud")}
+              options={[
+                { value: "folder", label: "Synced folder" },
+                { value: "cloud", label: "Cloud account" },
+              ]}
+            />
+            {where === "folder" ? (
+              <>
+                <fieldset className="flex flex-col gap-2">
+                  <legend className="mb-1 text-footnote font-medium text-fg-2">A folder you already sync (the same one on every computer)</legend>
+                  {list.length === 0 && <p className="text-footnote text-fg-2">No iCloud Drive, OneDrive, Dropbox or Google Drive folder found. Type the folder's full path below.</p>}
+                  {list.map((c) => (
+                    <label key={c.path} className="flex items-center gap-3 text-body text-fg">
+                      <input type="radio" name="folder" className="size-4 accent-accent" checked={folder === c.path} onChange={() => setFolder(c.path)} />
+                      <span className="min-w-0">
+                        <span className="block">{c.label}</span>
+                        <span className="block truncate text-footnote text-fg-2">{c.path}</span>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+                <TextField label="Or another folder" value={list.some((c) => c.path === folder) ? "" : folder} placeholder={list[0]?.path ?? "/Users/you/Dropbox"} autoComplete="off" onChange={(e) => setFolder(e.target.value)} />
+              </>
+            ) : (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-1 text-footnote font-medium text-fg-2">The Google Drive or OneDrive that keeps the files (the same account on every computer)</legend>
+                {cloudAccounts.length === 0 && <p className="text-footnote text-fg-2">Connect a Google or Microsoft account first (Settings, Accounts &amp; calendars).</p>}
+                {cloudAccounts.map((a) => (
+                  <label key={a.id} className="flex items-center gap-3 text-body text-fg">
+                    <input type="radio" name="cloud" className="size-4 accent-accent" checked={cloudAccount === a.id} onChange={() => setCloudAccount(a.id)} />
+                    <span className="min-w-0">
+                      <span className="block">{storeName(a.provider)}</span>
+                      <span className="block truncate text-footnote text-fg-2">{a.email ?? a.display_name}</span>
+                    </span>
+                  </label>
+                ))}
+                <p className="text-footnote text-fg-2">Works without the Drive or OneDrive app. Firstlight asks the account once for a folder only it can see; it can't see your other files.</p>
+              </fieldset>
+            )}
             <TextField label="Sync code (only when another computer already shares)" value={joinCode} placeholder="FL1-…" autoComplete="off" spellCheck={false} onChange={(e) => setJoinCode(e.target.value)} hint="Leave empty on your first computer: a new code is made for you." />
             {start.isError && (
               <p role="alert" className="rounded-card bg-danger-soft px-3 py-2 text-body text-danger">
@@ -77,7 +112,7 @@ export function FolderSyncSettings() {
               </p>
             )}
             <div className="flex justify-end">
-              <Button variant="primary" disabled={!folder.trim() || start.isPending} onClick={() => start.mutate()}>
+              <Button variant="primary" disabled={(where === "folder" ? !folder.trim() : !cloudAccount) || start.isPending} onClick={() => start.mutate()}>
                 {start.isPending ? "Starting…" : "Start sharing"}
               </Button>
             </div>
@@ -89,7 +124,7 @@ export function FolderSyncSettings() {
   return (
     <div className="flex flex-col gap-7">
       <Group title="Sharing" footer="Changes are shared each time calendars refresh, and when you press Sync now. Your cloud service moves the files between computers, so allow it a minute.">
-        <SettingRow title="Folder" description={on} />
+        <SettingRow title={s.tasks.cloud_sync ? "Kept in" : "Folder"} description={on} />
         <li className="flex flex-col gap-2 px-4 py-3">
           <span className="text-footnote font-medium text-fg-2">Sync code: type it on your other computers</span>
           <div className="flex items-center gap-2">
