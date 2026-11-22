@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, CalendarClock, ChevronRight, Mail, Pencil, Timer } from "lucide-react";
+import { ArrowRight, BellRing, CalendarClock, ChevronRight, Mail, Pencil, Timer } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, errorMessage, type Task, type TaskInput, type TaskView } from "@/api";
 import { Button, Dialog, IconButton, TextField, useToasts } from "@/design";
@@ -106,6 +106,22 @@ export function TaskRow({ task, onEdit, onPlan, onNudge, onTimer, fresh }: { tas
   const done = !!task.done_at;
   const line = meta(task);
   const [menu, setMenu] = useState(false);
+  // Phones: swipe right to tick it off, left to move it to tomorrow (both also in the options sheet).
+  const [dx, setDx] = useState(0);
+  const swipeFrom = useRef<{ x: number; y: number; sideways: boolean | null } | null>(null);
+  const tomorrow = useMutation({
+    mutationFn: () => {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      const p = (n: number) => String(n).padStart(2, "0");
+      return api.moveTasks([task.id], `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`);
+    },
+    onSuccess: () => {
+      changed();
+      push({ title: `Moved to tomorrow: ${task.title}` });
+    },
+    onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
+  });
   const openMail = () => void api.openMailMessage(task.mail!.open).catch((e) => push({ title: errorMessage(e), tone: "danger" }));
   if (isPhone) {
     // A phone: the whole row opens one sheet of big buttons instead of a line of small icons.
@@ -113,11 +129,45 @@ export function TaskRow({ task, onEdit, onPlan, onNudge, onTimer, fresh }: { tas
       { label: "Change", icon: <Pencil className="size-5" />, run: () => onEdit(task) },
       ...(onTimer && !done && !task.waiting_on ? [{ label: "Start a focus timer", icon: <Timer className="size-5" />, run: () => onTimer(task) }] : []),
       ...(onPlan && !done && !task.waiting_on ? [{ label: "Set time aside", icon: <CalendarClock className="size-5" />, run: () => onPlan(task) }] : []),
+      ...(!done ? [{ label: "Move to tomorrow", icon: <ArrowRight className="size-5" />, run: () => tomorrow.mutate() }] : []),
       ...(onNudge && task.waiting_on && !done ? [{ label: `Nudge ${task.waiting_on}`, icon: <BellRing className="size-5" />, run: () => onNudge(task) }] : []),
       ...(task.mail && task.mail.open.kind !== "none" ? [{ label: "Open the email", icon: <Mail className="size-5" />, run: openMail }] : []),
     ];
+    const SWIPE = 90;
     return (
-      <li ref={row} data-fresh={fresh || undefined} className="flex min-h-14 items-center gap-1 pl-2 pr-3 transition-colors duration-700 ease-standard data-[fresh]:bg-accent-soft">
+      <li className="relative overflow-hidden">
+        {/* What a swipe will do, revealed behind the row. */}
+        {dx !== 0 && (
+          <div aria-hidden className={`absolute inset-0 flex items-center px-5 text-headline font-semibold text-white ${dx > 0 ? "justify-start bg-success" : "justify-end bg-accent-fill"}`}>
+            {dx > 0 ? (done ? "Not done" : "Done") : "Tomorrow"}
+          </div>
+        )}
+      <div
+        ref={row as unknown as React.RefObject<HTMLDivElement>}
+        data-fresh={fresh || undefined}
+        style={{ transform: dx ? `translateX(${dx}px)` : undefined }}
+        onTouchStart={(e) => {
+          const t = e.touches[0];
+          if (t) swipeFrom.current = { x: t.clientX, y: t.clientY, sideways: null };
+        }}
+        onTouchMove={(e) => {
+          const s = swipeFrom.current;
+          const t = e.touches[0];
+          if (!s || !t) return;
+          const mx = t.clientX - s.x;
+          const my = t.clientY - s.y;
+          // Decide once whether this is a sideways swipe or the page scrolling.
+          if (s.sideways === null && Math.abs(mx) + Math.abs(my) > 10) s.sideways = Math.abs(mx) > Math.abs(my) * 1.5;
+          if (s.sideways) setDx(Math.max(-140, Math.min(140, done && mx < 0 ? 0 : mx)));
+        }}
+        onTouchEnd={() => {
+          if (dx >= SWIPE) toggle.mutate(!done);
+          else if (dx <= -SWIPE && !done) tomorrow.mutate();
+          swipeFrom.current = null;
+          setDx(0);
+        }}
+        className={`relative flex min-h-14 items-center gap-1 bg-surface pl-2 pr-3 data-[fresh]:bg-accent-soft ${dx ? "" : "transition-[transform,background-color] duration-200 ease-standard"}`}
+      >
         <label className="flex size-11 shrink-0 items-center justify-center">
           <input
             type="checkbox"
@@ -158,6 +208,7 @@ export function TaskRow({ task, onEdit, onPlan, onNudge, onTimer, fresh }: { tas
             ))}
           </div>
         </Dialog>
+      </div>
       </li>
     );
   }
