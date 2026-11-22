@@ -68,7 +68,7 @@ export function FolderSyncSettings() {
     },
   });
   if (!s) return null;
-  const pairing = isPhone ? <PairWithComputer paired={s.tasks.lan_peers} /> : <AddPhone />;
+  const pairing = isPhone ? <PairWithComputer paired={s.tasks.lan_peers.length > 0} /> : <AddPhone />;
   const storeName = (provider: string) => (provider === "google" ? "Google Drive" : "OneDrive");
   const cloudOn = s.tasks.cloud_sync ? cloudAccounts.find((a) => a.id === s.tasks.cloud_sync) : undefined;
   const place = s.tasks.folder_sync ?? (s.tasks.cloud_sync ? (cloudOn ? `${storeName(cloudOn.provider)} of ${cloudOn.email ?? cloudOn.display_name}` : "Your cloud storage") : null);

@@ -1,6 +1,6 @@
 import { assertHttps, type Backend } from "./backend";
 import { fixtureBriefing } from "./fixtureBriefing";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, CalendarInfo, CalEvent, AskReply, ConflictHelp, WeekAhead, WeekDay, EventInput, FreeSlot, MeetingNote, MeetingPrep, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, PlanSuggestion, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, Task, TaskInput, TaskLists, TaskView, MailResult, SyncSummary, UpdateStatus, PairState } from "./types";
 
 /**
  * Browser-only stand-in with fake data. Used by tests, Playwright screenshots and
@@ -330,6 +330,7 @@ function expandOwn(id: string, input: EventInput, calendar?: string): CalEvent[]
 }
 
 /** The sync code for sharing through a folder (stand-in for the keychain). */
+let pairingSince: number | null = null;
 let folderCode: string | null = null;
 /** Fields a new task starts with (crates/logic/src/tasks.rs `Task` defaults). */
 const TASK_EXTRAS = { repeat: null, next_made: null, waiting_on: null, waiting_since: null, mail: null, spent_minutes: 0 } satisfies Partial<Task>;
@@ -1123,26 +1124,30 @@ export const fixtureBackend: Backend = {
     if (!settings.tasks.lan_sync || !params.has("lanpeer")) return { applied: 0, peers: [], unreadable: 0 };
     return { applied: 0, peers: [{ name: "Office desktop", written_at: new Date(Date.now() - 60_000).toISOString() }], unreadable: 0 };
   },
-  async pairingCode() {
+  async startPairing() {
     await this.enableLanSync(null);
-    const text = `firstlight:pair?v=1&code=${folderCode}&device=a1b2c3d4&at=192.168.1.20`;
-    // A stand-in picture: the browser tests check that a code is shown, not that it scans.
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#fff"/><rect x="1" y="1" width="3" height="3"/></svg>';
-    return { text, svg, addrs: ["192.168.1.20"] };
+    pairingSince = Date.now();
+    return { state: "waiting" as const, pin: "482913", seconds_left: 600 };
   },
-  async pairWithComputer(text: string) {
-    await sleep(200);
-    const m = /^firstlight:pair\?v=1&code=(FL1-[A-Z0-9-]+)&device=[0-9a-f]+&at=([0-9.,]*)$/i.exec(text.trim());
-    if (!m) throw new Error("That isn't a Firstlight pairing code.");
-    const on = await this.enableLanSync(m[1] ?? null);
-    settings = { ...on.settings, tasks: { ...on.settings.tasks, lan_peers: (m[2] ?? "").split(",").filter(Boolean) } };
+  async pairingStatus(): Promise<PairState> {
+    if (pairingSince === null) return { state: "off" };
+    // Tests set this to stand for a phone typing the code.
+    if ((window as unknown as { __phonePaired?: boolean }).__phonePaired) return { state: "paired", name: "iPhone" };
+    return { state: "waiting", pin: "482913", seconds_left: Math.max(0, 600 - Math.floor((Date.now() - pairingSince) / 1000)) };
+  },
+  async stopPairing() {
+    pairingSince = null;
+  },
+  async pairWithCode(code: string) {
+    await sleep(300);
+    const digits = code.replace(/[\s-]/g, "");
+    if (!/^\d{6}$/.test(digits)) throw new Error("Type the 6 digits your computer shows.");
+    if (params.has("pairnotfound")) throw new Error("Couldn't find your computer. Check that it shows a pairing code, that both are on the same Wi-Fi, and that Firstlight may use the local network (on iPhone: Settings, Privacy & Security, Local Network).");
+    if (digits !== "482913") throw new Error("That code isn't right. Check the 6 digits on your computer and try again.");
+    const on = await this.enableLanSync("FL1-ABCD-EFGH");
+    settings = { ...on.settings, tasks: { ...on.settings.tasks, lan_peers: ["192.168.1.20"] } };
     settingsListeners.forEach((l) => l());
-    return { ...on, settings: structuredClone(settings) };
-  },
-  async scanQrCode() {
-    await sleep(100);
-    if (params.has("scanfail")) throw new Error("Firstlight isn't allowed to use the camera. You can allow it in the phone's Settings, or paste the pairing text instead.");
-    return (window as unknown as { __scanText?: string }).__scanText ?? null;
+    return { settings: structuredClone(settings), name: "Vijay's MacBook" };
   },
   async getSignInApps() {
     return { ...ownApps, google_has_secret: ownApps.google_client_id !== null && ownSecret, built_in_google: !params.has("nogoogle"), built_in_microsoft: !params.has("nomicrosoft") };

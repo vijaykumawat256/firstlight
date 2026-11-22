@@ -20,6 +20,7 @@ mod maps;
 mod notifier;
 #[cfg(windows)]
 mod outlook_win;
+mod pairing_cmd;
 mod providers;
 mod reminders;
 mod scheduler;
@@ -539,9 +540,6 @@ pub fn run() {
     // Android has no keychain the `keyring` crate can reach: secrets go to the Android Keystore through this.
     #[cfg(target_os = "android")]
     let builder = builder.plugin(android_secrets::init());
-    // Phones: the camera reads a computer's pairing code (capabilities/mobile.json).
-    #[cfg(mobile)]
-    let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
     let builder = builder
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
@@ -577,8 +575,10 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
-            lan_sync::pair_with_computer,
-            lan_sync::pairing_code,
+            pairing_cmd::pair_with_code,
+            pairing_cmd::stop_pairing,
+            pairing_cmd::pairing_status,
+            pairing_cmd::start_pairing,
             lan_sync::lan_sync_status,
             lan_sync::disable_lan_sync,
             lan_sync::enable_lan_sync,

@@ -33,6 +33,13 @@ pub(crate) fn computer_name() -> String {
                 }
             }
         }
+        // Phones don't tell apps their owner's name for the device without extra permissions; the kind is enough.
+        if cfg!(target_os = "ios") {
+            return "iPhone".into();
+        }
+        if cfg!(target_os = "android") {
+            return "Android phone".into();
+        }
         std::env::var("COMPUTERNAME")
             .ok()
             .filter(|n| !n.is_empty())

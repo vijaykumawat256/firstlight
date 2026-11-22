@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { assertHttps, type Backend } from "./backend";
-import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport, BackupInfo, ProblemReport, SignInApps, PairingCode } from "./types";
+import type { AccountView, AiProvider, AiStatus, AppInfo, AppSettings, Briefing, CalendarInfo, AskReply, CalEvent, ConflictHelp, WeekAhead, FreeSlot, MeetingNote, DayPlan, DayStatus, FollowUp, MessageSender, WeekReview, Task, TaskLists, MeetingPrep, MailResult, OAuthAvailability, OpenTarget, SyncSummary, SystemStatus, UpdateStatus, StatusReport, TimeReport, FocusTimer, TimeOffStatus, DndStatus, FolderSyncReport, BackupInfo, ProblemReport, SignInApps, PairState } from "./types";
 
 export const tauriBackend: Backend = {
   getEvents: (start, end) => invoke<CalEvent[]>("get_events", { start, end }),
@@ -38,20 +38,10 @@ export const tauriBackend: Backend = {
   enableLanSync: (code) => invoke<{ settings: AppSettings; code: string; report: FolderSyncReport }>("enable_lan_sync", { code }),
   disableLanSync: () => invoke<AppSettings>("disable_lan_sync"),
   lanSyncStatus: () => invoke<FolderSyncReport>("lan_sync_status"),
-  pairingCode: () => invoke<PairingCode>("pairing_code"),
-  pairWithComputer: (text) => invoke<{ settings: AppSettings; code: string; report: FolderSyncReport }>("pair_with_computer", { text }),
-  scanQrCode: async () => {
-    // Loaded only when used: the camera plugin exists on phones only.
-    const { scan, Format, checkPermissions, requestPermissions } = await import("@tauri-apps/plugin-barcode-scanner");
-    let allowed = await checkPermissions();
-    if (allowed !== "granted") allowed = await requestPermissions();
-    if (allowed !== "granted") throw new Error("Firstlight isn't allowed to use the camera. You can allow it in the phone's Settings, or paste the pairing text instead.");
-    try {
-      return (await scan({ windowed: false, formats: [Format.QRCode] })).content || null;
-    } catch {
-      return null;
-    }
-  },
+  startPairing: () => invoke<PairState>("start_pairing"),
+  pairingStatus: () => invoke<PairState>("pairing_status"),
+  stopPairing: () => invoke<void>("stop_pairing"),
+  pairWithCode: (code) => invoke<{ settings: AppSettings; name: string }>("pair_with_code", { code }),
   getSignInApps: () => invoke<SignInApps>("get_sign_in_apps"),
   setSignInApps: (change) => invoke<SignInApps>("set_sign_in_apps", { change }),
   getProblemReport: () => invoke<ProblemReport>("get_problem_report"),

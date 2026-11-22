@@ -611,9 +611,10 @@ export interface FreeSlot {
   minutes: number;
 }
 
-/** What a computer shows to pair a phone: the text to copy, the same as a QR code (SVG), and its network addresses. */
-export interface PairingCode {
-  text: string;
-  svg: string;
-  addrs: string[];
-}
+/** A computer's pairing state while it shows a 6-digit code for a phone. */
+export type PairState =
+  | { state: "off" }
+  | { state: "waiting"; pin: string; seconds_left: number }
+  | { state: "paired"; name: string }
+  | { state: "expired" }
+  | { state: "too_many_tries" };

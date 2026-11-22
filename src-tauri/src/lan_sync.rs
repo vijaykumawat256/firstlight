@@ -9,6 +9,7 @@
 use crate::AppState;
 use crate::commands::{CmdResult, internal, lock_store};
 use crate::folder_sync_cmd::{FolderSyncOn, computer_name, key_of};
+use crate::pairing_cmd;
 use crate::providers::Deps;
 use chrono::Utc;
 use firstlight_core::folder_sync::lan::{Beacon, LanFiles, PORT};
@@ -184,6 +185,16 @@ pub(crate) fn spawn(app: AppHandle, db: PathBuf, db_key: Redacted, deps: Deps) {
                 match &udp {
                     Some(s) => {
                         let mut buf = [0u8; 256];
+                        // A phone asking who is pairing: answered only while this computer shows a pairing code.
+                        if let Ok((n, from)) = s.peek_from(&mut buf)
+                            && &buf[..n] == pairing::WHO
+                        {
+                            let _ = s.recv_from(&mut buf);
+                            if let Some(port) = pairing_cmd::here_port() {
+                                let _ = s.send_to(pairing::here_text(port).as_bytes(), from);
+                            }
+                            continue;
+                        }
                         if let Ok((n, from)) = s.recv_from(&mut buf)
                             && let Some(b) =
                                 std::str::from_utf8(&buf[..n]).ok().and_then(Beacon::parse)
@@ -272,92 +283,4 @@ pub async fn lan_sync_status() -> CmdResult<Report> {
         .ok()
         .and_then(|l| l.as_ref().map(|(_, r)| r.clone()))
         .unwrap_or_default())
-}
-
-/// What the computer shows to pair a phone: the text (to copy) and the same as a QR code (an SVG picture).
-#[derive(serde::Serialize)]
-pub struct PairingCode {
-    pub text: String,
-    pub svg: String,
-    /// The home-network addresses the phone will greet, for the page to show ("192.168.1.20").
-    pub addrs: Vec<String>,
-}
-
-/// This computer's address on the home or office network: the one its default route leaves from. Connecting a UDP
-/// socket sends nothing; it only makes the system pick the interface.
-fn local_addrs() -> Vec<IpAddr> {
-    let probe = |bind: SocketAddr, to: SocketAddr| {
-        let s = UdpSocket::bind(bind).ok()?;
-        s.connect(to).ok()?;
-        Some(s.local_addr().ok()?.ip())
-    };
-    [
-        probe(
-            SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)),
-            SocketAddr::from(([192, 0, 2, 1], 9)),
-        ),
-        probe(
-            "[::]:0".parse().expect("valid"),
-            "[2001:db8::1]:9".parse().expect("valid"),
-        ),
-    ]
-    .into_iter()
-    .flatten()
-    .filter(pairing::local_network_addr)
-    .collect()
-}
-
-/// Makes the pairing code a phone scans. Turns on sharing on the network here (a code is made if there is none yet,
-/// or the one already used for a folder or cloud storage is kept), because that is how the phone will reach it.
-#[tauri::command]
-pub async fn pairing_code(app: AppHandle, state: State<'_, AppState>) -> CmdResult<PairingCode> {
-    let on = enable_lan_sync(app, state.clone(), None).await?;
-    let key = folder_sync::parse_code(&on.code).map_err(|e| e.to_string())?;
-    let device = {
-        let store = lock_store(&state)?;
-        folder_sync::device_id(&store).map_err(internal("reading this device's id"))?
-    };
-    let addrs = local_addrs();
-    let p = pairing::Pairing {
-        key,
-        device,
-        addrs: addrs.clone(),
-    };
-    let text = p.text();
-    let svg = qrcode::QrCode::with_error_correction_level(text.as_bytes(), qrcode::EcLevel::M)
-        .map_err(|_| "Couldn't draw the pairing code.".to_string())?
-        .render::<qrcode::render::svg::Color>()
-        .min_dimensions(240, 240)
-        .quiet_zone(true)
-        .build();
-    Ok(PairingCode {
-        text,
-        svg,
-        addrs: addrs.iter().map(|a| a.to_string()).collect(),
-    })
-}
-
-/// Pairs this device (a phone) with a computer from its pairing code: takes its sync code, remembers where it is on
-/// the network, and turns on sharing on the network. A different sync code that was here before is replaced (the
-/// page says so first).
-#[tauri::command]
-pub async fn pair_with_computer(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    text: String,
-) -> CmdResult<FolderSyncOn> {
-    let p = pairing::Pairing::parse(&text).map_err(|e| e.to_string())?;
-    let code = folder_sync::code_of(&p.key);
-    let mut on = enable_lan_sync(app.clone(), state.clone(), Some(code)).await?;
-    let store = lock_store(&state)?;
-    let mut s = store.load_settings();
-    s.tasks.lan_peers = p.addrs.iter().map(|a| a.to_string()).collect();
-    s.sanitize();
-    store
-        .save_settings(&s)
-        .map_err(internal("saving settings"))?;
-    drop(store);
-    on.settings = s;
-    let _ = app.emit("settings-changed", ());
-    Ok(on)
 }

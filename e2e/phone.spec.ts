@@ -52,40 +52,45 @@ async function openComputers(page: import("@playwright/test").Page, query: strin
   await page.getByRole("main").getByRole("button", { name: /^Your computers/ }).click();
 }
 
-test("a computer shows a pairing code for the phone, and turns on sharing on the network", async ({ page }) => {
+test("a computer shows a 6-digit code, and says Paired only once a phone really connected", async ({ page }) => {
   await openComputers(page, "");
-  await page.getByRole("button", { name: "Show code" }).click();
-  const dialog = page.getByRole("dialog", { name: "Scan this with your phone" });
-  await expect(dialog.getByRole("img", { name: "Pairing code for your phone" })).toBeVisible();
-  await expect(dialog.getByText(/192\.168\.1\.20/)).toBeVisible();
+  await page.getByRole("button", { name: "Add phone" }).click();
+  const dialog = page.getByRole("dialog", { name: "Pair your phone" });
+  await expect(dialog.getByLabel("Pairing code 4 8 2 9 1 3")).toHaveText("482 913");
+  await expect(dialog.getByText(/Works for \d+:\d\d/)).toBeVisible();
   await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await dialog.getByRole("button", { name: "Done" }).click();
-  // Sharing on the network is now on, so the page shows the running state.
+  // The phone types the code.
+  await page.evaluate(() => {
+    (window as unknown as { __phonePaired: boolean }).__phonePaired = true;
+  });
+  const done = page.getByRole("dialog", { name: "Phone paired" });
+  await expect(done.getByRole("status")).toContainText("Paired with iPhone");
+  await done.getByRole("button", { name: "Done" }).click();
   await expect(page.getByText("This network only")).toBeVisible();
 });
 
-test("a phone pairs by scanning, or by pasting the text, and refuses anything else", async ({ page }) => {
+test("a phone pairs by typing the 6 digits, and is told clearly when the code is wrong", async ({ page }) => {
   await openComputers(page, "?phone");
   await expect(page.getByRole("radio", { name: "Synced folder" })).toHaveCount(0);
-  // Something that isn't a pairing code.
-  await page.getByLabel("Or paste the pairing text").fill("FL1-NOPE");
-  await page.getByRole("button", { name: "Pair", exact: true }).click();
-  await expect(page.getByRole("alert")).toHaveText("That isn't a Firstlight pairing code.");
-  // Scanning the computer's code.
-  await page.evaluate(() => {
-    (window as unknown as { __scanText: string }).__scanText = "firstlight:pair?v=1&code=FL1-ABCD-EFGH&device=a1b2c3d4&at=192.168.1.20";
-  });
-  await page.getByRole("button", { name: "Scan the code" }).click();
-  await expect(page.getByText("Paired with your computer").first()).toBeVisible();
-  await expect(page.getByText(/Looking for your computer at 192\.168\.1\.20/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Scan again" })).toBeVisible();
+  const field = page.getByLabel("Pairing code");
+  const pairButton = page.getByRole("button", { name: "Pair", exact: true });
+  await expect(pairButton).toBeDisabled();
+  await field.fill("111111");
+  await expect(field).toHaveValue("111 111");
+  await pairButton.click();
+  await expect(page.getByRole("alert")).toHaveText("That code isn't right. Check the 6 digits on your computer and try again.");
+  await field.fill("482913");
+  await pairButton.click();
+  await expect(page.getByRole("status").filter({ hasText: "Paired with Vijay's MacBook" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pair again" })).toBeVisible();
   await settle(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
 
-test("a phone without camera permission is told how to pair instead", async ({ page }) => {
-  await openComputers(page, "?phone&scanfail");
-  await page.getByRole("button", { name: "Scan the code" }).click();
-  await expect(page.getByRole("alert")).toContainText("paste the pairing text instead");
+test("a phone that can't find the computer is told what to check", async ({ page }) => {
+  await openComputers(page, "?phone&pairnotfound");
+  await page.getByLabel("Pairing code").fill("482913");
+  await page.getByRole("button", { name: "Pair", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("same Wi-Fi");
 });
