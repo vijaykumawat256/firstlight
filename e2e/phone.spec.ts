@@ -94,3 +94,35 @@ test("a phone that can't find the computer is told what to check", async ({ page
   await page.getByRole("button", { name: "Pair", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("same Wi-Fi");
 });
+
+test("on a phone every main screen fits the width, with a tab bar and a big New button", async ({ page }) => {
+  await page.clock.install({ time: todayAt(9, 30) });
+  await page.goto("/?phone&tasks");
+  await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "Main" });
+  const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(await fits()).toBe(true);
+  // New event is the round button, and the form opens as a full page.
+  await page.getByRole("button", { name: "New event" }).click();
+  await expect(page.getByRole("dialog", { name: "New event" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  for (const [tab, heading] of [
+    ["Calendar", null],
+    ["Tasks", "Tasks"],
+    ["Settings", "Settings"],
+  ] as const) {
+    await nav.getByRole("button", { name: tab }).click();
+    await expect(nav.getByRole("button", { name: tab })).toHaveAttribute("aria-current", "page");
+    if (heading) await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
+    expect(await fits(), tab).toBe(true);
+  }
+  // A task opens one sheet of big buttons instead of a row of small icons.
+  await nav.getByRole("button", { name: "Tasks" }).click();
+  await page.getByRole("button", { name: /^Options for Review Sam's slides/ }).click();
+  const menu = page.getByRole("dialog", { name: "Review Sam's slides" });
+  await expect(menu.getByRole("button", { name: "Set time aside" })).toBeVisible();
+  await menu.getByRole("button", { name: "Change", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Change task" })).toBeVisible();
+  await settle(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});

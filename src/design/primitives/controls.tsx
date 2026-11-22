@@ -29,8 +29,8 @@ const buttonVariants: Record<ButtonVariant, string> = {
 };
 
 const buttonSizes: Record<ButtonSize, string> = {
-  sm: "h-7 px-3 text-body rounded-control",
-  md: "h-9 px-4 text-headline rounded-card",
+  sm: "h-7 px-3 text-body rounded-control phone:h-10 phone:px-4",
+  md: "h-9 px-4 text-headline rounded-card phone:h-12 phone:px-5",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -69,7 +69,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       aria-label={label}
       title={label}
       className={clsx(
-        "inline-flex size-8 items-center justify-center rounded-full text-fg-2",
+        "inline-flex size-8 shrink-0 items-center justify-center rounded-full text-fg-2 phone:size-11",
         "transition-[background-color,color] duration-150 ease-standard hover:bg-fill hover:text-fg",
         "active:bg-fill-strong disabled:opacity-40",
         className,
@@ -132,7 +132,7 @@ export function Select({ value, onValueChange, options, label }: SelectProps) {
       <RSelect.Trigger
         aria-label={label}
         className={clsx(
-          "inline-flex h-8 items-center gap-1.5 rounded-control bg-fill pl-3 pr-2 text-body text-fg",
+          "inline-flex h-8 items-center gap-1.5 rounded-control bg-fill pl-3 pr-2 text-body text-fg phone:h-10 phone:pl-4",
           "transition-colors duration-150 ease-standard hover:bg-fill-strong",
         )}
       >
@@ -153,7 +153,7 @@ export function Select({ value, onValueChange, options, label }: SelectProps) {
                 key={o.value}
                 value={o.value}
                 className={clsx(
-                  "relative flex h-7 cursor-default items-center rounded-control pl-7 pr-3 text-body text-fg outline-none",
+                  "relative flex h-7 cursor-default items-center rounded-control pl-7 pr-3 text-body text-fg outline-none phone:h-11",
                   "data-[highlighted]:bg-accent-fill data-[highlighted]:text-accent-fg",
                 )}
               >
@@ -196,7 +196,7 @@ export function Segmented({ value, onValueChange, options, label, fill }: Segmen
           key={o.value}
           value={o.value}
           className={clsx(
-            "h-6 whitespace-nowrap rounded-[5px] text-body font-medium text-fg-2",
+            "h-6 whitespace-nowrap rounded-[5px] text-body font-medium text-fg-2 phone:h-9",
             fill ? "flex-1 px-2" : "px-3",
             "transition-[background-color,color,box-shadow] duration-150 ease-standard",
             "data-[state=on]:bg-surface-raised data-[state=on]:text-fg data-[state=on]:shadow-card",
@@ -235,7 +235,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         aria-invalid={error ? true : undefined}
         aria-describedby={error || hint ? descId : undefined}
         className={clsx(
-          "h-9 select-text rounded-card bg-fill px-3 text-headline text-fg placeholder:text-fg-3",
+          "h-9 select-text rounded-card bg-fill px-3 text-headline text-fg placeholder:text-fg-3 phone:h-12 phone:px-4",
           "transition-shadow duration-150 ease-standard",
           error && "shadow-[inset_0_0_0_1.5px_var(--danger)]",
           className,

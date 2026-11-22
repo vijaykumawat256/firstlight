@@ -12,6 +12,7 @@ import { MonthGrid, monthWeeks } from "./MonthGrid";
 import { TimeGrid } from "./TimeGrid";
 import { localeFirstDay, sameDay, startOfLocalDay, startOfWeek } from "./layout";
 import { isPhone } from "@/app/platform";
+import { Fab } from "@/app/Fab";
 
 type Mode = "day" | "week" | "month";
 
@@ -66,6 +67,38 @@ export function CalendarScreen() {
           </Button>
         </div>
       )}
+      {isPhone ? (
+        // A phone: the title with Today and the arrows on one line, the view switch across the full width under it;
+        // a new event is the round button at the bottom.
+        <header className="flex shrink-0 flex-col gap-2 px-4 pb-2">
+          <div className="flex items-center gap-1">
+            <h1 aria-live="polite" className="min-w-0 flex-1 truncate text-headline font-semibold tracking-tight text-fg">
+              {title}
+            </h1>
+            <IconButton label={`Previous ${unit}`} onClick={() => step(-1)}>
+              <ChevronLeft className="size-5" />
+            </IconButton>
+            <Button variant="plain" size="sm" disabled={isCurrent} onClick={() => setAnchor(startOfLocalDay(new Date()))}>
+              Today
+            </Button>
+            <IconButton label={`Next ${unit}`} onClick={() => step(1)}>
+              <ChevronRight className="size-5" />
+            </IconButton>
+          </div>
+          <Segmented
+            fill
+            label="View"
+            value={mode}
+            onValueChange={(v) => setMode(v as Mode)}
+            options={[
+              { value: "day", label: "Day" },
+              { value: "week", label: "Week" },
+              { value: "month", label: "Month" },
+            ]}
+          />
+          <Fab label="New event" onClick={() => setAdding(true)} />
+        </header>
+      ) : (
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-5 pb-3">
         <h1 aria-live="polite" className="text-title font-semibold tracking-tight text-fg">
           {title}
@@ -103,6 +136,7 @@ export function CalendarScreen() {
           </div>
         </div>
       </header>
+      )}
       {events.isPending ? (
         <div className="flex flex-col gap-2 px-5" role="status" aria-busy>
           <span className="sr-only">Loading…</span>

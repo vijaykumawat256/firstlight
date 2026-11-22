@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, CalendarClock, Mail, Pencil, Timer } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { BellRing, CalendarClock, ChevronRight, Mail, Pencil, Timer } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, errorMessage, type Task, type TaskInput, type TaskView } from "@/api";
-import { IconButton, TextField, useToasts } from "@/design";
+import { Button, Dialog, IconButton, TextField, useToasts } from "@/design";
+import { isPhone } from "@/app/platform";
 import { formatDate, formatTime } from "@/features/briefing/format";
 import { parseQuickTask, type QuickTask } from "@/features/events/quickAdd";
 
@@ -104,6 +105,62 @@ export function TaskRow({ task, onEdit, onPlan, onNudge, onTimer, fresh }: { tas
   });
   const done = !!task.done_at;
   const line = meta(task);
+  const [menu, setMenu] = useState(false);
+  const openMail = () => void api.openMailMessage(task.mail!.open).catch((e) => push({ title: errorMessage(e), tone: "danger" }));
+  if (isPhone) {
+    // A phone: the whole row opens one sheet of big buttons instead of a line of small icons.
+    const actions: { label: string; icon: ReactNode; run: () => void }[] = [
+      { label: "Change", icon: <Pencil className="size-5" />, run: () => onEdit(task) },
+      ...(onTimer && !done && !task.waiting_on ? [{ label: "Start a focus timer", icon: <Timer className="size-5" />, run: () => onTimer(task) }] : []),
+      ...(onPlan && !done && !task.waiting_on ? [{ label: "Set time aside", icon: <CalendarClock className="size-5" />, run: () => onPlan(task) }] : []),
+      ...(onNudge && task.waiting_on && !done ? [{ label: `Nudge ${task.waiting_on}`, icon: <BellRing className="size-5" />, run: () => onNudge(task) }] : []),
+      ...(task.mail && task.mail.open.kind !== "none" ? [{ label: "Open the email", icon: <Mail className="size-5" />, run: openMail }] : []),
+    ];
+    return (
+      <li ref={row} data-fresh={fresh || undefined} className="flex min-h-14 items-center gap-1 pl-2 pr-3 transition-colors duration-700 ease-standard data-[fresh]:bg-accent-soft">
+        <label className="flex size-11 shrink-0 items-center justify-center">
+          <input
+            type="checkbox"
+            aria-label={`${done ? "Not done" : "Done"}: ${task.title}`}
+            checked={done}
+            disabled={toggle.isPending}
+            onChange={(e) => toggle.mutate(e.target.checked)}
+            className="size-6 cursor-pointer accent-accent"
+          />
+        </label>
+        <button type="button" aria-label={`Options for ${task.title}`} onClick={() => setMenu(true)} className="flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left">
+          <span className="min-w-0 flex-1">
+            <span className={`block break-words text-headline ${done ? "text-fg-2 line-through" : "text-fg"}`}>{task.title}</span>
+            {line && <span className={`block text-footnote ${task.days_late > 0 && !done ? "text-warning" : "text-fg-2"}`}>{line}</span>}
+          </span>
+          <ChevronRight className="size-5 shrink-0 text-fg-3" aria-hidden />
+        </button>
+        <Dialog
+          open={menu}
+          onOpenChange={setMenu}
+          title={task.title}
+          description={line || undefined}
+          footer={<Button onClick={() => setMenu(false)}>Close</Button>}
+        >
+          <div className="flex flex-col gap-2">
+            {actions.map((a) => (
+              <Button
+                key={a.label}
+                leading={a.icon}
+                className="justify-start"
+                onClick={() => {
+                  setMenu(false);
+                  a.run();
+                }}
+              >
+                {a.label}
+              </Button>
+            ))}
+          </div>
+        </Dialog>
+      </li>
+    );
+  }
   return (
     <li ref={row} data-fresh={fresh || undefined} className="flex min-h-12 items-center gap-3 px-4 py-2 transition-colors duration-700 ease-standard data-[fresh]:bg-accent-soft">
       <input
@@ -119,7 +176,7 @@ export function TaskRow({ task, onEdit, onPlan, onNudge, onTimer, fresh }: { tas
         {line && <div className={`text-footnote ${task.days_late > 0 && !done ? "text-warning" : "text-fg-2"}`}>{line}</div>}
       </div>
       {task.mail && task.mail.open.kind !== "none" && (
-        <IconButton label={`Open the email for ${task.title}`} onClick={() => void api.openMailMessage(task.mail!.open).catch((e) => push({ title: errorMessage(e), tone: "danger" }))}>
+        <IconButton label={`Open the email for ${task.title}`} onClick={openMail}>
           <Mail className="size-4" />
         </IconButton>
       )}

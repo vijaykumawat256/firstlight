@@ -32,7 +32,7 @@ function OverlayShell({
       <RDialog.Portal>
         <RDialog.Overlay className="fixed inset-0 z-40 animate-fade-in bg-overlay" />
         <RDialog.Content className={clsx("fixed z-50 flex flex-col bg-surface-raised shadow-float", contentClass)}>
-          <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-5">
+          <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-5 phone:pt-[max(1.25rem,env(safe-area-inset-top))]">
             <div>
               <RDialog.Title className="text-title font-semibold text-fg">{title}</RDialog.Title>
               {description ? (
@@ -48,19 +48,25 @@ function OverlayShell({
             </RDialog.Close>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">{children}</div>
-          {footer && <div className="flex justify-end gap-2 px-5 pb-5 pt-3">{footer}</div>}
+          {/* On a phone the buttons share the width, big enough for a thumb, above the home bar. */}
+          {footer && (
+            <div className="flex justify-end gap-2 px-5 pb-5 pt-3 phone:border-t phone:border-separator phone:pb-[max(1.25rem,env(safe-area-inset-bottom))] phone:[&>*]:flex-1">{footer}</div>
+          )}
         </RDialog.Content>
       </RDialog.Portal>
     </RDialog.Root>
   );
 }
 
-/** Centred modal for decisions that interrupt the flow. Prefer a Sheet for everything else. */
+/**
+ * Centred modal for decisions that interrupt the flow. Prefer a Sheet for everything else. On a phone it rises from the
+ * bottom; one with a text field fills the screen, so the keyboard never covers the field or the buttons.
+ */
 export function Dialog(props: OverlayProps) {
   return (
     <OverlayShell
       {...props}
-      contentClass="left-1/2 top-1/2 w-[min(92vw,380px)] max-h-[80vh] -translate-x-1/2 -translate-y-1/2 animate-pop-in rounded-sheet"
+      contentClass="left-1/2 top-1/2 w-[min(92vw,380px)] max-h-[80vh] -translate-x-1/2 -translate-y-1/2 animate-pop-in rounded-sheet phone:inset-x-0 phone:top-auto phone:bottom-0 phone:w-full phone:max-h-[92dvh] phone:translate-x-0 phone:translate-y-0 phone:rounded-b-none phone:animate-sheet-in phone:has-[input:not([type=checkbox]):not([type=radio]),textarea]:top-0 phone:has-[input:not([type=checkbox]):not([type=radio]),textarea]:max-h-none phone:has-[input:not([type=checkbox]):not([type=radio]),textarea]:rounded-none"
     />
   );
 }
@@ -70,7 +76,8 @@ export function Sheet(props: OverlayProps) {
   return (
     <OverlayShell
       {...props}
-      contentClass="inset-x-0 bottom-0 max-h-[85vh] animate-sheet-in rounded-t-sheet"
+      // On a phone a sheet is a full page, so the keyboard never covers its fields or buttons.
+      contentClass="inset-x-0 bottom-0 max-h-[85vh] animate-sheet-in rounded-t-sheet phone:top-0 phone:max-h-none phone:rounded-none"
     />
   );
 }
@@ -137,7 +144,8 @@ export function ToastHost({ children }: { children: ReactNode }) {
           {t.description && <RToast.Description className="text-footnote text-fg-2">{t.description}</RToast.Description>}
         </RToast.Root>
       ))}
-      <RToast.Viewport className="fixed inset-x-0 bottom-0 z-[60] m-0 flex list-none flex-col gap-2 p-4 outline-none" />
+      {/* On a phone, above the tab bar and the home bar. */}
+      <RToast.Viewport className="fixed inset-x-0 bottom-0 z-[60] m-0 flex list-none flex-col gap-2 p-4 outline-none phone:bottom-[calc(4.5rem+env(safe-area-inset-bottom))]" />
     </RToast.Provider>
   );
 }

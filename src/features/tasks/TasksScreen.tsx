@@ -95,7 +95,8 @@ export function TasksScreen() {
                 setFresh(t.id);
               }}
             />
-            <div className="flex flex-wrap justify-end gap-2">
+            {/* On a phone: four equal buttons in two rows instead of a scatter of links. */}
+            <div className="flex flex-wrap justify-end gap-2 phone:mt-2 phone:grid phone:grid-cols-2 phone:[&>button]:w-full">
               <Button variant="plain" size="sm" onClick={() => setTimeReport(true)}>
                 My time
               </Button>

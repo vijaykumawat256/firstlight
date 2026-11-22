@@ -174,7 +174,7 @@ export function SearchHost() {
           {rows.length === 0 && !events.isPending && !events.isError ? (
             <p className="px-1 py-4 text-center text-body text-fg-2">{query.trim() ? "Nothing matches." : "Nothing coming up."}</p>
           ) : (
-            <ul id={listId} role="listbox" aria-label={query.trim() ? "Results" : "Coming up"} className="flex max-h-72 flex-col overflow-y-auto">
+            <ul id={listId} role="listbox" aria-label={query.trim() ? "Results" : "Coming up"} className="flex max-h-72 flex-col overflow-y-auto phone:max-h-none">
               {rows.map((r, i) => (
                 <li
                   key={r.kind === "zone" ? "zone" : r.kind === "task" ? "task" : r.kind === "add" ? "add" : r.kind === "ask" ? "ask" : r.kind === "day" ? "day" : r.event.id}

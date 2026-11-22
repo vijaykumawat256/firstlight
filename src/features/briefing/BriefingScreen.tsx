@@ -22,6 +22,7 @@ import { LunchCard, TimeOffCard, TravelCard, WeekReviewCard, WrapUpCard } from "
 import { FollowUpCard } from "@/features/meetings/FollowUpCard";
 import { summarise } from "./summary";
 import { isPhone } from "@/app/platform";
+import { Fab } from "@/app/Fab";
 
 function LoadingState() {
   return (
@@ -88,11 +89,13 @@ export function BriefingScreen() {
             <Hourglass className="size-[18px]" />
           </IconButton>
         </Tooltip>
-        <Tooltip content="New event">
-          <IconButton label="New event" onClick={() => setAdding(true)}>
-            <Plus className="size-[19px]" />
-          </IconButton>
-        </Tooltip>
+        {!isPhone && (
+          <Tooltip content="New event">
+            <IconButton label="New event" onClick={() => setAdding(true)}>
+              <Plus className="size-[19px]" />
+            </IconButton>
+          </Tooltip>
+        )}
         {!isPhone && (
           <>
             <Tooltip content="Tasks">
@@ -121,7 +124,8 @@ export function BriefingScreen() {
         )}
       </div>
 
-      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
+      {isPhone && <Fab label="New event" onClick={() => setAdding(true)} />}
+      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 phone:pb-24 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
         <header className="mb-6">
           <h1 className="text-display font-bold tracking-tight text-fg">{greeting(now)}</h1>
           <p className="mt-0.5 text-headline font-medium text-fg-2">{formatDate(now)}</p>

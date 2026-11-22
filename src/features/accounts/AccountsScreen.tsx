@@ -10,6 +10,7 @@ import { useSettings } from "@/features/settings/useSettings";
 import { AddAccountSheet } from "./AddAccountSheet";
 import { SignInAppsDialog } from "./SignInApps";
 import { timeAgo } from "./time";
+import { isPhone } from "@/app/platform";
 
 const PROVIDER_LABEL: Record<AccountView["provider"], string> = {
   fixture: "Sample data",
@@ -247,8 +248,9 @@ export function AccountsScreen() {
   return (
     <div className="flex h-full flex-col">
       <div data-tauri-drag-region className="flex h-11 shrink-0 items-center justify-between px-3 pl-20">
-        <Button variant="plain" size="sm" leading={<ChevronLeft className="size-4" />} onClick={() => go("briefing")}>
-          Briefing
+        {/* A phone reaches Accounts from the Settings tab, so that is where back goes. */}
+        <Button variant="plain" size="sm" leading={<ChevronLeft className="size-4" />} onClick={() => go(isPhone ? "settings" : "briefing")}>
+          {isPhone ? "Settings" : "Briefing"}
         </Button>
         <Tooltip content="Add calendar">
           <IconButton label="Add calendar" onClick={() => setAdding(true)}>

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* `phone:` styles apply only inside the iPhone, iPad and Android apps (see src/app/platform.ts). */
+@custom-variant phone (&:where(:root:is([data-platform="ios"], [data-platform="android"]) *));
+
 /* ------------------------------------------------------------------------
    Design tokens. Every colour, size, radius, shadow and duration the UI uses
    is defined here. Components never use raw hex values or pixel sizes.
@@ -364,6 +367,11 @@
 :root[data-text-size="small"] { --text-scale: 0.92; }
 :root[data-text-size="large"] { --text-scale: 1.15; }
 :root[data-text-size="larger"] { --text-scale: 1.3; }
+/* Phones are read at arm's length: everything a step larger, still following the chosen text size. */
+:root:is([data-platform="ios"], [data-platform="android"]) { --text-scale: 1.12; }
+:root:is([data-platform="ios"], [data-platform="android"])[data-text-size="small"] { --text-scale: 1.04; }
+:root:is([data-platform="ios"], [data-platform="android"])[data-text-size="large"] { --text-scale: 1.27; }
+:root:is([data-platform="ios"], [data-platform="android"])[data-text-size="larger"] { --text-scale: 1.42; }
 
 /* Expose tokens to Tailwind utilities (bg-surface, text-fg-2, rounded-card, ...). */
 @theme inline {
@@ -520,6 +528,17 @@ body {
   height: 100dvh;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   box-sizing: border-box;
+}
+/* A phone zooms into any text field whose text is smaller than 16px, pushing the page off screen: never let it. Date
+   and time fields have a built-in minimum width on iPhone that overflows a two-column row unless told otherwise. */
+:root:is([data-platform="ios"], [data-platform="android"]) :is(input, textarea, select) {
+  font-size: max(16px, 1em);
+}
+:root:is([data-platform="ios"], [data-platform="android"]) input:is([type="date"], [type="time"], [type="datetime-local"]) {
+  min-width: 0;
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
 }
 :root:is([data-platform="ios"], [data-platform="android"]) [data-tauri-drag-region].pl-20 {
   padding-left: 0.75rem;
