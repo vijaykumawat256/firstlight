@@ -1,6 +1,6 @@
 # Firstlight privacy policy
 
-*Last updated: 21 November 2026. A plain-language description of exactly what Firstlight does with your information.*
+*Last updated: 22 November 2026. A plain-language description of exactly what Firstlight does with your information.*
 
 ## The short version
 
@@ -37,7 +37,7 @@ Firstlight connects only to services you set up. Each has its own privacy policy
 - **Out-of-office reply** (off by default): if you allow it for a Google or Microsoft account, Firstlight sets that account's automatic reply, with the text you see and the dates of your time off.
 - **AI services** (off by default): see "AI features" below.
 - **Apple Maps** (Mac only, off by default): to estimate travel time to an in-person meeting, Firstlight sends Apple the two places involved (where you are coming from and the meeting's place).
-- **Sharing between your computers** (off by default): your tasks, meeting notes, own events, templates and days off are written to a folder you already sync (iCloud Drive, OneDrive, Dropbox or Google Drive), **encrypted with a sync code only your computers have**. Your cloud service stores the encrypted file but cannot read it.
+- **Sharing between your computers** (off by default): your tasks, meeting notes, own events, templates and days off, **encrypted with a sync code only your devices have**, are kept where you choose: a folder you already sync (iCloud Drive, OneDrive, Dropbox or Google Drive); a hidden app folder in your own Google Drive or OneDrive, reached with a permission that covers only that folder and none of your other files; or nowhere at all, passed directly between your devices on the same network. Without the code the files can't be read. On the same network, each device announces itself every 30 seconds with an id made from the sync code, its device id and a port number (no personal information), and the encrypted data goes straight from one device to the other, never through the internet.
 - **Sign-in** happens in your own browser, on Google's or Microsoft's own page. Firstlight never sees your Google or Microsoft password.
 - **Updates:** about once a day Firstlight asks the update address (GitHub, which hosts the releases) whether a newer version exists. That request carries no personal information, though GitHub sees your internet address as with any download. You can turn this off in Settings.
 

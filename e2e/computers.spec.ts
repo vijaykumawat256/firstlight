@@ -85,3 +85,33 @@ test("joining cloud storage that another computer already uses asks for its code
   await page.getByRole("button", { name: "Start sharing" }).click();
   await expect(page.getByText("Sharing between your computers is on").first()).toBeVisible();
 });
+
+test("devices on the same network can share with no folder or cloud, and see each other", async ({ page }) => {
+  await open(page, "?lanpeer");
+  await page.getByRole("radio", { name: "Same network" }).click();
+  await expect(page.getByText("Nothing goes through the internet")).toBeVisible();
+  await page.getByRole("button", { name: "Start sharing" }).click();
+  await expect(page.getByText("This network only")).toBeVisible();
+  await expect(page.getByText(/^FL1-/)).toBeVisible();
+  const net = page.getByRole("list").filter({ hasText: "Office desktop" });
+  await expect(net).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sync now" })).toHaveCount(0);
+  await settle(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.getByRole("button", { name: "Stop sharing" }).click();
+  await expect(page.getByRole("button", { name: "Start sharing" })).toBeVisible();
+});
+
+test("a folder can also share on the same network, switched on and off", async ({ page }) => {
+  await open(page);
+  await page.getByRole("radio", { name: /iCloud Drive/ }).check();
+  await page.getByRole("button", { name: "Start sharing" }).click();
+  const sw = page.getByRole("switch", { name: "Also share on the same network" });
+  await expect(sw).not.toBeChecked();
+  await sw.click();
+  await expect(sw).toBeChecked();
+  await expect(page.getByText("No other device found yet")).toBeVisible();
+  await sw.click();
+  await expect(sw).not.toBeChecked();
+  await expect(page.getByText("No other device found yet")).toHaveCount(0);
+});

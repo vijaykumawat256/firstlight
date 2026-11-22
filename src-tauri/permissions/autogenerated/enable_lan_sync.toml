@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-enable-lan-sync"
+description = "Enables the enable_lan_sync command without any pre-configured scope."
+commands.allow = ["enable_lan_sync"]
+
+[[permission]]
+identifier = "deny-enable-lan-sync"
+description = "Denies the enable_lan_sync command without any pre-configured scope."
+commands.deny = ["enable_lan_sync"]

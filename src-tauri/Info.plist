@@ -14,6 +14,8 @@
   <string>Only if you turn it on, Firstlight keeps your task list in step with Reminders, so your tasks reach your iPhone and Siri. It changes or deletes only reminders in your default list that it keeps in step.</string>
   <key>NSRemindersUsageDescription</key>
   <string>Only if you turn it on, Firstlight keeps your task list in step with Reminders, so your tasks reach your iPhone and Siri. It changes or deletes only reminders in your default list that it keeps in step.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Only if you turn on sharing on the same network, Firstlight finds your other computers on this network and exchanges your tasks, notes and events with them, encrypted with your sync code.</string>
   <key>NSAppleEventsUsageDescription</key>
   <string>Firstlight asks Mail for your unread messages and meeting invitations so it can summarise them. It never changes or sends mail.</string>
 </dict>

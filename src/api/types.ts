@@ -464,7 +464,7 @@ export interface AppSettings {
 
   templates: EventTemplate[];
   /** Accounts your tasks are kept in step with (the first takes tasks made here). */
-  tasks: { sync_accounts: string[]; folder_sync: string | null; cloud_sync: string | null };
+  tasks: { sync_accounts: string[]; folder_sync: string | null; cloud_sync: string | null; lan_sync: boolean };
 }
 
 export type AiProvider = "anthropic" | "local" | "openai" | "xai" | "gemini" | "mistral" | "groq" | "openrouter" | "custom";

@@ -355,6 +355,10 @@ pub trait SyncFiles: Send + Sync {
     fn read(&self, device: &str) -> Result<Vec<u8>>;
     /// Creates or replaces this device's file.
     fn write(&self, device: &str, data: &[u8]) -> Result<()>;
+    /// A short name for the kind of place, so what was read from one place is remembered apart from another.
+    fn kind(&self) -> &'static str {
+        "files"
+    }
 }
 
 /// A device id as used in file names: what [`device_id`] makes (hex). Anything else in the folder is not ours.
@@ -475,7 +479,7 @@ pub fn sync(
     list.sort_by(|a, b| a.device.cmp(&b.device));
     let own_present = list.iter().any(|f| f.device == me);
     for f in list.iter().filter(|f| f.device != me) {
-        let seen_key = format!("{SEEN_PREFIX}{}", f.device);
+        let seen_key = format!("{SEEN_PREFIX}{}:{}", files.kind(), f.device);
         let seen: Option<Seen> = store
             .get_setting(&seen_key)?
             .and_then(|v| serde_json::from_value(v).ok());
@@ -557,6 +561,7 @@ pub fn sync(
 }
 
 pub mod cloud;
+pub mod lan;
 
 #[cfg(test)]
 mod tests;

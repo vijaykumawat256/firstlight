@@ -17,7 +17,7 @@ use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter, State};
 
 /// This computer's name as the person knows it ("Vijay's MacBook Air"), shown on the other computers.
-fn computer_name() -> String {
+pub(crate) fn computer_name() -> String {
     static NAME: OnceLock<String> = OnceLock::new();
     NAME.get_or_init(|| {
         #[cfg(target_os = "macos")]
@@ -41,7 +41,7 @@ fn computer_name() -> String {
     .clone()
 }
 
-fn key_of(deps: &Deps) -> Option<[u8; 32]> {
+pub(crate) fn key_of(deps: &Deps) -> Option<[u8; 32]> {
     let code = deps.secrets.get(KEY_SECRET).ok().flatten()?;
     folder_sync::parse_code(&code).ok()
 }
@@ -195,11 +195,21 @@ fn check_folder(folder: &str) -> CmdResult<PathBuf> {
 }
 
 #[derive(Serialize)]
-pub struct FolderSyncOn {
+pub(crate) struct FolderSyncOn {
     settings: AppSettings,
     /// The sync code to type on your other computers.
     code: String,
     report: Report,
+}
+
+impl FolderSyncOn {
+    pub(crate) fn new(settings: AppSettings, code: String, report: Report) -> Self {
+        Self {
+            settings,
+            code,
+            report,
+        }
+    }
 }
 
 /// Starts sharing through `folder`. On the first computer `code` is empty and a new code is made; on the others it is

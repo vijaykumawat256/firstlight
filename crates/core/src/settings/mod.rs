@@ -158,6 +158,9 @@ pub struct TaskSyncSettings {
     /// folder, OneDrive's app folder) holds the files. This computer only, like `folder_sync`: changed only by
     /// `enable_cloud_sync` / `disable_cloud_sync`; import clears it; removing the account clears it.
     pub cloud_sync: Option<String>,
+    /// Also (or only) share directly with your devices on the same network. This computer only: changed only by
+    /// `enable_lan_sync` / `disable_lan_sync`; import clears it.
+    pub lan_sync: bool,
 }
 
 /// Choices about what Firstlight does on its own and what it keeps.
@@ -911,6 +914,7 @@ impl AppSettings {
         imported.tasks.sync_accounts.clear();
         imported.tasks.folder_sync = None;
         imported.tasks.cloud_sync = None;
+        imported.tasks.lan_sync = false;
         imported.ai.consented = None;
         imported.ai.consented_host = None;
         imported.ai.plan_consented = None;

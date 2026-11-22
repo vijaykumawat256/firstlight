@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Laptop } from "lucide-react";
+import { Copy, Laptop, Wifi } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage, type FolderSyncReport } from "@/api";
-import { Button, Segmented, TextField, useToasts } from "@/design";
+import { Button, Segmented, Switch, TextField, useToasts } from "@/design";
 import { timeAgo } from "@/features/accounts/time";
 import { Group, SettingRow } from "./controls";
 import { useSettings } from "./useSettings";
@@ -16,11 +16,12 @@ export function FolderSyncSettings() {
   const qc = useQueryClient();
   const { settings: s } = useSettings();
   const choices = useQuery({ queryKey: ["folder-choices"], queryFn: () => api.folderSyncChoices(), staleTime: 60_000 });
-  const sharing = s?.tasks.folder_sync ?? s?.tasks.cloud_sync ?? null;
+  const sharing = s?.tasks.folder_sync ?? s?.tasks.cloud_sync ?? (s?.tasks.lan_sync ? "lan" : null);
+  const lanStatus = useQuery({ queryKey: ["lan-status"], queryFn: () => api.lanSyncStatus(), enabled: !!s?.tasks.lan_sync, refetchInterval: 15_000 });
   const code = useQuery({ queryKey: ["folder-code", sharing], queryFn: () => api.folderSyncCode(), enabled: !!sharing });
   const accounts = useQuery({ queryKey: ["accounts"], queryFn: () => api.listAccounts() });
   const cloudAccounts = (accounts.data ?? []).filter((a) => a.provider === "google" || a.provider === "microsoft");
-  const [where, setWhere] = useState<"folder" | "cloud">("folder");
+  const [where, setWhere] = useState<"folder" | "cloud" | "lan">("folder");
   const [cloudAccount, setCloudAccount] = useState("");
   const [folder, setFolder] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -30,7 +31,8 @@ export function FolderSyncSettings() {
     void qc.invalidateQueries();
   };
   const start = useMutation({
-    mutationFn: () => (where === "cloud" ? api.enableCloudSync(cloudAccount, joinCode.trim() || null) : api.enableFolderSync(folder, joinCode.trim() || null)),
+    mutationFn: () =>
+      where === "cloud" ? api.enableCloudSync(cloudAccount, joinCode.trim() || null) : where === "lan" ? api.enableLanSync(joinCode.trim() || null) : api.enableFolderSync(folder, joinCode.trim() || null),
     onSuccess: (r) => {
       qc.setQueryData(["settings"], r.settings);
       done(r.report);
@@ -45,8 +47,17 @@ export function FolderSyncSettings() {
     },
     onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
   });
+  const lan = useMutation({
+    mutationFn: (on: boolean) => (on ? api.enableLanSync(null).then((r) => r.settings) : api.disableLanSync()),
+    onSuccess: (saved) => qc.setQueryData(["settings"], saved),
+    onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
+  });
   const stop = useMutation({
-    mutationFn: () => (s?.tasks.cloud_sync ? api.disableCloudSync() : api.disableFolderSync()),
+    mutationFn: async () => {
+      if (s?.tasks.lan_sync) await api.disableLanSync();
+      if (s?.tasks.cloud_sync) return api.disableCloudSync();
+      return api.disableFolderSync();
+    },
     onSuccess: (saved) => {
       qc.setQueryData(["settings"], saved);
       setLast(null);
@@ -56,7 +67,8 @@ export function FolderSyncSettings() {
   if (!s) return null;
   const storeName = (provider: string) => (provider === "google" ? "Google Drive" : "OneDrive");
   const cloudOn = s.tasks.cloud_sync ? cloudAccounts.find((a) => a.id === s.tasks.cloud_sync) : undefined;
-  const on = s.tasks.folder_sync ?? (s.tasks.cloud_sync ? (cloudOn ? `${storeName(cloudOn.provider)} of ${cloudOn.email ?? cloudOn.display_name}` : "Your cloud storage") : null);
+  const place = s.tasks.folder_sync ?? (s.tasks.cloud_sync ? (cloudOn ? `${storeName(cloudOn.provider)} of ${cloudOn.email ?? cloudOn.display_name}` : "Your cloud storage") : null);
+  const on = place ?? (s.tasks.lan_sync ? "This network only" : null);
   if (!on) {
     const list = choices.data ?? [];
     return (
@@ -66,13 +78,18 @@ export function FolderSyncSettings() {
             <Segmented
               label="Where to keep the files"
               value={where}
-              onValueChange={(v) => v && setWhere(v as "folder" | "cloud")}
+              onValueChange={(v) => v && setWhere(v as "folder" | "cloud" | "lan")}
               options={[
                 { value: "folder", label: "Synced folder" },
                 { value: "cloud", label: "Cloud account" },
+                { value: "lan", label: "Same network" },
               ]}
             />
-            {where === "folder" ? (
+            {where === "lan" ? (
+              <p className="text-body text-fg-2">
+                Your devices find each other on the same Wi-Fi or office network and swap changes directly, encrypted with your sync code. Nothing goes through the internet. They share only while both are on the same network; add a folder or cloud account later to share from anywhere.
+              </p>
+            ) : where === "folder" ? (
               <>
                 <fieldset className="flex flex-col gap-2">
                   <legend className="mb-1 text-footnote font-medium text-fg-2">A folder you already sync (the same one on every computer)</legend>
@@ -112,7 +129,7 @@ export function FolderSyncSettings() {
               </p>
             )}
             <div className="flex justify-end">
-              <Button variant="primary" disabled={(where === "folder" ? !folder.trim() : !cloudAccount) || start.isPending} onClick={() => start.mutate()}>
+              <Button variant="primary" disabled={(where === "folder" ? !folder.trim() : where === "cloud" ? !cloudAccount : false) || start.isPending} onClick={() => start.mutate()}>
                 {start.isPending ? "Starting…" : "Start sharing"}
               </Button>
             </div>
@@ -124,7 +141,12 @@ export function FolderSyncSettings() {
   return (
     <div className="flex flex-col gap-7">
       <Group title="Sharing" footer="Changes are shared each time calendars refresh, and when you press Sync now. Your cloud service moves the files between computers, so allow it a minute.">
-        <SettingRow title={s.tasks.cloud_sync ? "Kept in" : "Folder"} description={on} />
+        <SettingRow title={s.tasks.cloud_sync ? "Kept in" : s.tasks.folder_sync ? "Folder" : "Sharing"} description={on} />
+        {place && (
+          <SettingRow title="Also on the same network" description="Faster when your devices are on the same Wi-Fi or office network, and works when the internet is down.">
+            <Switch label="Also share on the same network" checked={s.tasks.lan_sync} disabled={lan.isPending} onCheckedChange={(v) => lan.mutate(v)} />
+          </SettingRow>
+        )}
         <li className="flex flex-col gap-2 px-4 py-3">
           <span className="text-footnote font-medium text-fg-2">Sync code: type it on your other computers</span>
           <div className="flex items-center gap-2">
@@ -147,7 +169,22 @@ export function FolderSyncSettings() {
           <p className="text-footnote text-fg-2">Keep it private: anyone with the code and the folder can read what is shared.</p>
         </li>
       </Group>
-      <Group title="Your other computers">
+      {s.tasks.lan_sync && (
+        <Group title="On this network" footer="Looked for every 30 seconds. Your Mac may ask once to allow Local Network access, and Windows to allow it on private networks.">
+          {(lanStatus.data?.peers ?? []).length === 0 ? (
+            <li className="px-4 py-3 text-body text-fg-2">No other device found yet. Turn on sharing on the same network, with the same code, on your other computer.</li>
+          ) : (
+            lanStatus.data!.peers.map((p) => (
+              <li key={"lan" + p.name} className="flex min-h-12 items-center gap-3 px-4 py-2">
+                <Wifi className="size-4 shrink-0 text-fg-2" aria-hidden />
+                <span className="min-w-0 flex-1 truncate text-headline text-fg">{p.name}</span>
+                <span className="shrink-0 text-footnote text-fg-2">changed {timeAgo(p.written_at)}</span>
+              </li>
+            ))
+          )}
+        </Group>
+      )}
+      {place && <Group title="Your other computers">
         {(last?.peers ?? []).length === 0 ? (
           <li className="px-4 py-3 text-body text-fg-2">{last ? "None yet. Turn sharing on with this code on your other computer." : "Press Sync now to look."}</li>
         ) : (
@@ -160,14 +197,16 @@ export function FolderSyncSettings() {
           ))
         )}
         {last && last.unreadable > 0 && <li className="px-4 py-3 text-footnote text-warning">{last.unreadable === 1 ? "1 file" : `${last.unreadable} files`} in the folder use a different sync code and were left alone.</li>}
-      </Group>
+      </Group>}
       <div className="flex justify-end gap-2">
         <Button variant="plain" disabled={stop.isPending} onClick={() => stop.mutate()}>
           Stop sharing
         </Button>
-        <Button variant="primary" disabled={now.isPending} onClick={() => now.mutate()}>
-          {now.isPending ? "Syncing…" : "Sync now"}
-        </Button>
+        {place && (
+          <Button variant="primary" disabled={now.isPending} onClick={() => now.mutate()}>
+            {now.isPending ? "Syncing…" : "Sync now"}
+          </Button>
+        )}
       </div>
     </div>
   );

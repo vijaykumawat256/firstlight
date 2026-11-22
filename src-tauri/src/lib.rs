@@ -11,6 +11,7 @@ mod eventkit;
 mod folder_sync_cmd;
 mod fullscreen;
 mod keychain;
+mod lan_sync;
 mod mail_ai;
 mod maps;
 mod notifier;
@@ -532,6 +533,9 @@ pub fn run() {
             task_sync::disable_task_sync,
             task_sync::sync_tasks_now,
             tasks_cmd::get_week_review,
+            lan_sync::lan_sync_status,
+            lan_sync::disable_lan_sync,
+            lan_sync::enable_lan_sync,
             folder_sync_cmd::disable_cloud_sync,
             folder_sync_cmd::enable_cloud_sync,
             sign_in_apps::set_sign_in_apps,
@@ -755,6 +759,13 @@ pub fn run() {
             );
             sync.trigger(Trigger::Launch);
             let (db_path_for_notifier, key_for_notifier) = (db_path.clone(), key.clone());
+            // Sharing on the same network (idle unless turned on in Settings, Your computers).
+            lan_sync::spawn(
+                app.handle().clone(),
+                db_path.clone(),
+                key.clone(),
+                deps.clone(),
+            );
             app.manage(AppState {
                 store: Mutex::new(store),
                 db_path,
