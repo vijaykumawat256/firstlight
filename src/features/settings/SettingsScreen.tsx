@@ -142,11 +142,15 @@ export function SettingsScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <div data-tauri-drag-region className="flex h-11 shrink-0 items-center px-3 pl-20">
-        <Button variant="plain" size="sm" leading={<ChevronLeft className="size-4" />} onClick={() => (section ? setSection(null) : go("briefing"))}>
-          {section ? "Settings" : "Briefing"}
-        </Button>
-      </div>
+      {section || !isPhone ? (
+        <div data-tauri-drag-region className="flex h-11 shrink-0 items-center px-3 pl-20">
+          <Button variant="plain" size="sm" leading={<ChevronLeft className="size-4" />} onClick={() => (section ? setSection(null) : go("briefing"))}>
+            {section ? "Settings" : "Briefing"}
+          </Button>
+        </div>
+      ) : (
+        <div className="h-3 shrink-0" />
+      )}
       <main key={section ?? "home"} className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
         <h1 ref={heading} tabIndex={-1} className="mb-6 text-largetitle font-bold tracking-tight text-fg outline-none">
           {section ? titleOf(section) : "Settings"}
@@ -598,7 +602,7 @@ export function SettingsScreen() {
             )}
 
             <Group title="Crash reports">
-              <SettingRow title="Crash reports" description="If Firstlight stops unexpectedly, save a short report on this computer. It contains no calendar or email information and is never sent anywhere.">
+              <SettingRow title="Crash reports" description="If Firstlight stops unexpectedly, save a short report on this device. It contains no calendar or email information and is never sent anywhere.">
                 <Switch label="Save crash reports" checked={s.privacy.crash_reports} onCheckedChange={(v) => update((d) => void (d.privacy.crash_reports = v))} />
               </SettingRow>
               {crash.data && (
@@ -610,13 +614,13 @@ export function SettingsScreen() {
               )}
             </Group>
 
-            <Group title="Your data" footer="Firstlight has no server and no account. Your events stay on this computer, your passwords and sign-ins live in the system keychain, and nothing is sent anywhere except to your own calendar providers, and (only if you turn those on) your own mail provider, AI service and mailbox.">
+            <Group title="Your data" footer="Firstlight has no server and no account. Your events stay on this device, your passwords and sign-ins live in the system keychain, and nothing is sent anywhere except to your own calendar providers, and (only if you turn those on) your own mail provider, AI service and mailbox.">
               <SettingRow title="Export my own events" description="The events you added yourself, as a calendar file you can open in any calendar app.">
                 <Button size="sm" variant="secondary" disabled={exportEvents.isPending} onClick={() => exportEvents.mutate()}>
                   Export…
                 </Button>
               </SettingRow>
-              <SettingRow title="Erase all data" description="Removes every account, saved password and link, event and setting from this computer.">
+              <SettingRow title="Erase all data" description="Removes every account, saved password and link, event and setting from this device.">
                 <Button size="sm" variant="danger" onClick={() => setErasing(true)}>
                   Erase…
                 </Button>
@@ -685,7 +689,7 @@ export function SettingsScreen() {
         open={erasing}
         onOpenChange={setErasing}
         title="Erase all data?"
-        description="This removes every connected account, saved password and calendar link, all cached events, and all settings from this computer. Your calendars themselves are not touched. It cannot be undone."
+        description="This removes every connected account, saved password and calendar link, all cached events, and all settings from this device. Your calendars themselves are not touched. It cannot be undone."
         footer={
           <>
             <Button onClick={() => setErasing(false)}>Cancel</Button>

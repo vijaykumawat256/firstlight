@@ -70,7 +70,7 @@ export function EmailGroup() {
               title="Outlook"
               description={
                 e.outlook_mail
-                  ? "Reading unread mail and meeting invitations from Outlook on this computer."
+                  ? "Reading unread mail and meeting invitations from Outlook on this device."
                   : "Unread count and meeting invitations from classic Outlook, with no sign-in. Senders and previews aren't read, because Outlook asks before sharing them."
               }
             >
@@ -335,7 +335,7 @@ function PreviewDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title="What is sent" description="This is the complete text sent each time the summary refreshes." footer={<Button onClick={() => onOpenChange(false)}>Close</Button>}>
       <PreviewBox enabled={open} />
-      <p className="mt-2 text-footnote text-fg-2">When you type a question into Search and choose Ask, only that question, today’s date and your time zone are sent, never your events. The answer is worked out on this computer.</p>
+      <p className="mt-2 text-footnote text-fg-2">When you type a question into Search and choose Ask, only that question, today’s date and your time zone are sent, never your events. The answer is worked out on this device.</p>
     </Dialog>
   );
 }
@@ -396,7 +396,7 @@ function ConsentBody({ onOpenChange, onDone }: { onOpenChange: (o: boolean) => v
   const destinationHost = provider === "custom" ? hostOf(shownCustom) : info.host;
   const where =
     provider === "local"
-      ? `the model at ${shownEndpoint}, which runs on this computer`
+      ? `the model at ${shownEndpoint}, which runs on this device`
       : destinationHost
         ? `${info.company}'s servers (${destinationHost})`
         : "the service whose address you enter below";
@@ -498,7 +498,7 @@ function ConsentBody({ onOpenChange, onDone }: { onOpenChange: (o: boolean) => v
             label="Model address"
             value={shownEndpoint}
             onChange={(e) => setEndpoint(e.target.value)}
-            hint="Ollama, LM Studio or similar running on this computer. Only addresses on this computer are accepted."
+            hint="Ollama, LM Studio or similar running on this device. Only addresses on this device are accepted."
             spellCheck={false}
             autoComplete="off"
           />
@@ -507,7 +507,7 @@ function ConsentBody({ onOpenChange, onDone }: { onOpenChange: (o: boolean) => v
         <div>
           <p className="mb-1.5 text-footnote font-medium text-fg-2">Exactly what will be sent</p>
           <PreviewBox enabled />
-          <p className="mt-2 text-footnote text-fg-2">When you type a question into Search and choose Ask, only that question, today’s date and your time zone are sent, never your events. The answer is worked out on this computer.</p>
+          <p className="mt-2 text-footnote text-fg-2">When you type a question into Search and choose Ask, only that question, today’s date and your time zone are sent, never your events. The answer is worked out on this device.</p>
         </div>
 
         <TextField label="Model" value={shownModel} onChange={(e) => setModel(e.target.value)} hint={provider === "local" ? undefined : "Model names change over time. If this one is no longer offered, the check below says so."} spellCheck={false} autoComplete="off" />

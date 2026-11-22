@@ -175,17 +175,17 @@ test("cancelling the agreement changes nothing", async ({ page }) => {
   expect(await calls(page, "__aiCalls")).toBe(0);
 });
 
-test("a local model needs no key and says it stays on this computer", async ({ page }) => {
+test("a local model needs no key and says it stays on this device", async ({ page }) => {
   await openSettings(page, "", "AI summaries");
   await page.getByRole("switch", { name: "AI summaries" }).click();
   const dialog = page.getByRole("dialog", { name: "Turn on AI summaries?" });
   await dialog.getByRole("combobox", { name: "Provider" }).click();
-  await page.getByRole("option", { name: "A model on this computer" }).click();
-  await expect(dialog).toContainText("runs on this computer");
+  await page.getByRole("option", { name: "A model on this device" }).click();
+  await expect(dialog).toContainText("runs on this device");
   await expect(dialog.getByLabel("Model address")).toHaveValue("http://127.0.0.1:11434");
   await expect(dialog.getByLabel("Anthropic API key")).toHaveCount(0);
   await dialog.getByRole("button", { name: "Turn on" }).click();
-  await expect(page.getByText("A model on this computer · llama3.2")).toBeVisible();
+  await expect(page.getByText("A model on this device · llama3.2")).toBeVisible();
 });
 
 test("the AI summary replaces the normal one and is labelled", async ({ page }) => {

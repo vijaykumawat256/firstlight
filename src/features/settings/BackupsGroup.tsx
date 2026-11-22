@@ -13,7 +13,7 @@ const WHY: Record<BackupInfo["reason"], string> = {
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
 /**
- * Settings, Privacy & data: the automatic backups (daily and before each update; encrypted, on this computer) and
+ * Settings, Privacy & data: the automatic backups (daily and before each update; encrypted, on this device) and
  * putting one back. Restoring restarts the app; what is there now is kept as a backup of its own.
  */
 export function BackupsGroup() {
@@ -25,7 +25,7 @@ export function BackupsGroup() {
     <>
       <Group
         title="Automatic backups"
-        footer="Firstlight copies your tasks, notes, events and settings every day and before each update, and keeps the last 10. They stay on this computer, encrypted like everything else. Your sign-ins and passwords stay in the system keychain and aren't part of them."
+        footer="Firstlight copies your tasks, notes, events and settings every day and before each update, and keeps the last 10. They stay on this device, encrypted like everything else. Your sign-ins and passwords stay in the system keychain and aren't part of them."
       >
         {backups.length === 0 ? (
           <SettingRow title="No backups yet" description="The first one is made within a minute of starting." />

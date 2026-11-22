@@ -44,7 +44,7 @@ const hour = (h: number) => new Date(2000, 0, 1, h).toLocaleTimeString(undefined
 /**
  * The three things that make Firstlight work from day one, on the briefing after the first calendar is connected:
  * open at sign-in (or it can't appear when you unlock), when it appears, and working hours (free time, lunch and
- * the end-of-day note depend on them). Gone once all three are done, or when hidden. Remembered on this computer.
+ * the end-of-day note depend on them). Gone once all three are done, or when hidden. Remembered on this device.
  */
 export function GettingStarted() {
   const [steps, setSteps] = useState<Steps>(read);

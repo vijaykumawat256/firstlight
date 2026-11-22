@@ -56,7 +56,7 @@ interface Draft {
   /** Minutes before, or "none". */
   reminder: string;
   invitees: string;
-  /** Focus time (timed events kept on this computer only). */
+  /** Focus time (timed events kept on this device only). */
   focus: boolean;
 }
 
@@ -213,7 +213,7 @@ function repeatOptions(current: string): { value: string; label: string }[] {
   ];
 }
 
-/** Add an event of your own, or change one. It is saved only on this computer. */
+/** Add an event of your own, or change one. It is saved only on this device. */
 export function EventForm({
   open,
   onOpenChange,
@@ -286,7 +286,7 @@ function FormSheet({
   const choices = !initial && !detach ? (writable.data ?? []) : [];
   // The field to invite people appears only when real invitations can go out; otherwise only who is already invited shows.
   const canInvite = (useInviteSenders().data?.length ?? 0) > 0;
-  // Focus time is read from this computer's copy, so it is offered only for events kept here.
+  // Focus time is read from this device's copy, so it is offered only for events kept here.
   const canFocus = !d.allDay && destination === "local" && !initial?.saved_to;
 
   const save = useMutation({
@@ -361,7 +361,7 @@ function FormSheet({
       description={
         detach
           ? "Only this day changes. The rest of the repeat stays as it is."
-          : "Saved only on this computer. It isn't added to Google, Outlook or any other calendar."
+          : "Saved only on this device. It isn't added to Google, Outlook or any other calendar."
       }
       footer={
         <>
@@ -399,7 +399,7 @@ function FormSheet({
               value={destination}
               onValueChange={setDestination}
               options={[
-                { value: "local", label: "This computer only" },
+                { value: "local", label: "This device only" },
                 ...choices.map((c) => ({ value: c.id, label: c.source ? `${c.name} (${c.source})` : c.name })),
               ]}
             />

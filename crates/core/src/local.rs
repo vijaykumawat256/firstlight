@@ -2,7 +2,7 @@
 //!
 //! What the user typed (title, times, repeat rule, reminder, invitees) is kept as one record in
 //! `own_events`. The dated events the app shows are generated from it into the ordinary `events` table,
-//! under one account ("On this computer") and one calendar, so the briefing, notifications, calendar
+//! under one account ("On this device") and one calendar, so the briefing, notifications, calendar
 //! views and "Erase all data" treat them like any other. Repeats are expanded by the same tested
 //! recurrence code that reads calendar feeds. Nothing here talks to a provider: the entries never leave
 //! this computer, and Firstlight still asks for no write access to anyone's calendar.
@@ -331,7 +331,7 @@ pub fn ensure_calendar(store: &Store, now: DateTime<Utc>) -> Result<()> {
     store.upsert_account(&Account {
         id: ACCOUNT_ID.into(),
         provider: ProviderKind::Local,
-        display_name: "On this computer".into(),
+        display_name: "On this device".into(),
         email: None,
         status: AccountStatus::Ok,
         secret_ref: None,

@@ -32,7 +32,7 @@ function Line({ icon, children, tone }: { icon: React.ReactNode; children: React
 
 /**
  * What is worth knowing before this meeting, from your own calendar: what happened the last times, what is right
- * before and after, anything overlapping, and unread mail that looks related. Worked out on this computer (no AI,
+ * before and after, anything overlapping, and unread mail that looks related. Worked out on this device (no AI,
  * no network). Shown only when there is something to say.
  */
 export function MeetingPrep({ event }: { event: CalEvent }) {

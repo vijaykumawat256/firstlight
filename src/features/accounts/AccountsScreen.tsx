@@ -17,7 +17,7 @@ const PROVIDER_LABEL: Record<AccountView["provider"], string> = {
   microsoft: "Microsoft",
   caldav: "CalDAV",
   ics: "Calendar link",
-  system: "This computer",
+  system: "This device",
   local: "Your own events",
 };
 
@@ -220,7 +220,7 @@ function AccountCard({ account, onChanged }: { account: AccountView; onChanged: 
         open={confirming}
         onOpenChange={setConfirming}
         title={`Remove “${account.display_name}”?`}
-        description="Its events are deleted from this computer, and its saved link or sign-in is removed from the keychain. Your calendar itself is untouched."
+        description="Its events are deleted from this device, and its saved link or sign-in is removed from the keychain. Your calendar itself is untouched."
         footer={
           <>
             <Button onClick={() => setConfirming(false)}>Cancel</Button>

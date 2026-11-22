@@ -249,7 +249,7 @@ test("Reconnect restores an account that needs attention", async ({ page }) => {
 test("Calendar app: explains the permission, connects, birthdays start hidden", async ({ page }) => {
   await page.goto("/?fresh");
   await openAdd(page);
-  await page.getByRole("button", { name: /Calendar app on this computer/ }).click();
+  await page.getByRole("button", { name: /Calendar app on this device/ }).click();
   await expect(page.getByText("Allow Full Access")).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/system-calendar.png` });
   await page.getByRole("button", { name: "Allow access" }).click();
@@ -265,7 +265,7 @@ test("Calendar app: explains the permission, connects, birthdays start hidden", 
 test("Calendar app: denied access shows the way to System Settings", async ({ page }) => {
   await page.goto("/?fresh&denied");
   await openAdd(page);
-  await page.getByRole("button", { name: /Calendar app on this computer/ }).click();
+  await page.getByRole("button", { name: /Calendar app on this device/ }).click();
   await expect(page.getByRole("button", { name: "Check again" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open System Settings" })).toBeVisible();
   await page.getByRole("button", { name: "Check again" }).click();
@@ -276,7 +276,7 @@ test("Calendar app option is hidden where it is unsupported", async ({ page }) =
   await page.goto("/?fresh&nosystem");
   await openAdd(page);
   await expect(page.getByRole("button", { name: /Calendar link/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Calendar app on this computer/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Calendar app on this device/ })).toHaveCount(0);
 });
 
 test("public holidays are added with one tap and are an ordinary read-only calendar", async ({ page }) => {
@@ -302,9 +302,9 @@ test("on Windows the computer's own calendars are offered as Outlook, read-only"
   await page.goto("/?fresh&outlook");
   await page.getByRole("button", { name: "Add a calendar" }).click();
   const dialog = page.getByRole("dialog", { name: "Add a calendar" });
-  await expect(dialog.getByText("Outlook on this computer")).toBeVisible();
-  await expect(dialog.getByText("Calendar app on this computer")).toHaveCount(0);
-  await dialog.getByText("Outlook on this computer").click();
+  await expect(dialog.getByText("Outlook on this device")).toBeVisible();
+  await expect(dialog.getByText("Calendar app on this device")).toHaveCount(0);
+  await dialog.getByText("Outlook on this device").click();
   const outlook = page.getByRole("dialog", { name: "Outlook" });
   await expect(outlook.getByText(/classic Outlook/)).toBeVisible();
   await expect(outlook.getByText(/new Outlook can't be read/)).toBeVisible();

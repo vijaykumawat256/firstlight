@@ -11,6 +11,7 @@ import { useSettings } from "@/features/settings/useSettings";
 import { MonthGrid, monthWeeks } from "./MonthGrid";
 import { TimeGrid } from "./TimeGrid";
 import { localeFirstDay, sameDay, startOfLocalDay, startOfWeek } from "./layout";
+import { isPhone } from "@/app/platform";
 
 type Mode = "day" | "week" | "month";
 
@@ -55,19 +56,30 @@ export function CalendarScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <div data-tauri-drag-region className="flex h-11 shrink-0 items-center px-3 pl-20">
-        <Button variant="plain" size="sm" leading={<ChevronLeft className="size-4" />} onClick={() => go("briefing")}>
-          Briefing
-        </Button>
-      </div>
+      {/* On a phone the tab bar takes you back, so there is no title strip (and no space lost to it). */}
+      {isPhone ? (
+        <div className="h-3 shrink-0" />
+      ) : (
+        <div data-tauri-drag-region className="flex h-11 shrink-0 items-center px-3 pl-20">
+          <Button variant="plain" size="sm" leading={<ChevronLeft className="size-4" />} onClick={() => go("briefing")}>
+            Briefing
+          </Button>
+        </div>
+      )}
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-5 pb-3">
         <h1 aria-live="polite" className="text-title font-semibold tracking-tight text-fg">
           {title}
         </h1>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" leading={<Plus className="size-4" aria-hidden />} onClick={() => setAdding(true)}>
-            New event
-          </Button>
+        <div className="flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between">
+          {isPhone ? (
+            <IconButton label="New event" onClick={() => setAdding(true)}>
+              <Plus className="size-5" />
+            </IconButton>
+          ) : (
+            <Button size="sm" variant="secondary" leading={<Plus className="size-4" aria-hidden />} onClick={() => setAdding(true)}>
+              New event
+            </Button>
+          )}
           <Segmented
             label="View"
             value={mode}

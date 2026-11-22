@@ -61,7 +61,7 @@ export function TimeOffSettings() {
       .catch(() => push({ title: "Couldn't copy", tone: "danger" }));
   return (
     <div className="flex flex-col gap-7">
-      <Group title="Your days off" footer="On these days only reminders about meetings come; summaries, task reminders, wrap-up and nudges stay quiet. Kept on this computer.">
+      <Group title="Your days off" footer="On these days only reminders about meetings come; summaries, task reminders, wrap-up and nudges stay quiet. Kept on this device.">
         {list.length === 0 && (
           <li className="px-4 py-3 text-body text-fg-2">No time off planned.</li>
         )}

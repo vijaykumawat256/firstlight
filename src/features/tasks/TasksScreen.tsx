@@ -12,6 +12,7 @@ import { PlanDay } from "./PlanDay";
 import { FocusTimerBar, StartTimer } from "./FocusTimer";
 import { StatusReportDialog } from "@/features/insights/StatusReport";
 import { TimeReportSheet } from "@/features/insights/TimeReport";
+import { isPhone } from "@/app/platform";
 
 type Tab = TaskTab;
 
@@ -61,17 +62,22 @@ export function TasksScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <div data-tauri-drag-region className="flex h-11 shrink-0 items-center px-3 pl-20">
-        <Button variant="plain" size="sm" leading={<ChevronLeft className="size-4" />} onClick={() => go("briefing")}>
-          Briefing
-        </Button>
-      </div>
+      {/* On a phone the tab bar takes you back, so there is no title strip (and no space lost to it). */}
+      {isPhone ? (
+        <div className="h-3 shrink-0" />
+      ) : (
+        <div data-tauri-drag-region className="flex h-11 shrink-0 items-center px-3 pl-20">
+          <Button variant="plain" size="sm" leading={<ChevronLeft className="size-4" />} onClick={() => go("briefing")}>
+            Briefing
+          </Button>
+        </div>
+      )}
       <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-2xl">
         <div className="flex flex-col gap-4">
           <header>
             <h1 className="text-display font-bold tracking-tight text-fg">Tasks</h1>
             <p className="mt-0.5 text-footnote text-fg-2">
-              {syncing ? "Kept in step with your task list online (Settings, General)." : "Kept only on this computer."} Unfinished tasks stay in Today until they are done.
+              {syncing ? "Kept in step with your task list online (Settings, General)." : "Kept only on this device."} Unfinished tasks stay in Today until they are done.
             </p>
             {syncing && (
               <Button className="mt-1" size="sm" variant="plain" disabled={syncNow.isPending} onClick={() => syncNow.mutate()}>

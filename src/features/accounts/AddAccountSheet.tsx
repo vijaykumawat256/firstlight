@@ -118,7 +118,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
       open={open}
       onOpenChange={close}
       title={step === "choose" ? "Add a calendar" : step === "system" ? (system.data?.name ?? "Calendar app") : step === "holidays" ? "Public holidays" : step === "ics" ? "Calendar link" : step === "oauth" ? `Sign in with ${OAUTH_LABEL[oauthProvider]}` : "iCloud, Yahoo and others"}
-      description={step === "choose" ? "Choose how to connect." : step === "system" ? "Use the calendars already on this computer." : step === "holidays" ? "Choose a country. Its holidays appear alongside your events." : step === "ics" ? "Paste the address of a published calendar." : step === "oauth" ? "Firstlight only asks to view your calendar." : "Sign in with an app password."}
+      description={step === "choose" ? "Choose how to connect." : step === "system" ? "Use the calendars already on this device." : step === "holidays" ? "Choose a country. Its holidays appear alongside your events." : step === "ics" ? "Paste the address of a published calendar." : step === "oauth" ? "Firstlight only asks to view your calendar." : "Sign in with an app password."}
       footer={
         step === "system" ? (
           <>
@@ -166,7 +166,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
             <ListGroup>
               <Choice
                 icon={<Laptop />}
-                title={system.data.name === "Outlook" ? "Outlook on this computer" : "Calendar app on this computer"}
+                title={system.data.name === "Outlook" ? "Outlook on this device" : "Calendar app on this device"}
                 subtitle={system.data.name === "Outlook" ? "Every account already in Outlook: Microsoft 365, Exchange, Gmail, IMAP…" : "Everything already in Calendar: iCloud, Gmail, Outlook, Yahoo…"}
                 onClick={() => setStep("system")}
               />
@@ -220,7 +220,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
               </li>
             ))}
           </ListGroup>
-          <p className="px-1 text-footnote text-fg-2">These are public calendars published by Google. Birthdays from your Contacts already appear if you connect the Calendar app on this computer.</p>
+          <p className="px-1 text-footnote text-fg-2">These are public calendars published by Google. Birthdays from your Contacts already appear if you connect the Calendar app on this device.</p>
         </div>
       ) : step === "system" ? (
         <div className="flex flex-col gap-4 pb-4">
@@ -238,7 +238,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
           {system.data?.name === "Outlook" ? (
             <>
               <p className="text-body text-fg">
-                Firstlight will read the calendars in Outlook on this computer, so every account you've added there shows up with no extra sign-in.
+                Firstlight will read the calendars in Outlook on this device, so every account you've added there shows up with no extra sign-in.
               </p>
               <ul className="flex flex-col gap-1.5 text-body text-fg-2">
                 <li>• This works with the classic Outlook. Outlook may open in the background the first time.</li>
@@ -249,7 +249,7 @@ export function AddAccountSheet({ open, onOpenChange, hasDemo }: { open: boolean
           ) : (
             <>
               <p className="text-body text-fg">
-                Firstlight will read the calendars in your Calendar app, so any account you've added to this computer shows up here with no extra sign-in.
+                Firstlight will read the calendars in your Calendar app, so any account you've added to this device shows up here with no extra sign-in.
               </p>
               <ul className="flex flex-col gap-1.5 text-body text-fg-2">
                 <li>• macOS will ask you to allow access. Choose <span className="font-medium text-fg">Allow Full Access</span>.</li>

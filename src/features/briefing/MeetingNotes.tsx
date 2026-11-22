@@ -11,7 +11,7 @@ const MAX_CHARS = 10_000;
 /**
  * Your private notes for this meeting. One note per meeting: every time it happens (a repeating meeting, or the next
  * one with the same title) shows the same note, so what you wrote last time is there when it comes round again.
- * Saved as you type, kept only on this computer, never sent anywhere (not to AI, not to the calendar).
+ * Saved as you type, kept only on this device, never sent anywhere (not to AI, not to the calendar).
  */
 export function MeetingNotes({ event }: { event: CalEvent }) {
   const id = useId();
@@ -51,7 +51,7 @@ export function MeetingNotes({ event }: { event: CalEvent }) {
       ? `Not saved: ${errorMessage(save.error)}`
       : note.data
         ? `Saved ${formatDate(new Date(note.data.updated_at))}, ${formatTime(new Date(note.data.updated_at))}`
-        : "Only on this computer. It comes back every time this meeting does.";
+        : "Only on this device. It comes back every time this meeting does.";
 
   return (
     <section className="flex flex-col gap-1.5">

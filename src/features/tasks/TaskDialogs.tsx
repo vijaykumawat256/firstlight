@@ -59,7 +59,7 @@ export function TaskForm({ task, onClose }: { task: Task; onClose: () => void })
   });
   const minutes = d.minutes === null ? "none" : String(d.minutes);
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Change task" description="Kept only on this computer.">
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Change task" description="Kept only on this device.">
       <form
         className="flex flex-col gap-4 pb-2"
         onSubmit={(e) => {
@@ -152,7 +152,7 @@ export function PlanTask({ task, onClose }: { task: Task; onClose: () => void })
     onError: (e) => push({ title: errorMessage(e), tone: "danger" }),
   });
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Set time aside" description={`For “${task.title}”. It is added to your calendar on this computer only.`}>
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Set time aside" description={`For “${task.title}”. It is added to your calendar on this device only.`}>
       <div className="pb-3">
         <Segmented label="How long" value={minutes} onValueChange={setMinutes} options={options} />
       </div>

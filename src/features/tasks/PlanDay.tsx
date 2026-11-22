@@ -6,7 +6,7 @@ import { formatTime } from "@/features/briefing/format";
 import { useTaskChanged } from "./shared";
 
 /**
- * "Plan my day": suggestions for when today's tasks could be done, in today's free time. Worked out on this computer,
+ * "Plan my day": suggestions for when today's tasks could be done, in today's free time. Worked out on this device,
  * or (when the person agreed to it) by their AI service, whose answer is checked against the free time first. Nothing
  * goes in the calendar until "Set time aside" is pressed.
  */
@@ -56,7 +56,7 @@ export function PlanDay({ onClose }: { onClose: () => void }) {
         <pre aria-label="What would be sent" className="mb-3 max-h-60 overflow-auto whitespace-pre-wrap rounded-card bg-fill p-3 text-footnote text-fg-2">
           {preview.data ?? "Loading…"}
         </pre>
-        <p className="mb-3 text-footnote text-fg-2">You can withdraw this in Settings, AI. The suggestions are always checked against your free time on this computer.</p>
+        <p className="mb-3 text-footnote text-fg-2">You can withdraw this in Settings, AI. The suggestions are always checked against your free time on this device.</p>
         <div className="flex justify-end gap-2 pb-2">
           <Button onClick={() => setConsenting(false)}>Not now</Button>
           <Button variant="primary" disabled={!preview.data || agree.isPending} onClick={() => agree.mutate()}>
@@ -76,7 +76,7 @@ export function PlanDay({ onClose }: { onClose: () => void }) {
             value={useAi ? "ai" : "local"}
             onValueChange={(v) => setUseAi(v === "ai")}
             options={[
-              { value: "local", label: "This computer" },
+              { value: "local", label: "This device" },
               { value: "ai", label: "AI" },
             ]}
           />
@@ -94,7 +94,7 @@ export function PlanDay({ onClose }: { onClose: () => void }) {
         <>
           {p.problem && (
             <p role="status" className="mb-2 rounded-card bg-warning-soft px-3 py-2 text-footnote text-warning">
-              {p.problem === "limit" ? "AI has been asked a lot this hour. Here is the plan worked out on this computer." : "AI couldn't help this time. Here is the plan worked out on this computer."}
+              {p.problem === "limit" ? "AI has been asked a lot this hour. Here is the plan worked out on this device." : "AI couldn't help this time. Here is the plan worked out on this device."}
             </p>
           )}
           {p.suggestions.length === 0 ? (
@@ -126,7 +126,7 @@ export function PlanDay({ onClose }: { onClose: () => void }) {
               ))}
             </ul>
           )}
-          <p className="pb-3 text-footnote text-fg-2">{p.by_ai ? "Suggested by AI and checked against your free time." : "Worked out on this computer: tasks that have waited longest go first."}</p>
+          <p className="pb-3 text-footnote text-fg-2">{p.by_ai ? "Suggested by AI and checked against your free time." : "Worked out on this device: tasks that have waited longest go first."}</p>
         </>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 pb-2">

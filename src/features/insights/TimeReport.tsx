@@ -69,7 +69,7 @@ export function TimeReportSheet({ onClose }: { onClose: () => void }) {
   const r = report.data;
   const maxDay = r ? Math.max(...r.by_day.map(([, m]) => m), 1) : 1;
   return (
-    <Sheet open onOpenChange={(o) => !o && onClose()} title="Where my time went" description="Meetings and focus time from your calendars. Worked out on this computer.">
+    <Sheet open onOpenChange={(o) => !o && onClose()} title="Where my time went" description="Meetings and focus time from your calendars. Worked out on this device.">
       <div className="flex flex-col gap-4 pb-4">
         <Segmented
           label="Which days"

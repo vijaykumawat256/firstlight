@@ -6,7 +6,7 @@ export interface AiProviderInfo {
   label: string;
   /** The company, for "…'s servers". */
   company: string;
-  /** The computer the summary is sent to ("api.openai.com"); null for a custom address or this computer. */
+  /** The computer the summary is sent to ("api.openai.com"); null for a custom address or this device. */
   host: string | null;
   /** The name of the key, for the field label: "OpenAI API key". */
   keyLabel: string | null;
@@ -26,7 +26,7 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
   { id: "groq", company: "Groq", label: "Groq", host: "api.groq.com", keyLabel: "Groq API key", keyPlaceholder: "gsk_…", keyUrl: "https://console.groq.com/keys", defaultModel: "llama-3.3-70b-versatile" },
   { id: "openrouter", company: "OpenRouter", label: "OpenRouter (many models)", host: "openrouter.ai", keyLabel: "OpenRouter API key", keyPlaceholder: "sk-or-…", keyUrl: "https://openrouter.ai/keys", defaultModel: "openai/gpt-4o-mini" },
   { id: "custom", company: "The service", label: "Another service (OpenAI-compatible)", host: null, keyLabel: "API key", keyPlaceholder: "", keyUrl: null, defaultModel: "gpt-4o-mini" },
-  { id: "local", company: "This computer", label: "A model on this computer", host: null, keyLabel: null, keyPlaceholder: "", keyUrl: null, defaultModel: "llama3.2" },
+  { id: "local", company: "This device", label: "A model on this device", host: null, keyLabel: null, keyPlaceholder: "", keyUrl: null, defaultModel: "llama3.2" },
 ];
 
 export const aiProvider = (id: AiProvider): AiProviderInfo => AI_PROVIDERS.find((p) => p.id === id) ?? AI_PROVIDERS[0]!;

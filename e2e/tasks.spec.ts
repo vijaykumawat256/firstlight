@@ -115,7 +115,7 @@ test("plan my day suggests times for today's tasks, and sets time aside only for
   const dialog = page.getByRole("dialog", { name: "Plan my day" });
   const list = dialog.getByRole("list", { name: "Suggestions" });
   await expect(list.getByRole("listitem").first()).toBeVisible();
-  await expect(dialog).toContainText("Worked out on this computer");
+  await expect(dialog).toContainText("Worked out on this device");
   // AI is off, so it is not offered.
   await expect(dialog.getByRole("button", { name: "Ask AI instead…" })).toHaveCount(0);
   const count = await list.getByRole("checkbox").count();

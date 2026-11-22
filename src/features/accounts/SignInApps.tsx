@@ -8,7 +8,7 @@ const FORM_ID = "sign-in-apps-form";
 /**
  * Your own Google / Microsoft sign-in app, set here instead of being built into the app. Needed only when a provider
  * says "Set up" (this copy of Firstlight has no app of its own for it) or when a company requires its own registered
- * app. Kept on this computer only and never in a settings export; the Google secret goes in the system keychain.
+ * app. Kept on this device only and never in a settings export; the Google secret goes in the system keychain.
  */
 export function SignInAppsDialog({ open, onOpenChange, focus }: { open: boolean; onOpenChange: (o: boolean) => void; focus?: "google" | "microsoft" }) {
   const current = useQuery({ queryKey: ["sign-in-apps"], queryFn: () => api.getSignInApps(), enabled: open });

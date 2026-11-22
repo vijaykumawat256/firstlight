@@ -28,6 +28,8 @@ export function FolderSyncSettings() {
   const [cloudAccount, setCloudAccount] = useState("");
   const [folder, setFolder] = useState("");
   const [joinCode, setJoinCode] = useState("");
+  // On a phone, pairing is the way; the others are folded away until asked for.
+  const [otherWays, setOtherWays] = useState(!isPhone);
   const [last, setLast] = useState<FolderSyncReport | null>(null);
   const done = (r: FolderSyncReport) => {
     setLast(r);
@@ -64,7 +66,7 @@ export function FolderSyncSettings() {
     onSuccess: (saved) => {
       qc.setQueryData(["settings"], saved);
       setLast(null);
-      push({ title: "Sharing stopped on this computer" });
+      push({ title: "Sharing stopped on this device" });
     },
   });
   if (!s) return null;
@@ -78,7 +80,12 @@ export function FolderSyncSettings() {
     return (
       <div className="flex flex-col gap-7">
         {pairing}
-        <Group title={isPhone ? "Or share another way" : "Share between your computers"} footer="Your tasks, meeting notes, events you made here, templates and days off. Each computer keeps an encrypted file there; only your computers have the code to open them. Use the same place on every computer. No server of ours, no new account.">
+        {!otherWays && (
+          <Button variant="plain" className="self-start" onClick={() => setOtherWays(true)}>
+            Other ways to share
+          </Button>
+        )}
+        {otherWays && <Group title={isPhone ? "Or share another way" : "Share between your computers"} footer="Your tasks, meeting notes, events you made here, templates and days off. Each computer keeps an encrypted file there; only your computers have the code to open them. Use the same place on every computer. No server of ours, no new account.">
           <li className="flex flex-col gap-3 px-4 py-3">
             <Segmented
               label="Where to keep the files"
@@ -139,7 +146,7 @@ export function FolderSyncSettings() {
               </Button>
             </div>
           </li>
-        </Group>
+        </Group>}
       </div>
     );
   }

@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tan
 import { Suspense, lazy, useEffect, useState } from "react";
 import { api } from "@/api";
 import { useNav } from "@/app/nav";
+import { isPhone } from "@/app/platform";
+import { TabBar } from "@/app/TabBar";
 import { Skeleton, ToastHost, TooltipProvider, useToasts } from "@/design";
 const Gallery = lazy(() => import("@/design/Gallery").then((m) => ({ default: m.Gallery })));
 const AboutScreen = lazy(() => import("@/features/about/AboutScreen").then((m) => ({ default: m.AboutScreen })));
@@ -77,7 +79,16 @@ function Shell() {
   const screen = view === "accounts" ? <AccountsScreen /> : view === "calendar" ? <CalendarScreen /> : view === "settings" ? <SettingsScreen /> : view === "about" ? <AboutScreen /> : view === "tasks" ? <TasksScreen /> : <BriefingScreen />;
   return (
     <>
-      <Suspense fallback={<ScreenSkeleton />}>{screen}</Suspense>
+      {isPhone ? (
+        <div className="flex h-full flex-col">
+          <div className="min-h-0 flex-1">
+            <Suspense fallback={<ScreenSkeleton />}>{screen}</Suspense>
+          </div>
+          <TabBar />
+        </div>
+      ) : (
+        <Suspense fallback={<ScreenSkeleton />}>{screen}</Suspense>
+      )}
       <SearchHost />
     </>
   );

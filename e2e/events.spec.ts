@@ -10,7 +10,7 @@ test("add an event of your own: it shows in the briefing, can be edited, and del
   await page.goto("/");
   await page.getByRole("button", { name: "New event" }).click();
   const sheet = page.getByRole("dialog", { name: "New event" });
-  await expect(sheet).toContainText("Saved only on this computer");
+  await expect(sheet).toContainText("Saved only on this device");
   await expect(sheet.getByRole("button", { name: "Add event" })).toBeDisabled(); // needs a title
 
   await sheet.getByLabel("Title").fill("Pick up the car");

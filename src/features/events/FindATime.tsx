@@ -46,7 +46,7 @@ export function FindATime({ onClose }: { onClose: () => void }) {
       .catch(() => push({ title: "Couldn't copy that", tone: "danger" }));
   };
 
-  // Blocks the chosen length from the start of the stretch as focus time, kept on this computer.
+  // Blocks the chosen length from the start of the stretch as focus time, kept on this device.
   const block = useMutation({
     mutationFn: (s: FreeSlot) => {
       const start = new Date(s.start);

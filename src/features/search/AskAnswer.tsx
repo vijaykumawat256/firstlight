@@ -87,7 +87,7 @@ export function AskAnswer({ question, onBack, onOpen }: { question: string; onBa
         </p>
       </div>
       {body}
-      <p className="px-1 text-footnote text-fg-3">Only your question was sent to the AI. The answer is read from your calendar on this computer.</p>
+      <p className="px-1 text-footnote text-fg-3">Only your question was sent to the AI. The answer is read from your calendar on this device.</p>
     </div>
   );
 }

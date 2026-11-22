@@ -461,7 +461,7 @@ function saveFixtureEvent(id: string | null, input: EventInput, destination?: st
     accounts.push({
       id: "local-account",
       provider: "local",
-      display_name: "On this computer",
+      display_name: "On this device",
       email: null,
       status: "ok",
       calendars: [{ id: LOCAL_CAL, account_id: "local-account", remote_id: "events", name: "My events", colour: "purple", visible: true, read_only: false }],
