@@ -63,6 +63,19 @@ pub fn base_of(records: &Records) -> Base {
         .collect()
 }
 
+/// The starting point for a device met for the first time, when no copy of it has been merged before.
+///
+/// It is what this device last published, so a record we published and have since deleted stays deleted instead of
+/// coming back from their copy. But a record we still have and they don't is left out: they have simply never seen
+/// it (a new phone or computer joining), so it must be kept and handed to them, never taken as deleted there.
+pub fn first_contact_base(published: &Base, local: &Records, remote: &Records) -> Base {
+    published
+        .iter()
+        .filter(|(k, _)| remote.contains_key(*k) || !local.contains_key(*k))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
+}
+
 /// Which side wins when both changed: the newer time, else the larger fingerprint (the same answer on both computers).
 fn theirs_win(ours: &Rec, theirs: &Rec) -> bool {
     match (ours.ts, theirs.ts) {
@@ -137,6 +150,27 @@ mod tests {
         list.iter()
             .map(|(k, j, t)| (k.to_string(), rec(j, *t)))
             .collect()
+    }
+
+    #[test]
+    fn meeting_a_device_for_the_first_time_keeps_what_only_we_have_and_what_we_deleted_stays_gone()
+    {
+        // We published task:1 and task:2, then deleted task:2. A new device arrives with task:9 and an old copy of
+        // task:2 (it had it from somewhere else).
+        let published = base_of(&recs(&[
+            ("task:1", "mine", Some(1)),
+            ("task:2", "gone", Some(1)),
+        ]));
+        let local = recs(&[("task:1", "mine", Some(1))]);
+        let remote = recs(&[("task:2", "gone", Some(1)), ("task:9", "theirs", Some(2))]);
+        let base = first_contact_base(&published, &local, &remote);
+        let c = merge(&local, &remote, &base);
+        // task:1 is ours and they have never seen it: kept (no change here). task:9 comes over. task:2 stays deleted.
+        assert_eq!(c.len(), 1, "{c:?}");
+        assert!(
+            matches!(&c[0], Change::Set(key, _) if key == "task:9"),
+            "{c:?}"
+        );
     }
 
     #[test]

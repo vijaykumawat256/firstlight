@@ -10,6 +10,12 @@
 //!   code together with that number. So nobody without the code can read it or forge it, and an old answer recorded
 //!   on the network can't be played back later.
 //!
+//! - **Phones push and pull themselves:** a phone may refuse connections from outside, and often can't hear
+//!   broadcasts. So a phone connects to its paired computer on [`PORT`] (TCP, a fixed port) and, in one connection,
+//!   hands over its own snapshot sealed to a fresh number the computer picked ([`LanFiles::push_to`]), and gets the
+//!   computer's announcement back, so it can then fetch the computer's snapshot the usual way. Every connection
+//!   starts at the phone, the direction pairing already proved works.
+//!
 //! [`LanFiles`] is a [`SyncFiles`]: the devices heard recently are its files, so `folder_sync::sync` does the rest.
 //! The sockets and threads are in the shell (`src-tauri/src/lan_sync.rs`); everything here is tested over loopback.
 
@@ -23,10 +29,13 @@ use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// The UDP port announcements are sent to and heard on.
+/// The UDP port announcements are sent to and heard on, and the TCP port a computer answers on when it can have it.
 pub const PORT: u16 = 47_913;
 const MAGIC: &str = "FLLAN1";
 const REQUEST: &[u8; 6] = b"FLREQ1";
+const PUSH: &[u8; 6] = b"FLPUT1";
+/// A snapshot handed over by a phone is kept this long (the phone sends a fresh one at each round while it is open).
+const KEEP_PUSHED: Duration = Duration::from_secs(30 * 60);
 const NONCE: usize = 16;
 /// A device not heard from for this long is no longer listed.
 pub const FORGET_AFTER: Duration = Duration::from_secs(150);
@@ -95,6 +104,24 @@ struct Peer {
     heard: Instant,
 }
 
+struct Pushed {
+    data: Vec<u8>,
+    stamp: String,
+    at: Instant,
+}
+
+/// The stamp of a sealed snapshot file: follows its records only, so the same data sealed again isn't "new".
+fn records_stamp(key: &[u8; 32], data: &[u8]) -> String {
+    let print = open(key, data)
+        .ok()
+        .and_then(|p| serde_json::from_slice::<Snapshot>(&p).ok())
+        .and_then(|s| serde_json::to_string(&s.records).ok())
+        .map(|r| fingerprint(&r))
+        .unwrap_or_default();
+    let digest = Sha256::digest(print.as_bytes());
+    digest[..8].iter().map(|b| format!("{b:02x}")).collect()
+}
+
 #[derive(Default)]
 struct Served {
     /// This device's snapshot file (sealed), as the next request gets it.
@@ -111,6 +138,10 @@ pub struct LanFiles {
     me: String,
     peers: Mutex<HashMap<String, Peer>>,
     served: Mutex<Served>,
+    /// Snapshots phones handed over (device → file).
+    pushed: Mutex<HashMap<String, Pushed>>,
+    /// The TCP port this device answers on, for the announcement sent back to a phone that pushed.
+    port: std::sync::atomic::AtomicU16,
 }
 
 impl LanFiles {
@@ -121,7 +152,19 @@ impl LanFiles {
             me: me.into(),
             peers: Mutex::default(),
             served: Mutex::default(),
+            pushed: Mutex::default(),
+            port: std::sync::atomic::AtomicU16::new(0),
         }
+    }
+
+    /// Records the TCP port this device answers on.
+    pub fn set_port(&self, port: u16) {
+        self.port.store(port, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// This device's own stamp (changes when its records do).
+    pub fn stamp(&self) -> String {
+        self.beacon(0).stamp
     }
 
     /// This device's announcement, for the port it answers on.
@@ -170,17 +213,24 @@ impl LanFiles {
         peers.len()
     }
 
-    /// Answers one connection from another device: a request with a fresh number gets this device's snapshot,
-    /// sealed together with that number. Anything else is dropped.
-    pub fn serve(&self, mut stream: TcpStream) -> Result<()> {
+    /// Answers one connection from another device. A request with a fresh number gets this device's snapshot, sealed
+    /// together with that number. A phone pushing its own snapshot gets a fresh number to seal it with, then this
+    /// device's announcement back. Anything else is dropped. Returns the device that pushed, if one did.
+    pub fn serve(&self, mut stream: TcpStream) -> Result<Option<String>> {
         let io = |_| Error::Provider("network".into());
         stream.set_read_timeout(Some(IO_LIMIT)).map_err(io)?;
         stream.set_write_timeout(Some(IO_LIMIT)).map_err(io)?;
-        let mut req = [0u8; REQUEST.len() + NONCE];
-        stream.read_exact(&mut req).map_err(io)?;
-        if &req[..REQUEST.len()] != REQUEST {
+        let mut magic = [0u8; 6];
+        stream.read_exact(&mut magic).map_err(io)?;
+        if &magic == PUSH {
+            return self.take_push(stream).map(Some);
+        }
+        if &magic != REQUEST {
             return Err(Error::Invalid("not a request"));
         }
+        let mut req = [0u8; REQUEST.len() + NONCE];
+        req[..REQUEST.len()].copy_from_slice(REQUEST);
+        stream.read_exact(&mut req[REQUEST.len()..]).map_err(io)?;
         let data = self
             .served
             .lock()
@@ -195,7 +245,100 @@ impl LanFiles {
         stream
             .write_all(&(answer.len() as u32).to_be_bytes())
             .and_then(|_| stream.write_all(&answer))
-            .map_err(io)
+            .map_err(io)?;
+        Ok(None)
+    }
+
+    /// The computer's side of a push: a fresh number out, the phone's sealed snapshot in, our announcement back.
+    fn take_push(&self, mut stream: TcpStream) -> Result<String> {
+        let io = |_| Error::Provider("network".into());
+        let mut nonce = [0u8; NONCE];
+        getrandom::fill(&mut nonce)
+            .map_err(|_| Error::Invalid("Couldn't make a random number."))?;
+        stream.write_all(&nonce).map_err(io)?;
+        let mut len = [0u8; 4];
+        stream.read_exact(&mut len).map_err(io)?;
+        let len = u32::from_be_bytes(len) as u64;
+        if len > MAX_FILE + 1024 {
+            return Err(Error::Invalid("too big"));
+        }
+        let mut sealed = vec![0u8; len as usize];
+        stream.read_exact(&mut sealed).map_err(io)?;
+        // nonce ‖ device length ‖ device ‖ the phone's snapshot file. Sealed with the sync code and our fresh number:
+        // only a device of ours can make it, and an old one recorded on the network can't be played back.
+        let plain = open(&self.key, &sealed)?;
+        if plain.len() < NONCE + 1 || plain[..NONCE] != nonce {
+            return Err(Error::Invalid("an answer to another request"));
+        }
+        let dlen = plain[NONCE] as usize;
+        let device = plain
+            .get(NONCE + 1..NONCE + 1 + dlen)
+            .and_then(|d| std::str::from_utf8(d).ok())
+            .filter(|d| valid_device(d) && *d != self.me)
+            .ok_or(Error::Invalid("not one of our devices"))?
+            .to_string();
+        let file = plain[NONCE + 1 + dlen..].to_vec();
+        if !file.is_empty() {
+            let stamp = records_stamp(&self.key, &file);
+            if let Ok(mut pushed) = self.pushed.lock() {
+                pushed.insert(
+                    device.clone(),
+                    Pushed {
+                        data: file,
+                        stamp,
+                        at: Instant::now(),
+                    },
+                );
+            }
+        }
+        let port = self.port.load(std::sync::atomic::Ordering::Relaxed);
+        let text = self.beacon(port).text();
+        stream
+            .write_all(&(text.len() as u16).to_be_bytes())
+            .and_then(|_| stream.write_all(text.as_bytes()))
+            .map_err(io)?;
+        Ok(device)
+    }
+
+    /// The phone's side: hands this device's snapshot to the computer at `addr` and returns the computer's
+    /// announcement (heard as if it had arrived by UDP, so the computer's snapshot is fetched next).
+    pub fn push_to(&self, addr: SocketAddr) -> Result<Beacon> {
+        let io = |_| Error::Offline;
+        let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3)).map_err(io)?;
+        stream.set_read_timeout(Some(IO_LIMIT)).map_err(io)?;
+        stream.set_write_timeout(Some(IO_LIMIT)).map_err(io)?;
+        stream.write_all(PUSH).map_err(io)?;
+        let mut nonce = [0u8; NONCE];
+        stream.read_exact(&mut nonce).map_err(io)?;
+        let data = self
+            .served
+            .lock()
+            .map(|s| s.data.clone())
+            .unwrap_or_default();
+        let mut plain = nonce.to_vec();
+        plain.push(self.me.len() as u8);
+        plain.extend_from_slice(self.me.as_bytes());
+        plain.extend_from_slice(&data);
+        let sealed = seal(&self.key, &plain)?;
+        stream
+            .write_all(&(sealed.len() as u32).to_be_bytes())
+            .and_then(|_| stream.write_all(&sealed))
+            .map_err(io)?;
+        let mut len = [0u8; 2];
+        stream.read_exact(&mut len).map_err(io)?;
+        let len = u16::from_be_bytes(len) as usize;
+        if len > 256 {
+            return Err(Error::Invalid("too big"));
+        }
+        let mut text = vec![0u8; len];
+        stream.read_exact(&mut text).map_err(io)?;
+        let b = std::str::from_utf8(&text)
+            .ok()
+            .and_then(Beacon::parse)
+            .filter(|b| b.group == self.group)
+            .ok_or(Error::Invalid("not one of our devices"))?;
+        let _ = self.hear(&b, addr.ip(), Instant::now());
+        Ok(b)
     }
 
     /// Where the devices heard recently are, so announcements can also go to each of them directly (a phone often
@@ -222,22 +365,41 @@ impl SyncFiles for LanFiles {
     }
 
     fn list(&self) -> Result<Vec<RemoteFile>> {
-        let Ok(peers) = self.peers.lock() else {
-            return Ok(vec![]);
-        };
         let now = Instant::now();
-        Ok(peers
-            .iter()
-            .filter(|(_, p)| now.duration_since(p.heard) < FORGET_AFTER)
-            .map(|(d, p)| RemoteFile {
+        let mut out: Vec<RemoteFile> = Vec::new();
+        // Snapshots phones handed over come first: they need no connection.
+        if let Ok(mut pushed) = self.pushed.lock() {
+            pushed.retain(|_, p| now.duration_since(p.at) < KEEP_PUSHED);
+            out.extend(pushed.iter().map(|(d, p)| RemoteFile {
                 device: d.clone(),
-                size: 0,
+                size: p.data.len() as u64,
                 stamp: p.stamp.clone(),
-            })
-            .collect())
+            }));
+        }
+        if let Ok(peers) = self.peers.lock() {
+            for (d, p) in peers.iter() {
+                if now.duration_since(p.heard) < FORGET_AFTER && !out.iter().any(|f| &f.device == d)
+                {
+                    out.push(RemoteFile {
+                        device: d.clone(),
+                        size: 0,
+                        stamp: p.stamp.clone(),
+                    });
+                }
+            }
+        }
+        Ok(out)
     }
 
     fn read(&self, device: &str) -> Result<Vec<u8>> {
+        if let Some(p) = self
+            .pushed
+            .lock()
+            .ok()
+            .and_then(|p| p.get(device).map(|p| p.data.clone()))
+        {
+            return Ok(p);
+        }
         let addr = self
             .peer(device)
             .ok_or(Error::Invalid("that device isn't here"))?;

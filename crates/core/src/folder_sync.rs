@@ -504,11 +504,20 @@ pub fn sync(
         let base_key = format!("folder_sync_base:{}", snap.device);
         // A device read for the first time is compared with what this one last published: a record we published and
         // have since deleted stays deleted, instead of coming back from their copy of it.
-        let base: foldersync::Base = store
+        let base: foldersync::Base = match store
             .get_setting(&base_key)?
-            .or(store.get_setting(PUBLISHED_KEY)?)
             .and_then(|v| serde_json::from_value(v).ok())
-            .unwrap_or_default();
+        {
+            Some(b) => b,
+            // First meeting: never take "they haven't got it" as "they deleted it" (see `first_contact_base`).
+            None => {
+                let published: foldersync::Base = store
+                    .get_setting(PUBLISHED_KEY)?
+                    .and_then(|v| serde_json::from_value(v).ok())
+                    .unwrap_or_default();
+                foldersync::first_contact_base(&published, &local, &snap.records)
+            }
+        };
         let changes = foldersync::merge(&local, &snap.records, &base);
         if !changes.is_empty() {
             report.applied += apply_changes(store, &changes, now)?;

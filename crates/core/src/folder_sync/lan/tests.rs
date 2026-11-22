@@ -3,7 +3,7 @@ use crate::folder_sync::{new_code, sync};
 use crate::secrets::{MemorySecretStore, load_or_create_db_key};
 use crate::store::Store;
 use crate::tasks::TaskInput;
-use std::net::{Ipv4Addr, TcpListener};
+use std::net::{Ipv4Addr, SocketAddr, TcpListener};
 use std::sync::Arc;
 
 const NY: chrono_tz::Tz = chrono_tz::America::New_York;
@@ -152,4 +152,96 @@ fn an_answer_must_match_the_question_and_the_code() {
     c.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
     let mut buf = [0u8; 8];
     assert!(matches!(c.read(&mut buf), Ok(0) | Err(_)));
+}
+
+#[test]
+fn a_phone_pushes_its_changes_and_pulls_the_computers_with_connections_it_starts() {
+    let (_, key) = new_code().unwrap();
+    let (mut phone_db, mut mac_db) = (store(), store());
+    let now: chrono::DateTime<chrono::Utc> = "2026-11-22T10:00:00Z".parse().unwrap();
+    let phone = Arc::new(LanFiles::new(
+        key,
+        &crate::folder_sync::device_id(&phone_db).unwrap(),
+    ));
+    let mac = Arc::new(LanFiles::new(
+        key,
+        &crate::folder_sync::device_id(&mac_db).unwrap(),
+    ));
+    // Only the computer answers connections; the phone never does (as when a phone refuses incoming ones).
+    let mac_port = serve(mac.clone());
+    mac.set_port(mac_port);
+    let at = SocketAddr::new(HERE, mac_port);
+
+    crate::todo::add(&phone_db, &task("Made on the phone"), NY, now).unwrap();
+    crate::todo::add(&mac_db, &task("Made on the Mac"), NY, now).unwrap();
+    sync(&mut phone_db, phone.as_ref(), &key, "iPhone", now).unwrap();
+    sync(&mut mac_db, mac.as_ref(), &key, "Mac", now).unwrap();
+
+    // The phone pushes; the computer has its snapshot without connecting to the phone.
+    let b = phone.push_to(at).unwrap();
+    assert_eq!(b.device, crate::folder_sync::device_id(&mac_db).unwrap());
+    let r = sync(&mut mac_db, mac.as_ref(), &key, "Mac", now).unwrap();
+    assert_eq!(r.applied, 1);
+    assert_eq!(r.peers[0].name, "iPhone");
+    // And the phone, having heard the computer through the push, fetches the computer's changes itself.
+    let r = sync(&mut phone_db, phone.as_ref(), &key, "iPhone", now).unwrap();
+    assert_eq!(r.applied, 1);
+    let titles = |db: &Store| {
+        let mut t: Vec<String> = crate::todo::all(db)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.title)
+            .collect();
+        t.sort();
+        t
+    };
+    assert_eq!(titles(&phone_db), ["Made on the Mac", "Made on the phone"]);
+    assert_eq!(titles(&mac_db), ["Made on the Mac", "Made on the phone"]);
+
+    // A later change on the phone goes across at the next push; nothing changed means nothing applied.
+    crate::todo::add(&phone_db, &task("Second phone task"), NY, now).unwrap();
+    sync(&mut phone_db, phone.as_ref(), &key, "iPhone", now).unwrap();
+    phone.push_to(at).unwrap();
+    assert_eq!(
+        sync(&mut mac_db, mac.as_ref(), &key, "Mac", now)
+            .unwrap()
+            .applied,
+        1
+    );
+    phone.push_to(at).unwrap();
+    assert_eq!(
+        sync(&mut mac_db, mac.as_ref(), &key, "Mac", now)
+            .unwrap()
+            .applied,
+        0
+    );
+}
+
+#[test]
+fn a_push_from_a_stranger_or_a_recording_is_refused() {
+    let (_, key) = new_code().unwrap();
+    let (_, other) = new_code().unwrap();
+    let mac = Arc::new(LanFiles::new(key, "aa11"));
+    let port = serve(mac.clone());
+    let at = SocketAddr::new(HERE, port);
+    // Another sync code: the computer can't open it, and the phone gets nothing back.
+    let stranger = LanFiles::new(other, "bb22");
+    assert!(stranger.push_to(at).is_err());
+    assert!(mac.list().unwrap().is_empty());
+    // A push sealed to an old number (a recording) is refused.
+    let mut c = TcpStream::connect(at).unwrap();
+    c.write_all(PUSH).unwrap();
+    let mut fresh = [0u8; NONCE];
+    c.read_exact(&mut fresh).unwrap();
+    let mut plain = vec![9u8; NONCE];
+    plain.push(4);
+    plain.extend_from_slice(b"cc33");
+    plain.extend_from_slice(b"old");
+    let sealed = seal(&key, &plain).unwrap();
+    c.write_all(&(sealed.len() as u32).to_be_bytes()).unwrap();
+    c.write_all(&sealed).unwrap();
+    let mut buf = [0u8; 4];
+    let _ = c.set_read_timeout(Some(Duration::from_secs(2)));
+    assert!(matches!(c.read(&mut buf), Ok(0) | Err(_)));
+    assert!(mac.list().unwrap().is_empty());
 }

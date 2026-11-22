@@ -25,7 +25,11 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, State};
 
 const ANNOUNCE_EVERY: Duration = Duration::from_secs(30);
-const ROUND_EVERY: Duration = Duration::from_secs(60);
+/// Often, so a change reaches the other device within seconds: a round that finds nothing new is only a local read.
+const ROUND_EVERY: Duration = Duration::from_secs(15);
+
+/// Set when a phone has just handed over its changes, so they are merged at once instead of at the next round.
+static KICK: AtomicBool = AtomicBool::new(false);
 
 /// The last round on the network, for Settings ("seen on this network").
 static LAST: Mutex<Option<(chrono::DateTime<Utc>, Report)>> = Mutex::new(None);
@@ -45,9 +49,12 @@ impl Drop for Running {
 
 /// Answers requests from the other devices until `stop` is set.
 fn listen(lan: Arc<LanFiles>, stop: Arc<AtomicBool>) -> std::io::Result<u16> {
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))?;
+    // The fixed port first, so a paired phone always knows where to connect; any free one if it is taken.
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, PORT))
+        .or_else(|_| TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)))?;
     listener.set_nonblocking(true)?;
     let port = listener.local_addr()?.port();
+    lan.set_port(port);
     std::thread::Builder::new()
         .name("lan-answer".into())
         .spawn(move || {
@@ -57,7 +64,9 @@ fn listen(lan: Arc<LanFiles>, stop: Arc<AtomicBool>) -> std::io::Result<u16> {
                         let lan = lan.clone();
                         let _ = conn.set_nonblocking(false);
                         std::thread::spawn(move || {
-                            let _ = lan.serve(conn);
+                            if let Ok(Some(_)) = lan.serve(conn) {
+                                KICK.store(true, Ordering::Relaxed);
+                            }
                         });
                     }
                     Err(_) => std::thread::sleep(Duration::from_millis(200)),
@@ -68,8 +77,21 @@ fn listen(lan: Arc<LanFiles>, stop: Arc<AtomicBool>) -> std::io::Result<u16> {
 }
 
 fn round(store: &mut Store, lan: &LanFiles, key: &[u8; 32], app: &AppHandle) {
+    // Said once when it starts or stops happening, not every 15 seconds.
+    static UNREADABLE: Mutex<usize> = Mutex::new(0);
     match folder_sync::sync(store, lan, key, &computer_name(), Utc::now()) {
         Ok(r) => {
+            if let Ok(mut before) = UNREADABLE.lock()
+                && *before != r.unreadable
+            {
+                if r.unreadable > 0 {
+                    log::warn!(
+                        "network sharing: {} device(s) heard but their changes couldn't be fetched",
+                        r.unreadable
+                    );
+                }
+                *before = r.unreadable;
+            }
             if r.applied > 0 {
                 log::info!("network sharing: {} changes", r.applied);
                 let _ = app.emit("tasks-changed", ());
@@ -160,7 +182,8 @@ pub(crate) fn spawn(app: AppHandle, db: PathBuf, db_key: Redacted, deps: Deps) {
                     std::thread::sleep(Duration::from_secs(2));
                     continue;
                 };
-                let mut due = last_round.elapsed() >= ROUND_EVERY;
+                let mut due =
+                    last_round.elapsed() >= ROUND_EVERY || KICK.swap(false, Ordering::Relaxed);
                 if announced.elapsed() >= ANNOUNCE_EVERY {
                     announced = Instant::now();
                     if let Some(s) = &udp {
@@ -212,11 +235,46 @@ pub(crate) fn spawn(app: AppHandle, db: PathBuf, db_key: Redacted, deps: Deps) {
                 }
                 if due {
                     let (lan, key) = (r.lan.clone(), r.key);
+                    let before = lan.stamp();
                     round(&mut store, &lan, &key, &app);
+                    // A phone starts every connection itself (it may refuse incoming ones): it hands its changes to
+                    // the paired computer and hears the computer's answer, then fetches the computer's changes.
+                    if cfg!(mobile) && !paired.is_empty() {
+                        let mut reached = false;
+                        for ip in &paired {
+                            match lan.push_to(SocketAddr::new(*ip, PORT)) {
+                                Ok(_) => reached = true,
+                                Err(e) => push_trouble(&e.to_string()),
+                            }
+                        }
+                        if reached {
+                            push_trouble("");
+                            round(&mut store, &lan, &key, &app);
+                        }
+                    }
                     last_round = Instant::now();
+                    // Our own data changed: tell the others now rather than at the next announcement.
+                    if lan.stamp() != before {
+                        announced = Instant::now() - ANNOUNCE_EVERY;
+                    }
                 }
             }
         });
+}
+
+/// Logs a phone's trouble reaching its computer once when it starts ("" = reached again).
+fn push_trouble(problem: &str) {
+    static LAST: Mutex<String> = Mutex::new(String::new());
+    if let Ok(mut last) = LAST.lock()
+        && *last != problem
+    {
+        if problem.is_empty() {
+            log::info!("network sharing: reached the paired computer");
+        } else {
+            log::warn!("network sharing: can't reach the paired computer ({problem})");
+        }
+        *last = problem.to_string();
+    }
 }
 
 /// Turns on sharing on the same network. `code` as for `enable_folder_sync`: empty on the first device (one is made,
