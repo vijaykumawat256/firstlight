@@ -78,3 +78,22 @@ app is something you open, plus notifications (and later a widget). "Appears whe
   list there (`webpki-roots`); everywhere else the system checks them as before.
 - No Google backup or device-to-device copy of the app's data (`allowBackup=false`, `data_extraction_rules.xml`).
 - Ran on a Pixel 6 emulator (Android 15): welcome screen, encrypted database, backup. Not yet on a real phone.
+
+## Round of 22 Nov 2026 (the improvement list)
+
+| Item | State |
+|------|-------|
+| Sync status line on Today (`sharing_status`, `SyncStatus.tsx`): "Synced with … · 10 s ago", or what is wrong after 90 s without contact; tapping opens Your computers | Done |
+| Pull down to refresh on Today and Tasks (phones; `usePullToRefresh`) | Done |
+| Refresh and coming back to the app ask the other devices at once (`share_now`, `kick`); every screen listens for `tasks-changed` / `events-changed` | Done |
+| Notifications when the app is closed: heads-ups, summaries, own and task reminders scheduled with the phone's system 12 h ahead (`phone_notify.rs`), cancelled when a meeting moves | Built; not yet seen firing on a real phone with the app closed |
+| Background refresh (iOS `BGAppRefreshTask`, Android WorkManager) | Not built: needs a native (Swift / Kotlin) part that registers at launch and calls into Rust |
+| Sync away from home (phone uses the encrypted iCloud Drive / Drive / OneDrive files) | Not built: needs phone sign-in (below) or an iCloud Drive folder picker (native) |
+| iPhone Calendar recommended first; Google and Outlook point to it on iPhone | Done |
+| Google / Microsoft sign-in on phones (ASWebAuthenticationSession / custom-scheme redirect) | Not built: needs new iOS / Android client registrations from the user |
+| Android's own calendar (CalendarContract) and a real Android phone test | Not built |
+| Swipe a task: right = done, left = tomorrow | Done |
+| Phone Help text | Done |
+| Home-screen widget, iPad layout | Not built (a widget is a native extension) |
+| Apple Developer account, TestFlight, App Store, Google Play, Mac/Windows signing | Needs the user's accounts |
+| Pushed to GitHub | Done (18 commits) |
