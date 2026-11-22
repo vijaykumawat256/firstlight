@@ -10,7 +10,7 @@ what to set up and where it goes. Items 6–12 are built into the app and the re
 | 2 | Google verification | **Waiting on you**: decision + submission (section 2) |
 | 3 | Code signing (Mac and Windows) | **Waiting on you**: certificates; workflow ready (section 3) |
 | 4 | Beta with 10–20 people | **Waiting on you**: people; plan below (section 4) |
-| 5 | Website, privacy contact, support address, price | **Waiting on you**: section 5 |
+| 5 | Website, privacy contact, support address, price | README, privacy policy (current) and terms of use written; contact = GitHub issues. **Waiting on you**: support email, price, legal review (section 5) |
 | 6 | Auto-update through GitHub Releases | Built; needs the update key + a public releases repository (section 3c) |
 | 7 | One Mac installer for Apple chips and Intel | Built (universal build in `installers.yml`) |
 | 8 | First-run set-up card | Built (`GettingStarted.tsx`) |
@@ -100,8 +100,10 @@ can't download from a **private** repository, so:
 
 ## 5. Website, privacy, support, price
 
-- **Privacy policy:** `docs/PRIVACY.md` is written; fill in the contact line (it says "add your contact address here").
-  Google's review needs it at a public web address.
+- **Privacy policy and terms:** `docs/PRIVACY.md` (updated for every feature, 2026-11-21) and `docs/TERMS.md`, both shown
+  in the app under About and linked from the README. Contact is GitHub issues; add an email address if you want one.
+  Google's review needs the policy at a public web address (the GitHub file works once the repository is public). Have
+  someone qualified review both before a commercial launch.
 - **Support address:** repository variable `SUPPORT_EMAIL`. "Report a problem" then offers "Save and email".
 - **Website:** one page is enough for Google's review and for people to find it: the promise ("Your workday, ready
   when you unlock. Private: nothing leaves your computer."), three screenshots, download buttons pointing at the latest

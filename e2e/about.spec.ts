@@ -53,6 +53,16 @@ test("the privacy policy is the published document, and says what it must", asyn
   await expect(policy.locator("script, a, img")).toHaveCount(0);
 });
 
+test("the terms of use are the published document", async ({ page }) => {
+  await openAbout(page);
+  await page.getByRole("radio", { name: "Terms" }).click();
+  const terms = page.getByRole("region", { name: "Terms of use" });
+  await expect(terms).toContainText("as is");
+  await expect(terms.getByRole("heading", { name: "No guarantee" })).toBeVisible();
+  await expect(terms.getByRole("heading", { name: "Limitation of liability" })).toBeVisible();
+  await expect(terms.locator("script, a, img")).toHaveCount(0);
+});
+
 test("licences: searchable, with the real text for each package", async ({ page }) => {
   await openAbout(page);
   await page.getByRole("radio", { name: "Licences" }).click();

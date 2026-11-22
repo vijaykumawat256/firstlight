@@ -7,8 +7,9 @@ import { Button, Card, Segmented, Skeleton } from "@/design";
 import { Markdown } from "./markdown";
 import { ProblemReportButton } from "./ProblemReport";
 import privacyPolicy from "../../../docs/PRIVACY.md?raw";
+import termsOfUse from "../../../docs/TERMS.md?raw";
 
-type Tab = "help" | "privacy" | "licences";
+type Tab = "help" | "privacy" | "terms" | "licences";
 
 const HELP: Array<{ title: string; body: string[] }> = [
   {
@@ -190,6 +191,7 @@ export function AboutScreen() {
             options={[
               { value: "help", label: "Help" },
               { value: "privacy", label: "Privacy" },
+              { value: "terms", label: "Terms" },
               { value: "licences", label: "Licences" },
             ]}
           />
@@ -209,6 +211,12 @@ export function AboutScreen() {
             <section aria-label="Privacy policy" className="flex flex-col gap-3">
               <h2 className="text-title font-semibold text-fg">Privacy policy</h2>
               <Markdown source={privacyPolicy} />
+            </section>
+          )}
+          {tab === "terms" && (
+            <section aria-label="Terms of use" className="flex flex-col gap-3">
+              <h2 className="text-title font-semibold text-fg">Terms of use</h2>
+              <Markdown source={termsOfUse} />
             </section>
           )}
           {tab === "licences" && <Licences />}
