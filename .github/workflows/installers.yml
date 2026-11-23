@@ -158,19 +158,19 @@ jobs:
       - name: Collect the files
         shell: bash
         run: |
-          mkdir -p dist
+          mkdir -p installers
           if [ "${{ matrix.name }}" = "mac" ]; then
-            cp "${{ matrix.out }}"/dmg/*.dmg dist/
-            cp "${{ matrix.out }}"/macos/*.app.tar.gz* dist/ 2>/dev/null || true
+            cp "${{ matrix.out }}"/dmg/*.dmg installers/
+            cp "${{ matrix.out }}"/macos/*.app.tar.gz* installers/ 2>/dev/null || true
           else
-            cp "${{ matrix.out }}"/*-setup.exe* dist/
+            cp "${{ matrix.out }}"/*-setup.exe* installers/
           fi
-          ls -l dist
+          ls -l installers
 
       - uses: actions/upload-artifact@v4
         with:
           name: firstlight-${{ matrix.name }}
-          path: dist/*
+          path: installers/*
           if-no-files-found: error
 
   # Puts the installers on a release (which doesn't expire like run artifacts). With updates set up, also writes the
