@@ -120,7 +120,17 @@ jobs:
 
       - name: Build the installer
         shell: bash
-        run: npm run tauri build -- ${{ matrix.args }} $RELEASE_ARGS
+        run: |
+          # A secret that isn't set arrives as an empty variable, and Tauri takes an empty APPLE_CERTIFICATE as
+          # "import this certificate" (and fails). Drop the empty ones so an unset secret means "not used".
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID \
+                   TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
+                   AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
+          # Windows: bash finds Git's own perl first, which lacks modules OpenSSL's Configure needs; use Strawberry.
+          if [ "${{ matrix.name }}" = "windows" ]; then export OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe; fi
+          npm run tauri build -- ${{ matrix.args }} $RELEASE_ARGS
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
